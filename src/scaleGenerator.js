@@ -238,9 +238,12 @@ function toggleSelectionMode() {
     // Don't call createHeptatonicScaleTable here - let the event listener handle it
 }
 
-let placeholder = document.getElementById('placeholderContent');
-while (placeholder.firstChild) {
-    placeholder.removeChild(placeholder.firstChild);
+// Try to get the new scale controls container first, fallback to old one
+let placeholder = document.getElementById('scaleControlsContainer') || document.getElementById('placeholderContent');
+if (placeholder) {
+    while (placeholder.firstChild) {
+        placeholder.removeChild(placeholder.firstChild);
+    }
 }
 
 function intToRoman(num){
@@ -550,9 +553,22 @@ function createRootNoteTable() {
 
 // Create a table for the 7 heptatonic base scales and their scale degrees
 function createHeptatonicScaleTable() {
+    // Update placeholder reference to use the new container if available
+    let currentPlaceholder = document.getElementById('scaleControlsContainer');
+    if (!currentPlaceholder) {
+        // Fallback to old placeholder if new one doesn't exist yet
+        currentPlaceholder = document.getElementById('placeholderContent');
+    }
+    if (!currentPlaceholder) {
+        console.warn('No placeholder found for scales - deferring initialization');
+        // Try again in a bit if no container is available
+        setTimeout(createHeptatonicScaleTable, 200);
+        return;
+    }
+    
     // Clear all existing content
-    while (placeholder.firstChild) {
-        placeholder.removeChild(placeholder.firstChild);
+    while (currentPlaceholder.firstChild) {
+        currentPlaceholder.removeChild(currentPlaceholder.firstChild);
     }
 
     // Create toggle switch container
@@ -638,11 +654,11 @@ function createHeptatonicScaleTable() {
     toggleContainer.appendChild(toggleSwitch);
     toggleContainer.appendChild(toggleLabel);
     toggleContainer.appendChild(clearButton);
-    placeholder.appendChild(toggleContainer);
+    currentPlaceholder.appendChild(toggleContainer);
 
     // Add root note selection table
     let rootNoteTable = createRootNoteTable();
-    placeholder.appendChild(rootNoteTable);
+    currentPlaceholder.appendChild(rootNoteTable);
 
     let scales = HeptatonicScales;
 
@@ -926,7 +942,7 @@ function createHeptatonicScaleTable() {
         }
         table.appendChild(row);
     }
-    placeholder.appendChild(table);
+    currentPlaceholder.appendChild(table);
 
     // Update cross-reference display when scales change
     if (typeof window.updateCrossReferenceDisplay === 'function') {

@@ -206,8 +206,9 @@ window.$ = window.jQuery = require('jquery');
 
 // Defer initialization until DOM and modules are fully loaded
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize scale table after all modules are loaded
-    createHeptatonicScaleTable();
+    // Initialize scale table after fretboard is ready - no longer needed here
+    // as scales are now initialized within the fretboard container
+    // createHeptatonicScaleTable();
     
     // Initialize chord cache for default selected scales
     refreshChordsForRootNote();

@@ -1864,7 +1864,24 @@ function initializeFretboard() {
     showScaleOnFretboard();
     updateChordButtonStyles();
     
+    // Initialize scales in the new container after a short delay to ensure DOM is ready
+    setTimeout(() => {
+        initializeScalesInFretboard();
+    }, 100);
+    
     return mainFretboard;
+}
+
+/**
+ * Initialize scales within the fretboard container
+ */
+function initializeScalesInFretboard() {
+    // Import and call the scale table creation function
+    if (typeof createHeptatonicScaleTable === 'function') {
+        createHeptatonicScaleTable();
+    } else {
+        console.warn('createHeptatonicScaleTable function not available');
+    }
 }
 
 /**
@@ -1875,7 +1892,7 @@ function createFretboardControls(fretboard) {
     controlsContainer.style.cssText = `
         margin: 20px 0;
         padding: 15px;
-        background: linear-gradient(to bottom, #f8f8f8, #e8e8e8);
+        background: hsla(0, 0%, 24%, 1.00);
         border-radius: 12px;
         display: flex;
         gap: 12px;
@@ -2474,8 +2491,9 @@ function createFretboardControls(fretboard) {
     chordTypeLabel.style.cssText = `
         font-size: 20px;
         font-weight: bold;
-        color: #333;
+        color: #fff;
         margin-right: 4px;
+        padding: 0 20px;
     `;
     
     const chordTypeSelect = document.createElement('select');
@@ -2820,10 +2838,44 @@ function createFretboardControls(fretboard) {
     // Insert controls before the fretboard
     fretboard.container.insertBefore(controlsContainer, fretboard.fretboardElement);
     
+    // Create a flex container for scales and chord grid
+    const scalesAndChordsContainer = document.createElement('div');
+    scalesAndChordsContainer.style.cssText = `
+        display: flex;
+        gap: 20px;
+        align-items: flex-start;
+        margin-top: 20px;
+    `;
+    
+    // Create scale controls container
+    const scaleControlsContainer = document.createElement('div');
+    scaleControlsContainer.id = 'scaleControlsContainer';
+    scaleControlsContainer.style.cssText = `
+        flex: 0 0 auto;
+        background: hsla(0, 0%, 24%, 1.00);
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        min-width: 300px;
+    `;
+    
+    const scaleLabel = document.createElement('h3');
+    scaleLabel.textContent = 'Scale Controls';
+    scaleLabel.style.cssText = `
+        margin: 0 0 10px 0;
+        font-size: 16px;
+        font-weight: bold;
+        text-align: center;
+        color: #333;
+    `;
+    scaleControlsContainer.appendChild(scaleLabel);
+    
     // Add chord button grid after the fretboard
     const chordGrid = createChordButtonGrid();
     if (chordGrid) {
-        fretboard.container.appendChild(chordGrid);
+        scalesAndChordsContainer.appendChild(scaleControlsContainer);
+        scalesAndChordsContainer.appendChild(chordGrid);
+        fretboard.container.appendChild(scalesAndChordsContainer);
         
         // Initialize chord grid colors based on current scale (if any)
         // Use setTimeout to ensure the DOM elements are fully added before updating colors
@@ -2920,7 +2972,7 @@ function createChordButtonGrid() {
     gridContainer.style.cssText = `
         margin: 20px auto;
         max-width: 600px;
-        background: #f8f9fa;
+        background: hsla(0, 0%, 24%, 1.00);
         border-radius: 8px;
         padding: 15px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -2934,7 +2986,7 @@ function createChordButtonGrid() {
         font-size: 16px;
         font-weight: bold;
         text-align: center;
-        color: #333;
+        color: #fff;
     `;
     
     let grid = document.createElement('table');
@@ -3088,7 +3140,7 @@ function createChordButtonGrid() {
         margin-top: 10px;
         padding: 8px;
         font-size: 11px;
-        color: #333;
+        color: #fff;
         text-align: center;
         line-height: 1.4;
     `;
