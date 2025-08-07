@@ -1,0 +1,1629 @@
+@import './styles/theme-variables.css';
+
+body {
+  margin: 0;
+   /* font-family:'Roboto Mono'; */
+  font-family: -apple-system, BlinkMacSystemFont, 'Roboto Mono', 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: var(--theme-background, #202124);
+  color: var(--theme-strong, #FFFFFF);
+
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica,
+    Arial, sans-serif;
+  margin: auto;
+  /* max-width: 38rem; */
+  padding: 2rem;
+}
+
+.vexbox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 150px;
+  background-color: #FFFFFF;
+}
+
+.selectionContainer{
+  align-items: center;
+  justify-content: left;
+  display: flex;
+  width:100%;
+  font-size:24px;
+  display: table;
+  text-align: center;
+  height: 32pt;
+  text-align: center;
+  border: 2px dashed #f69c55; 
+}
+.staveContainer{
+  display: flex;
+  background-color: #FFFFFF;
+}
+.fixed{
+  width: 300px;
+}
+.flex-item{
+  flex-grow: 1;
+}
+
+/* #container {
+  position: fixed;
+  bottom: 0;
+  width: 100%;
+} */
+
+.container{
+  display: flex;
+  width:100%;
+  justify-content: right;
+}
+html {
+  box-sizing: border-box;
+}
+
+*,
+*:before,
+*:after {
+  box-sizing: inherit;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+:root {
+  --keyboard: hsl(300, 100%, 16%);
+  --keyboard-shadow: hsla(19, 50%, 66%, 0.2);
+  --keyboard-border: hsl(20, 91%, 5%);
+  --black-10: hsla(0, 0%, 0%, 0.1);
+  --black-20: hsla(0, 0%, 0%, 0.2);
+  --black-30: hsla(0, 0%, 0%, 0.3);
+  --black-50: hsla(0, 0%, 0%, 0.5);
+  --black-60: hsla(0, 0%, 0%, 0.6);
+  --white-20: hsla(0, 0%, 100%, 0.2);
+  --white-50: hsla(0, 0%, 100%, 0.5);
+  --white-80: hsla(0, 0%, 100%, 0.8);
+}
+
+.white,
+.black {
+  position: relative;
+  float: left;
+  display: flex;
+  justify-content: right;
+  align-items: center;
+  padding: 0.5rem 0;
+  user-select: none;
+  cursor: pointer;
+  writing-mode: vertical-rl;
+  /* font-size: 1pt; */
+}
+
+#keyboard li:first-child {
+  border-radius: 5px 0 5px 5px;
+}
+
+#keyboard li:last-child {
+  border-radius: 0 5px 5px 5px;
+}
+
+.white {
+  width: calc(100% / var(--num-keys, 55));
+  height: 12.5rem;
+  z-index: 1;
+  border-left: 1px solid hsl(0, 0%, 73%);
+  border-bottom: 1px solid hsl(0, 0%, 73%);
+  border-radius: 0 0 5px 5px;
+  background: #FFFFFF;
+  box-shadow: -1px 0 0 var(--white-80) inset, 0 0 5px hsl(0, 0%, 80%) inset,
+    0 0 3px var(--black-20);
+  color: var(--black-30);
+}
+
+.black {
+  height: 8rem;
+  width: calc(100% / var(--num-keys, 50)/2);;
+  margin: 0 0 0 -0.75rem;
+  z-index: 2;
+  border: 1px solid black;
+  border-radius: 0 0 3px 3px;
+  box-shadow: -1px -1px 2px var(--white-20) inset,
+    0 -5px 2px 3px var(--black-60) inset, 0 2px 4px var(--black-50);
+  background: linear-gradient(45deg, hsl(0, 0%, 13%) 0%, hsl(0, 0%, 33%) 100%);
+  color: var(--white-50);
+}
+
+.white.pressed {
+  border-top: 1px solid hsl(0, 0%, 47%);
+  border-left: 1px solid hsl(0, 0%, 60%);
+  border-bottom: 1px solid hsl(0, 0%, 60%);
+  box-shadow: 2px 0 3px var(--black-10) inset,
+    -5px 5px 20px var(--black-20) inset, 0 0 3px var(--black-20);
+  background: linear-gradient(to bottom, white 0%, hsl(0, 0%, 91%) 100%);
+  /* background-color: var(--keyboard); */
+  outline: none;
+}
+.white.highlightedKey{
+  background-color: hsl(209, 97%, 42%);
+}
+.black.highlightedKey{
+  background: hsl(209, 97%, 42%);
+  /* border: 1px solid hsl(209, 97%, 42%); */
+}
+.white.pressedKey{
+  background-color: #d38703;
+}
+.black.pressedKey{
+  background: hsl(48, 97%, 42%);
+  /* border: 1px solid hsl(48, 97%, 42%); */
+}
+/* .black:hover{  
+  background: hsl(48, 97%, 42%);
+  border: 1px solid hsl(48, 97%, 42%);
+}
+
+.white:hover{
+  background-color: hsl(48, 97%, 42%);
+} */
+
+.white.pressedKey.highlightedKey{
+  background: repeating-linear-gradient(
+    45deg,
+    hsl(209, 97%, 42%),
+    hsl(209, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 20px
+  );
+}
+.black.pressedKey.highlightedKey{
+  background: repeating-linear-gradient(
+    45deg,
+    hsl(209, 97%, 42%),
+    hsl(209, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 20px
+  );
+}
+.white.scaleKey{
+  background-color: hsl(276, 97%, 42%);
+}
+.black.scaleKey{
+  background: hsl(276, 97%, 42%);
+}
+
+.white.scaleKey.highlightedKey{
+  background: repeating-linear-gradient(
+    45deg,
+    hsl(276, 97%, 42%),
+    hsl(276, 97%, 42%) 10px,
+    hsl(209, 97%, 42%) 10px,
+    hsl(209, 97%, 42%) 20px
+  );
+}
+.black.scaleKey.highlightedKey{
+  background: repeating-linear-gradient(
+    45deg,
+    hsl(276, 97%, 42%),
+    hsl(276, 97%, 42%) 10px,
+    hsl(209, 97%, 42%) 10px,
+    hsl(209, 97%, 42%) 20px
+  );
+}
+.white.pressedKey.scaleKey{
+  background: repeating-linear-gradient(
+    45deg,
+    hsl(276, 97%, 42%),
+    hsl(276, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 20px
+  );
+}
+.black.pressedKey.scaleKey{
+  background: repeating-linear-gradient(
+    45deg,
+    hsl(276, 97%, 42%),
+    hsl(276, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 20px
+  );
+}
+.white.pressedKey.scaleKey.highlightedKey{
+  background: repeating-linear-gradient(
+    45deg,
+    hsl(276, 97%, 42%),
+    hsl(276, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 20px,
+    hsl(209, 97%, 42%) 20px,
+    hsl(209, 97%, 42%) 30px
+  );
+}
+.black.pressedKey.scaleKey.highlightedKey{
+  background: repeating-linear-gradient(
+    45deg,
+    hsl(276, 97%, 42%),
+    hsl(276, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 10px,
+    hsl(48, 97%, 42%) 20px,
+    hsl(209, 97%, 42%) 20px,
+    hsl(209, 97%, 42%) 30px
+  );
+}
+
+.black.pressed {
+  box-shadow: -1px -1px 2px var(--white-20) inset,
+    0 -2px 2px rgba(123, 0, 200, 0.6) inset, 0 1px 2px var(--black-50);
+  background: linear-gradient(
+    to right,
+    hsl(0, 0%, 27%) 0%,
+    hsl(0, 0%, 13%) 100%
+  );
+  outline: none;
+}
+.offset {
+  margin: 0 0 0 calc(-100% / var(--num-keys, 50) /3);;
+  /* width: 3.5rem; */
+}
+
+#keyboard {
+  /* border: 1px solid hsl(48, 97%, 42%); */
+  height: 12.5rem;
+  display:flex;
+  /* width: 100%; */
+  /* margin: 0.5rem auto; */
+  padding: 0.0rem 0 0 0rem;
+  position: relative;
+  /* border: 1px solid var(--keyboard-border); */
+  /* border-radius: 1rem; */
+  /* background-color: var(--keyboard); */
+  justify-content: center;
+  /* box-shadow: 0 0 50px var(--black-50) inset, 0 1px var(--keyboard-shadow) inset, */
+    /* 0 5px 15px var(--black-50); */
+}
+
+.tableCell{
+  display:table-cell;
+  vertical-align: middle;
+  clear:left;
+  border: 2px dashed #55dbf6;
+}
+/* The switch - the box around the slider */
+.switch {
+  position: relative;
+  width: 48pt;
+  height: 24pt;
+  vertical-align: middle;
+  /* margin: 3 0 0 -0.75rem; */
+}
+
+/* Hide default HTML checkbox */
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+/* The slider */
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 20pt;
+  width: 20pt;
+  left: 4pt;
+  bottom: 2pt;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: #2196F3;
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px #2196F3;
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(20pt);
+  -ms-transform: translateX(20pt);
+  transform: translateX(20pt);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 34px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
+
+.btn {
+  border: none; /* Remove borders */
+  color: white; /* Add a text color */
+  height:45pt;
+  cursor: pointer; /* Add a pointer cursor on mouse-over */
+}
+
+.success {background-color: #04AA6D;} /* Green */
+.success:hover {background-color: #46a049;}
+
+.info {background-color: #2196F3;} /* Blue */
+.info:hover {background: #0b7dda;}
+
+.warning {background-color: #ff9800;} /* Orange */
+.warning:hover {background: #e68a00;}
+
+.danger {background-color: #f44336;} /* Red */
+.danger:hover {background: #da190b;}
+
+.default {background-color: #e7e7e7; color: black;} /* Gray */
+.default:hover {background: #ddd;}
+
+
+/* Style the tab */
+.tab {
+  float: left;
+  border: 1px solid #ccc;
+  background-color: #111;
+  width: 15%;
+  height: 650px;
+}
+
+/* Style the buttons that are used to open the tab content */
+.tab button {
+  display: block;
+  background-color: inherit;
+  color: black;
+  padding: 22px 16px;
+  width: 100%;
+  border: none;
+  outline: none;
+  text-align: left;
+  cursor: pointer;
+  color: #818181;
+  font-size: 16pt;
+}
+
+/* Change background color of buttons on hover */
+.tab button:hover {
+  background-color: rgb(255, 255, 255);
+}
+
+/* Create an active/current "tab button" class */
+.tab button.active {
+  background-color: rgb(255, 255, 255);
+}
+
+/* Style the tab content */
+.tabcontent {
+  float: left;
+  padding: 0px 12px;
+  border: 1px solid #ccc;
+  width: 100%;
+  border-left: none;
+  height: 1010px;
+  display: none;
+  font-size: 18pt;
+}
+
+/* Clear floats after the tab */
+.clearfix::after {
+  content: "";
+  clear: both;
+  display: table;
+}
+* {box-sizing: border-box}
+body {font-family: "Lato", sans-serif;} 
+
+h4 {
+  font-size: 24pt;
+}
+h3 {
+  font-size: 36pt;
+}
+[data-animation] {
+  animation:
+    /* var(--animn, none) */
+    var(--animdur, 1s)
+    /* var(--animtf, linear) */
+    /* var(--animdel, 0s) */
+    var(--animic, infinite)
+    /* var(--animdir, alternate) */
+    /* var(--animfm, none) */
+    var(--animps, running);
+}
+.metronome{
+  width: calc((100%) / 25);
+  height: 60px;
+  background: red;
+  /* margin: 0; */
+  /* display: inline-flex; */
+  /* -webkit-box-shadow: 0 0 30px red, inset 0 0 5px rgba(255,255,255, 0.5); */
+  /* border-radius: 5px; */
+  -webkit-animation-duration: 1.0s;
+  animation-duration: 1.0s;
+  -webkit-animation-iteration-count: infinite;
+  animation-iteration-count: infinite;
+/*   -webkit-animation-direction: alternate; */
+}
+.metronome01 {
+	--box-shadow-color: #fde725;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation01;
+}
+.metronome02 {
+	--box-shadow-color: #c8e020;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation02;
+}
+.metronome03 {
+	--box-shadow-color: #90d743;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation03;
+}
+.metronome04 {
+	--box-shadow-color: #5ec962;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation04;
+}
+.metronome05 {
+	--box-shadow-color: #35b779;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation05;
+}
+.metronome06 {
+	--box-shadow-color: #20a486;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation06;
+}
+.metronome07 {
+	--box-shadow-color: #21918c;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation07;
+}
+.metronome08 {
+	--box-shadow-color: #287c8e;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation08;
+}
+.metronome09 {
+	--box-shadow-color: #31688e;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation09;
+}
+.metronome10 {
+	--box-shadow-color: #3b528b;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation10;
+}
+.metronome11 {
+	--box-shadow-color: #443983;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation11;
+}
+.metronome12 {
+	--box-shadow-color: #481f70;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation12;
+}
+.metronome13 {
+	--box-shadow-color: #440154;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation13;
+}
+.metronome14 {
+	--box-shadow-color: #481f70;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation14;
+}
+.metronome15 {
+	--box-shadow-color: #443983;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation15;
+}
+.metronome16 {
+	--box-shadow-color: #3b528b;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation16;
+}
+.metronome17 {
+	--box-shadow-color: #31688e;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation17;
+}
+.metronome18 {
+	--box-shadow-color: #287c8e;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation18;
+}
+.metronome19 {
+	--box-shadow-color: #21918c;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation19;
+}
+.metronome20 {
+	--box-shadow-color: #20a486;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation20;
+}
+.metronome21 {
+	--box-shadow-color: #35b779;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation21;
+}
+.metronome22 {
+	--box-shadow-color: #5ec962;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation22;
+}
+.metronome23 {
+	--box-shadow-color: #90d743;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation23;
+}
+.metronome24 {
+	--box-shadow-color: #c8e020;
+	background: var(--box-shadow-color);
+	box-shadow: 0 0 30px var(--box-shadow-color), inset 0 0 5px;
+	animation-name: animation24;
+}
+
+[data-animation-pause]:checked ~ [data-animation] {
+  --animps: paused;
+}
+
+@keyframes animation01 {
+   0% {opacity:0.9;}
+   1% {opacity:0.7;}
+   2% {opacity:0.4;}
+   2% {opacity:0.1;}
+  91% {opacity:0.2;}
+  92% {opacity:0.2;}
+  92% {opacity:0.3;}
+  93% {opacity:0.3;}
+  93% {opacity:0.4;}
+  94% {opacity:0.4;}
+  94% {opacity:0.5;}
+  95% {opacity:0.5;}
+  95% {opacity:0.6;}
+  96% {opacity:0.7;}
+  96% {opacity:0.7;}
+  97% {opacity:0.8;}
+  97% {opacity:0.8;}
+  98% {opacity:0.9;}
+ 100% {opacity:0.9;}
+}
+
+@keyframes animation02 {
+   0% {opacity:0.7;}
+   0% {opacity:0.7;}
+   1% {opacity:0.8;}
+   1% {opacity:0.8;}
+   2% {opacity:0.9;}
+   3% {opacity:0.8;}
+   4% {opacity:0.5;}
+   4% {opacity:0.2;}
+   5% {opacity:0.1;}
+  89% {opacity:0.2;}
+  90% {opacity:0.2;}
+  90% {opacity:0.3;}
+  91% {opacity:0.3;}
+  91% {opacity:0.4;}
+  92% {opacity:0.5;}
+  92% {opacity:0.5;}
+  93% {opacity:0.6;}
+  93% {opacity:0.6;}
+  94% {opacity:0.7;}
+  94% {opacity:0.7;}
+  95% {opacity:0.8;}
+  95% {opacity:0.8;}
+  96% {opacity:0.9;}
+  97% {opacity:0.8;}
+  98% {opacity:0.5;}
+  98% {opacity:0.2;}
+  99% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation03 {
+   0% {opacity:0.4;}
+   0% {opacity:0.5;}
+   1% {opacity:0.5;}
+   1% {opacity:0.6;}
+   2% {opacity:0.7;}
+   2% {opacity:0.7;}
+   3% {opacity:0.8;}
+   3% {opacity:0.8;}
+   4% {opacity:0.9;}
+   6% {opacity:0.6;}
+   6% {opacity:0.3;}
+   7% {opacity:0.1;}
+  87% {opacity:0.2;}
+  87% {opacity:0.2;}
+  88% {opacity:0.3;}
+  88% {opacity:0.3;}
+  89% {opacity:0.4;}
+  89% {opacity:0.4;}
+  90% {opacity:0.5;}
+  90% {opacity:0.5;}
+  91% {opacity:0.6;}
+  91% {opacity:0.6;}
+  92% {opacity:0.7;}
+  92% {opacity:0.7;}
+  93% {opacity:0.8;}
+  93% {opacity:0.9;}
+  95% {opacity:0.7;}
+  96% {opacity:0.4;}
+  96% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation04 {
+   0% {opacity:0.2;}
+   0% {opacity:0.3;}
+   1% {opacity:0.3;}
+   1% {opacity:0.4;}
+   2% {opacity:0.4;}
+   2% {opacity:0.5;}
+   3% {opacity:0.5;}
+   3% {opacity:0.6;}
+   4% {opacity:0.6;}
+   4% {opacity:0.7;}
+   5% {opacity:0.7;}
+   5% {opacity:0.8;}
+   6% {opacity:0.9;}
+   8% {opacity:0.7;}
+   8% {opacity:0.4;}
+   9% {opacity:0.1;}
+  85% {opacity:0.2;}
+  85% {opacity:0.2;}
+  86% {opacity:0.3;}
+  86% {opacity:0.3;}
+  87% {opacity:0.4;}
+  87% {opacity:0.4;}
+  88% {opacity:0.5;}
+  88% {opacity:0.5;}
+  89% {opacity:0.6;}
+  89% {opacity:0.7;}
+  90% {opacity:0.7;}
+  90% {opacity:0.8;}
+  91% {opacity:0.8;}
+  91% {opacity:0.9;}
+  93% {opacity:0.6;}
+  94% {opacity:0.3;}
+  94% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation05 {
+   0% {opacity:0.1;}
+   2% {opacity:0.2;}
+   2% {opacity:0.2;}
+   3% {opacity:0.3;}
+   3% {opacity:0.3;}
+   4% {opacity:0.4;}
+   4% {opacity:0.5;}
+   5% {opacity:0.5;}
+   5% {opacity:0.6;}
+   6% {opacity:0.6;}
+   6% {opacity:0.7;}
+   7% {opacity:0.7;}
+   7% {opacity:0.8;}
+   8% {opacity:0.8;}
+   8% {opacity:0.9;}
+  10% {opacity:0.8;}
+  10% {opacity:0.5;}
+  11% {opacity:0.2;}
+  11% {opacity:0.1;}
+  83% {opacity:0.2;}
+  83% {opacity:0.2;}
+  84% {opacity:0.3;}
+  84% {opacity:0.3;}
+  85% {opacity:0.4;}
+  85% {opacity:0.5;}
+  86% {opacity:0.5;}
+  86% {opacity:0.6;}
+  87% {opacity:0.6;}
+  87% {opacity:0.7;}
+  88% {opacity:0.7;}
+  88% {opacity:0.8;}
+  89% {opacity:0.8;}
+  89% {opacity:0.9;}
+  91% {opacity:0.8;}
+  91% {opacity:0.5;}
+  92% {opacity:0.2;}
+  92% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation06 {
+   0% {opacity:0.1;}
+   4% {opacity:0.2;}
+   4% {opacity:0.2;}
+   5% {opacity:0.3;}
+   5% {opacity:0.3;}
+   6% {opacity:0.4;}
+   6% {opacity:0.4;}
+   7% {opacity:0.5;}
+   7% {opacity:0.5;}
+   8% {opacity:0.6;}
+   8% {opacity:0.7;}
+   9% {opacity:0.7;}
+   9% {opacity:0.8;}
+  10% {opacity:0.8;}
+  10% {opacity:0.9;}
+  12% {opacity:0.6;}
+  13% {opacity:0.3;}
+  13% {opacity:0.1;}
+  81% {opacity:0.2;}
+  81% {opacity:0.3;}
+  82% {opacity:0.3;}
+  82% {opacity:0.4;}
+  83% {opacity:0.4;}
+  83% {opacity:0.5;}
+  84% {opacity:0.5;}
+  84% {opacity:0.6;}
+  85% {opacity:0.6;}
+  85% {opacity:0.7;}
+  86% {opacity:0.7;}
+  86% {opacity:0.8;}
+  87% {opacity:0.8;}
+  87% {opacity:0.9;}
+  89% {opacity:0.7;}
+  89% {opacity:0.4;}
+  90% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation07 {
+   0% {opacity:0.1;}
+   6% {opacity:0.2;}
+   6% {opacity:0.2;}
+   7% {opacity:0.3;}
+   7% {opacity:0.3;}
+   8% {opacity:0.4;}
+   8% {opacity:0.4;}
+   9% {opacity:0.5;}
+   9% {opacity:0.5;}
+  10% {opacity:0.6;}
+  10% {opacity:0.6;}
+  11% {opacity:0.7;}
+  11% {opacity:0.7;}
+  12% {opacity:0.8;}
+  12% {opacity:0.9;}
+  14% {opacity:0.7;}
+  15% {opacity:0.4;}
+  15% {opacity:0.1;}
+  78% {opacity:0.2;}
+  79% {opacity:0.2;}
+  79% {opacity:0.3;}
+  80% {opacity:0.3;}
+  80% {opacity:0.4;}
+  81% {opacity:0.4;}
+  81% {opacity:0.5;}
+  82% {opacity:0.5;}
+  82% {opacity:0.6;}
+  83% {opacity:0.6;}
+  83% {opacity:0.7;}
+  84% {opacity:0.8;}
+  84% {opacity:0.8;}
+  85% {opacity:0.9;}
+  87% {opacity:0.6;}
+  87% {opacity:0.3;}
+  88% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation08 {
+   0% {opacity:0.1;}
+   8% {opacity:0.2;}
+   9% {opacity:0.2;}
+   9% {opacity:0.3;}
+  10% {opacity:0.4;}
+  10% {opacity:0.4;}
+  11% {opacity:0.5;}
+  11% {opacity:0.5;}
+  12% {opacity:0.6;}
+  12% {opacity:0.6;}
+  13% {opacity:0.7;}
+  13% {opacity:0.7;}
+  14% {opacity:0.8;}
+  14% {opacity:0.8;}
+  15% {opacity:0.9;}
+  16% {opacity:0.8;}
+  17% {opacity:0.4;}
+  17% {opacity:0.1;}
+  76% {opacity:0.2;}
+  77% {opacity:0.2;}
+  77% {opacity:0.3;}
+  78% {opacity:0.3;}
+  78% {opacity:0.4;}
+  79% {opacity:0.4;}
+  79% {opacity:0.5;}
+  80% {opacity:0.6;}
+  80% {opacity:0.6;}
+  81% {opacity:0.7;}
+  81% {opacity:0.7;}
+  82% {opacity:0.8;}
+  82% {opacity:0.8;}
+  83% {opacity:0.9;}
+  85% {opacity:0.5;}
+  85% {opacity:0.2;}
+  86% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation09 {
+   0% {opacity:0.1;}
+  10% {opacity:0.2;}
+  11% {opacity:0.2;}
+  11% {opacity:0.3;}
+  12% {opacity:0.3;}
+  12% {opacity:0.4;}
+  13% {opacity:0.4;}
+  13% {opacity:0.5;}
+  14% {opacity:0.6;}
+  14% {opacity:0.6;}
+  15% {opacity:0.7;}
+  15% {opacity:0.7;}
+  16% {opacity:0.8;}
+  16% {opacity:0.8;}
+  17% {opacity:0.9;}
+  19% {opacity:0.5;}
+  19% {opacity:0.2;}
+  20% {opacity:0.1;}
+  74% {opacity:0.2;}
+  75% {opacity:0.2;}
+  75% {opacity:0.3;}
+  76% {opacity:0.4;}
+  76% {opacity:0.4;}
+  77% {opacity:0.5;}
+  77% {opacity:0.5;}
+  78% {opacity:0.6;}
+  78% {opacity:0.6;}
+  79% {opacity:0.7;}
+  79% {opacity:0.7;}
+  80% {opacity:0.8;}
+  80% {opacity:0.8;}
+  81% {opacity:0.9;}
+  82% {opacity:0.8;}
+  83% {opacity:0.4;}
+  83% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation10 {
+   0% {opacity:0.1;}
+  12% {opacity:0.2;}
+  13% {opacity:0.2;}
+  13% {opacity:0.3;}
+  14% {opacity:0.3;}
+  14% {opacity:0.4;}
+  15% {opacity:0.4;}
+  15% {opacity:0.5;}
+  16% {opacity:0.5;}
+  16% {opacity:0.6;}
+  17% {opacity:0.6;}
+  17% {opacity:0.7;}
+  18% {opacity:0.8;}
+  18% {opacity:0.8;}
+  19% {opacity:0.9;}
+  21% {opacity:0.6;}
+  21% {opacity:0.3;}
+  22% {opacity:0.1;}
+  72% {opacity:0.2;}
+  72% {opacity:0.2;}
+  73% {opacity:0.3;}
+  73% {opacity:0.3;}
+  74% {opacity:0.4;}
+  74% {opacity:0.4;}
+  75% {opacity:0.5;}
+  75% {opacity:0.5;}
+  76% {opacity:0.6;}
+  76% {opacity:0.6;}
+  77% {opacity:0.7;}
+  77% {opacity:0.7;}
+  78% {opacity:0.8;}
+  78% {opacity:0.9;}
+  80% {opacity:0.7;}
+  81% {opacity:0.3;}
+  81% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation11 {
+   0% {opacity:0.1;}
+  15% {opacity:0.2;}
+  15% {opacity:0.3;}
+  16% {opacity:0.3;}
+  16% {opacity:0.4;}
+  17% {opacity:0.4;}
+  17% {opacity:0.5;}
+  18% {opacity:0.5;}
+  18% {opacity:0.6;}
+  19% {opacity:0.6;}
+  19% {opacity:0.7;}
+  20% {opacity:0.7;}
+  20% {opacity:0.8;}
+  21% {opacity:0.8;}
+  21% {opacity:0.9;}
+  23% {opacity:0.7;}
+  23% {opacity:0.4;}
+  24% {opacity:0.1;}
+  70% {opacity:0.2;}
+  70% {opacity:0.2;}
+  71% {opacity:0.3;}
+  71% {opacity:0.3;}
+  72% {opacity:0.4;}
+  72% {opacity:0.4;}
+  73% {opacity:0.5;}
+  73% {opacity:0.6;}
+  74% {opacity:0.6;}
+  74% {opacity:0.7;}
+  75% {opacity:0.7;}
+  75% {opacity:0.8;}
+  76% {opacity:0.8;}
+  76% {opacity:0.9;}
+  78% {opacity:0.6;}
+  79% {opacity:0.2;}
+  79% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation12 {
+   0% {opacity:0.1;}
+  17% {opacity:0.2;}
+  17% {opacity:0.2;}
+  18% {opacity:0.3;}
+  18% {opacity:0.3;}
+  19% {opacity:0.4;}
+  19% {opacity:0.5;}
+  20% {opacity:0.5;}
+  20% {opacity:0.6;}
+  21% {opacity:0.6;}
+  21% {opacity:0.7;}
+  22% {opacity:0.7;}
+  22% {opacity:0.8;}
+  23% {opacity:0.8;}
+  23% {opacity:0.9;}
+  25% {opacity:0.5;}
+  26% {opacity:0.2;}
+  26% {opacity:0.1;}
+  68% {opacity:0.2;}
+  68% {opacity:0.2;}
+  69% {opacity:0.3;}
+  69% {opacity:0.4;}
+  70% {opacity:0.4;}
+  70% {opacity:0.5;}
+  71% {opacity:0.5;}
+  71% {opacity:0.6;}
+  72% {opacity:0.6;}
+  72% {opacity:0.7;}
+  73% {opacity:0.7;}
+  73% {opacity:0.8;}
+  74% {opacity:0.8;}
+  74% {opacity:0.9;}
+  76% {opacity:0.8;}
+  76% {opacity:0.5;}
+  77% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation13 {
+   0% {opacity:0.1;}
+  19% {opacity:0.2;}
+  19% {opacity:0.2;}
+  20% {opacity:0.3;}
+  20% {opacity:0.3;}
+  21% {opacity:0.4;}
+  21% {opacity:0.4;}
+  22% {opacity:0.5;}
+  22% {opacity:0.5;}
+  23% {opacity:0.6;}
+  23% {opacity:0.6;}
+  24% {opacity:0.7;}
+  24% {opacity:0.8;}
+  25% {opacity:0.8;}
+  25% {opacity:0.9;}
+  27% {opacity:0.6;}
+  28% {opacity:0.3;}
+  28% {opacity:0.1;}
+  65% {opacity:0.2;}
+  66% {opacity:0.2;}
+  66% {opacity:0.3;}
+  67% {opacity:0.3;}
+  67% {opacity:0.4;}
+  68% {opacity:0.4;}
+  68% {opacity:0.5;}
+  69% {opacity:0.5;}
+  69% {opacity:0.6;}
+  70% {opacity:0.6;}
+  70% {opacity:0.7;}
+  71% {opacity:0.7;}
+  71% {opacity:0.8;}
+  72% {opacity:0.9;}
+  74% {opacity:0.7;}
+  74% {opacity:0.4;}
+  75% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation14 {
+   0% {opacity:0.1;}
+  21% {opacity:0.2;}
+  22% {opacity:0.3;}
+  22% {opacity:0.3;}
+  23% {opacity:0.4;}
+  23% {opacity:0.4;}
+  24% {opacity:0.5;}
+  24% {opacity:0.5;}
+  25% {opacity:0.6;}
+  25% {opacity:0.6;}
+  26% {opacity:0.7;}
+  26% {opacity:0.7;}
+  27% {opacity:0.8;}
+  27% {opacity:0.8;}
+  28% {opacity:0.9;}
+  29% {opacity:0.7;}
+  30% {opacity:0.4;}
+  30% {opacity:0.1;}
+  63% {opacity:0.2;}
+  64% {opacity:0.2;}
+  64% {opacity:0.3;}
+  65% {opacity:0.3;}
+  65% {opacity:0.4;}
+  66% {opacity:0.4;}
+  66% {opacity:0.5;}
+  67% {opacity:0.5;}
+  67% {opacity:0.6;}
+  68% {opacity:0.7;}
+  68% {opacity:0.7;}
+  69% {opacity:0.8;}
+  69% {opacity:0.8;}
+  70% {opacity:0.9;}
+  72% {opacity:0.6;}
+  72% {opacity:0.3;}
+  73% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation15 {
+   0% {opacity:0.1;}
+  23% {opacity:0.2;}
+  24% {opacity:0.2;}
+  24% {opacity:0.3;}
+  25% {opacity:0.3;}
+  25% {opacity:0.4;}
+  26% {opacity:0.5;}
+  26% {opacity:0.5;}
+  27% {opacity:0.6;}
+  27% {opacity:0.6;}
+  28% {opacity:0.7;}
+  28% {opacity:0.7;}
+  29% {opacity:0.8;}
+  29% {opacity:0.8;}
+  30% {opacity:0.9;}
+  31% {opacity:0.8;}
+  32% {opacity:0.5;}
+  32% {opacity:0.2;}
+  33% {opacity:0.1;}
+  61% {opacity:0.2;}
+  62% {opacity:0.2;}
+  62% {opacity:0.3;}
+  63% {opacity:0.3;}
+  63% {opacity:0.4;}
+  64% {opacity:0.5;}
+  64% {opacity:0.5;}
+  65% {opacity:0.6;}
+  65% {opacity:0.6;}
+  66% {opacity:0.7;}
+  66% {opacity:0.7;}
+  67% {opacity:0.8;}
+  67% {opacity:0.8;}
+  68% {opacity:0.9;}
+  69% {opacity:0.8;}
+  70% {opacity:0.5;}
+  70% {opacity:0.2;}
+  71% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation16 {
+   0% {opacity:0.1;}
+  25% {opacity:0.2;}
+  26% {opacity:0.2;}
+  26% {opacity:0.3;}
+  27% {opacity:0.3;}
+  27% {opacity:0.4;}
+  28% {opacity:0.4;}
+  28% {opacity:0.5;}
+  29% {opacity:0.5;}
+  29% {opacity:0.6;}
+  30% {opacity:0.7;}
+  30% {opacity:0.7;}
+  31% {opacity:0.8;}
+  31% {opacity:0.8;}
+  32% {opacity:0.9;}
+  34% {opacity:0.6;}
+  34% {opacity:0.3;}
+  35% {opacity:0.1;}
+  59% {opacity:0.2;}
+  60% {opacity:0.3;}
+  60% {opacity:0.3;}
+  61% {opacity:0.4;}
+  61% {opacity:0.4;}
+  62% {opacity:0.5;}
+  62% {opacity:0.5;}
+  63% {opacity:0.6;}
+  63% {opacity:0.6;}
+  64% {opacity:0.7;}
+  64% {opacity:0.7;}
+  65% {opacity:0.8;}
+  65% {opacity:0.8;}
+  66% {opacity:0.9;}
+  67% {opacity:0.7;}
+  68% {opacity:0.4;}
+  68% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation17 {
+   0% {opacity:0.1;}
+  27% {opacity:0.2;}
+  28% {opacity:0.2;}
+  28% {opacity:0.3;}
+  29% {opacity:0.3;}
+  29% {opacity:0.4;}
+  30% {opacity:0.4;}
+  30% {opacity:0.5;}
+  31% {opacity:0.5;}
+  31% {opacity:0.6;}
+  32% {opacity:0.6;}
+  32% {opacity:0.7;}
+  33% {opacity:0.7;}
+  33% {opacity:0.8;}
+  34% {opacity:0.9;}
+  36% {opacity:0.7;}
+  36% {opacity:0.4;}
+  37% {opacity:0.1;}
+  57% {opacity:0.2;}
+  57% {opacity:0.2;}
+  58% {opacity:0.3;}
+  58% {opacity:0.3;}
+  59% {opacity:0.4;}
+  59% {opacity:0.4;}
+  60% {opacity:0.5;}
+  60% {opacity:0.5;}
+  61% {opacity:0.6;}
+  61% {opacity:0.6;}
+  62% {opacity:0.7;}
+  62% {opacity:0.8;}
+  63% {opacity:0.8;}
+  63% {opacity:0.9;}
+  65% {opacity:0.6;}
+  66% {opacity:0.3;}
+  66% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation18 {
+   0% {opacity:0.1;}
+  30% {opacity:0.2;}
+  30% {opacity:0.2;}
+  31% {opacity:0.3;}
+  31% {opacity:0.4;}
+  32% {opacity:0.4;}
+  32% {opacity:0.5;}
+  33% {opacity:0.5;}
+  33% {opacity:0.6;}
+  34% {opacity:0.6;}
+  34% {opacity:0.7;}
+  35% {opacity:0.7;}
+  35% {opacity:0.8;}
+  36% {opacity:0.8;}
+  36% {opacity:0.9;}
+  38% {opacity:0.8;}
+  38% {opacity:0.5;}
+  39% {opacity:0.1;}
+  55% {opacity:0.2;}
+  56% {opacity:0.3;}
+  56% {opacity:0.3;}
+  57% {opacity:0.4;}
+  57% {opacity:0.5;}
+  58% {opacity:0.5;}
+  58% {opacity:0.6;}
+  59% {opacity:0.6;}
+  59% {opacity:0.7;}
+  60% {opacity:0.7;}
+  60% {opacity:0.8;}
+  61% {opacity:0.8;}
+  61% {opacity:0.9;}
+  63% {opacity:0.5;}
+  64% {opacity:0.2;}
+  64% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation19 {
+   0% {opacity:0.1;}
+  32% {opacity:0.2;}
+  32% {opacity:0.2;}
+  33% {opacity:0.3;}
+  33% {opacity:0.3;}
+  34% {opacity:0.4;}
+  34% {opacity:0.4;}
+  35% {opacity:0.5;}
+  35% {opacity:0.6;}
+  36% {opacity:0.6;}
+  36% {opacity:0.7;}
+  37% {opacity:0.7;}
+  37% {opacity:0.8;}
+  38% {opacity:0.8;}
+  38% {opacity:0.9;}
+  40% {opacity:0.6;}
+  41% {opacity:0.2;}
+  41% {opacity:0.1;}
+  53% {opacity:0.2;}
+  53% {opacity:0.3;}
+  54% {opacity:0.3;}
+  54% {opacity:0.4;}
+  55% {opacity:0.4;}
+  55% {opacity:0.5;}
+  56% {opacity:0.5;}
+  56% {opacity:0.6;}
+  57% {opacity:0.6;}
+  57% {opacity:0.7;}
+  58% {opacity:0.7;}
+  58% {opacity:0.8;}
+  59% {opacity:0.8;}
+  59% {opacity:0.9;}
+  61% {opacity:0.7;}
+  61% {opacity:0.4;}
+  62% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation20 {
+   0% {opacity:0.1;}
+  34% {opacity:0.2;}
+  34% {opacity:0.2;}
+  35% {opacity:0.3;}
+  35% {opacity:0.3;}
+  36% {opacity:0.4;}
+  36% {opacity:0.4;}
+  37% {opacity:0.5;}
+  37% {opacity:0.5;}
+  38% {opacity:0.6;}
+  38% {opacity:0.6;}
+  39% {opacity:0.7;}
+  39% {opacity:0.8;}
+  40% {opacity:0.8;}
+  40% {opacity:0.9;}
+  42% {opacity:0.7;}
+  43% {opacity:0.3;}
+  43% {opacity:0.1;}
+  50% {opacity:0.2;}
+  51% {opacity:0.2;}
+  51% {opacity:0.3;}
+  52% {opacity:0.3;}
+  52% {opacity:0.4;}
+  53% {opacity:0.4;}
+  53% {opacity:0.5;}
+  54% {opacity:0.5;}
+  54% {opacity:0.6;}
+  55% {opacity:0.6;}
+  55% {opacity:0.7;}
+  56% {opacity:0.8;}
+  56% {opacity:0.8;}
+  57% {opacity:0.9;}
+  59% {opacity:0.6;}
+  59% {opacity:0.3;}
+  60% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation21 {
+   0% {opacity:0.1;}
+  36% {opacity:0.2;}
+  37% {opacity:0.2;}
+  37% {opacity:0.3;}
+  38% {opacity:0.4;}
+  38% {opacity:0.4;}
+  39% {opacity:0.5;}
+  39% {opacity:0.5;}
+  40% {opacity:0.6;}
+  40% {opacity:0.6;}
+  41% {opacity:0.7;}
+  41% {opacity:0.7;}
+  42% {opacity:0.8;}
+  42% {opacity:0.8;}
+  43% {opacity:0.9;}
+  44% {opacity:0.8;}
+  45% {opacity:0.4;}
+  45% {opacity:0.1;}
+  50% {opacity:0.3;}
+  50% {opacity:0.4;}
+  51% {opacity:0.4;}
+  51% {opacity:0.5;}
+  52% {opacity:0.6;}
+  52% {opacity:0.6;}
+  53% {opacity:0.7;}
+  53% {opacity:0.7;}
+  54% {opacity:0.8;}
+  54% {opacity:0.8;}
+  55% {opacity:0.9;}
+  57% {opacity:0.5;}
+  57% {opacity:0.2;}
+  58% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation22 {
+   0% {opacity:0.1;}
+  38% {opacity:0.2;}
+  39% {opacity:0.2;}
+  39% {opacity:0.3;}
+  40% {opacity:0.3;}
+  40% {opacity:0.4;}
+  41% {opacity:0.4;}
+  41% {opacity:0.5;}
+  42% {opacity:0.6;}
+  42% {opacity:0.6;}
+  43% {opacity:0.7;}
+  43% {opacity:0.7;}
+  44% {opacity:0.8;}
+  44% {opacity:0.8;}
+  45% {opacity:0.9;}
+  47% {opacity:0.5;}
+  47% {opacity:0.2;}
+  48% {opacity:0.1;}
+  50% {opacity:0.6;}
+  50% {opacity:0.6;}
+  51% {opacity:0.7;}
+  51% {opacity:0.7;}
+  52% {opacity:0.8;}
+  52% {opacity:0.8;}
+  53% {opacity:0.9;}
+  54% {opacity:0.8;}
+  55% {opacity:0.5;}
+  55% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation23 {
+   0% {opacity:0.1;}
+  40% {opacity:0.2;}
+  41% {opacity:0.2;}
+  41% {opacity:0.3;}
+  42% {opacity:0.3;}
+  42% {opacity:0.4;}
+  43% {opacity:0.4;}
+  43% {opacity:0.5;}
+  44% {opacity:0.5;}
+  44% {opacity:0.6;}
+  45% {opacity:0.6;}
+  45% {opacity:0.7;}
+  46% {opacity:0.8;}
+  46% {opacity:0.8;}
+  47% {opacity:0.9;}
+  49% {opacity:0.6;}
+  49% {opacity:0.3;}
+  50% {opacity:0.8;}
+  50% {opacity:0.9;}
+  52% {opacity:0.7;}
+  53% {opacity:0.4;}
+  53% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+@keyframes animation24 {
+   0% {opacity:0.1;}
+  43% {opacity:0.2;}
+  43% {opacity:0.3;}
+  44% {opacity:0.3;}
+  44% {opacity:0.4;}
+  45% {opacity:0.4;}
+  45% {opacity:0.5;}
+  46% {opacity:0.5;}
+  46% {opacity:0.6;}
+  47% {opacity:0.6;}
+  47% {opacity:0.7;}
+  48% {opacity:0.7;}
+  48% {opacity:0.8;}
+  49% {opacity:0.8;}
+  49% {opacity:0.9;}
+  50% {opacity:0.6;}
+  51% {opacity:0.3;}
+  51% {opacity:0.1;}
+ 100% {opacity:0.1;}
+}
+
+/* Root note pulse animation for fretboard */
+@keyframes rootPulse {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.1);
+    box-shadow: 0 4px 12px rgba(255,68,68,0.6);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+  }
+}
+
+/* Fretboard Styles */
+.fretboard {
+  font-family: 'Roboto Mono', monospace;
+  user-select: none;
+  position: relative;
+}
+
+.fretboard .neck-container {
+  /* background: linear-gradient(to bottom, 
+    #654321 0%, 
+    #8B4513 15%, 
+    #A0522D 50%, 
+    #8B4513 85%, 
+    #654321 100%); */
+  border-radius: 8px;
+  box-shadow: inset 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.fretboard .guitar-string {
+  transform: translateY(-50%);
+}
+
+.fretboard .nut {
+  background: linear-gradient(to bottom, 
+    #f8f8f8 0%, 
+    #e8e8e8 30%, 
+    #d8d8d8 50%, 
+    #e8e8e8 70%, 
+    #f8f8f8 100%) !important;
+  border: 1px solid #ccc;
+  box-shadow: 
+    1px 0 3px rgba(0,0,0,0.4),
+    inset 1px 0 1px rgba(255,255,255,0.3) !important;
+}
+
+.fretboard .fret-wire {
+  background: linear-gradient(to bottom, 
+    #444 0%, 
+    #888 30%, 
+    #aaa 50%, 
+    #888 70%, 
+    #444 100%);
+  box-shadow: 
+    1px 0 3px rgba(0,0,0,0.4),
+    inset 1px 0 1px rgba(255,255,255,0.2);
+}
+
+.fretboard .position-marker {
+  /* background: radial-gradient(circle at 30% 30%, 
+    #f4e4bc 0%, 
+    #d4af37 40%, 
+    #b8860b 100%); */
+  border: 1px solid rgba(0,0,0,0.2);
+}
+
+.fretboard .fret:hover {
+  z-index: 20;
+}
+
+.fretboard .note-marker {
+  /* animation: markerAppear 0.3s ease-out; */
+  /* transition: all 0.2s ease; */
+}
+
+.fretboard .note-marker:hover {
+  transform: translate(-50%, -50%) scale(1.1);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.5);
+}
+
+@keyframes markerAppear {
+  0% {
+    transform: translate(-50%, -50%) scale(0);
+    opacity: 0;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes rootPulse {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    box-shadow: 0 3px 8px rgba(0,0,0,0.4);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.05);
+    box-shadow: 0 4px 12px rgba(255,68,68,0.6);
+  }
+}
+
+.fretboard .note-marker.root-note {
+  z-index: 20;
+}
+
+/* Responsive fretboard for smaller screens */
+@media (max-width: 768px) {
+  .fretboard {
+    font-size: 10px;
+  }
+  
+  .fretboard .neck-container {
+    height: 120px;
+    margin: 0 10px;
+  }
+  
+  .fretboard .note-marker {
+    width: 20px;
+    height: 20px;
+    font-size: 9px;
+  }
+  
+  .fretboard .position-marker {
+    width: 10px;
+    height: 10px;
+  }
+  
+  .fretboard .fret-wire {
+    width: 2px;
+  }
+}

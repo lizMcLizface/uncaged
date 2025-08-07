@@ -1,0 +1,70 @@
+/* Theme Variables CSS File
+   This file provides CSS custom properties that update with the theme
+   Include this file in your HTML or import it to use theme variables in regular CSS
+*/
+
+:root {
+  /* Default theme values (Dark theme) */
+  --theme-background: #2a303c;
+  --theme-lite: #464e5f;
+  --theme-mid: #464e5f;
+  --theme-strong: #e2e8f0;
+  --theme-pop: #4ca2a1;
+  
+  /* Derived colors for common use cases */
+  --theme-background-light: var(--theme-lite);
+  --theme-background-dark: var(--theme-background);
+  --theme-text: var(--theme-strong);
+  --theme-text-muted: var(--theme-mid);
+  --theme-accent: var(--theme-pop);
+  --theme-border: var(--theme-mid);
+  --theme-shadow: rgba(0, 0, 0, 0.1);
+}
+
+/* Utility classes for quick theming */
+.theme-bg { background-color: var(--theme-background); }
+.theme-bg-lite { background-color: var(--theme-lite); }
+.theme-bg-mid { background-color: var(--theme-mid); }
+.theme-text { color: var(--theme-strong); }
+.theme-text-muted { color: var(--theme-mid); }
+.theme-accent { color: var(--theme-pop); }
+.theme-border { border-color: var(--theme-mid); }
+
+/* Common themed elements */
+.theme-card {
+  background-color: var(--theme-background);
+  color: var(--theme-strong);
+  border: 1px solid var(--theme-mid);
+  border-radius: 8px;
+  padding: 16px;
+  box-shadow: 0 2px 8px var(--theme-shadow);
+}
+
+.theme-button {
+  background-color: var(--theme-pop);
+  color: var(--theme-background);
+  border: 1px solid var(--theme-pop);
+  border-radius: 4px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-button:hover {
+  background-color: var(--theme-strong);
+  color: var(--theme-background);
+}
+
+.theme-input {
+  background-color: var(--theme-background);
+  color: var(--theme-strong);
+  border: 1px solid var(--theme-mid);
+  border-radius: 4px;
+  padding: 8px 12px;
+}
+
+.theme-input:focus {
+  border-color: var(--theme-pop);
+  box-shadow: 0 0 0 2px rgba(76, 162, 161, 0.2);
+  outline: none;
+}
