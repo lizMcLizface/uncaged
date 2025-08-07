@@ -4141,3 +4141,4 @@ window.quickChordPattern = quickChordPattern;
 window.analyzeChordScaleCompatibility = analyzeChordScaleCompatibility;
 window.updateChordGridColors = updateChordGridColors;
 window.refreshFretboardDisplay = refreshFretboardDisplay;
+window.updateFretboardsForScaleChange = updateFretboardsForScaleChange;

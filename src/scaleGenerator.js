@@ -107,11 +107,13 @@ function highlightScaleNotes(noteArray){
 // Function to update the current scale display in the HTML
 function updateCurrentScaleDisplay() {
     const currentScaleNode = document.getElementById('currentScaleNode');
+    const currentRootNode = document.getElementById('currentRootNode');
     if (!currentScaleNode) return;
 
     const primaryScale = getPrimaryScale();
     if (!primaryScale) {
         currentScaleNode.textContent = 'No Scale Selected';
+        if (currentRootNode) currentRootNode.textContent = '';
         return;
     }
 
@@ -120,20 +122,23 @@ function updateCurrentScaleDisplay() {
     const scaleName = scales[family][parseInt(mode, 10) - 1].name;
     const rootNote = getPrimaryRootNote();
     
-    // Display format: "Root ScaleName" (e.g., "C Major", "F# Dorian")
-    currentScaleNode.textContent = `${rootNote} ${scaleName}`;
+    // Display format: "Root ScaleName" for scale, just root note for root display
+    currentScaleNode.textContent = `${scaleName}`;
+    if (currentRootNode) {
+        currentRootNode.textContent = rootNote;
+    }
     
     // Show navigation indicators
-    let indicators = [];
-    if (selectedScales.length > 1) {
-        indicators.push(`Scale: ${primaryScaleIndex + 1}/${selectedScales.length}`);
-    }
-    if (Array.isArray(selectedRootNote) && selectedRootNote.length > 1) {
-        indicators.push(`Root: ${primaryRootNoteIndex + 1}/${selectedRootNote.length}`);
-    }
-    if (indicators.length > 0) {
-        currentScaleNode.textContent += ` (${indicators.join(', ')})`;
-    }
+    // let indicators = [];
+    // if (selectedScales.length > 1) {
+    //     indicators.push(`Scale: ${primaryScaleIndex + 1}/${selectedScales.length}`);
+    // }
+    // if (Array.isArray(selectedRootNote) && selectedRootNote.length > 1) {
+    //     indicators.push(`Root: ${primaryRootNoteIndex + 1}/${selectedRootNote.length}`);
+    // }
+    // if (indicators.length > 0) {
+    //     currentScaleNode.textContent += ` (${indicators.join(', ')})`;
+    // }
 
     // Update keyboard highlighting for the primary scale
     const intervals = scales[family][parseInt(mode, 10) - 1].intervals;
@@ -1000,6 +1005,123 @@ function refreshChordsForRootNote() {
     });
 }
 
+/**
+ * Initialize navigation buttons for scale and root note navigation
+ */
+function initializeNavigationButtons() {
+    // Wait for DOM to be ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Scale navigation buttons
+        const prevScaleBtn = document.getElementById('prevScaleBtn');
+        const nextScaleBtn = document.getElementById('nextScaleBtn');
+        
+        // Root note navigation buttons
+        const prevRootBtn = document.getElementById('prevRootBtn');
+        const nextRootBtn = document.getElementById('nextRootBtn');
+        
+        if (prevScaleBtn) {
+            prevScaleBtn.addEventListener('click', function() {
+                if (navigateToPreviousScale()) {
+                    // Scale changed, trigger any necessary updates
+                    if (typeof window.updateFretboardsForScaleChange === 'function') {
+                        const primaryScale = getPrimaryScale();
+                        const rootNote = getPrimaryRootNote();
+                        window.updateFretboardsForScaleChange({
+                            primaryScale: primaryScale,
+                            rootNote: rootNote
+                        });
+                    }
+                }
+            });
+            
+            // Add hover effects
+            prevScaleBtn.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#666';
+            });
+            prevScaleBtn.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '#444';
+            });
+        }
+        
+        if (nextScaleBtn) {
+            nextScaleBtn.addEventListener('click', function() {
+                if (navigateToNextScale()) {
+                    // Scale changed, trigger any necessary updates
+                    if (typeof window.updateFretboardsForScaleChange === 'function') {
+                        const primaryScale = getPrimaryScale();
+                        const rootNote = getPrimaryRootNote();
+                        window.updateFretboardsForScaleChange({
+                            primaryScale: primaryScale,
+                            rootNote: rootNote
+                        });
+                    }
+                }
+            });
+            
+            // Add hover effects
+            nextScaleBtn.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#666';
+            });
+            nextScaleBtn.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '#444';
+            });
+        }
+        
+        if (prevRootBtn) {
+            prevRootBtn.addEventListener('click', function() {
+                if (navigateToPreviousRootNote()) {
+                    // Root note changed, trigger any necessary updates
+                    refreshChordsForRootNote();
+                    if (typeof window.updateFretboardsForScaleChange === 'function') {
+                        const primaryScale = getPrimaryScale();
+                        const rootNote = getPrimaryRootNote();
+                        window.updateFretboardsForScaleChange({
+                            primaryScale: primaryScale,
+                            rootNote: rootNote
+                        });
+                    }
+                }
+            });
+            
+            // Add hover effects
+            prevRootBtn.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#666';
+            });
+            prevRootBtn.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '#444';
+            });
+        }
+        
+        if (nextRootBtn) {
+            nextRootBtn.addEventListener('click', function() {
+                if (navigateToNextRootNote()) {
+                    // Root note changed, trigger any necessary updates
+                    refreshChordsForRootNote();
+                    if (typeof window.updateFretboardsForScaleChange === 'function') {
+                        const primaryScale = getPrimaryScale();
+                        const rootNote = getPrimaryRootNote();
+                        window.updateFretboardsForScaleChange({
+                            primaryScale: primaryScale,
+                            rootNote: rootNote
+                        });
+                    }
+                }
+            });
+            
+            // Add hover effects
+            nextRootBtn.addEventListener('mouseenter', function() {
+                this.style.backgroundColor = '#666';
+            });
+            nextRootBtn.addEventListener('mouseleave', function() {
+                this.style.backgroundColor = '#444';
+            });
+        }
+    });
+}
+
+// Initialize navigation buttons when the module loads
+initializeNavigationButtons();
+
 
 
 
@@ -1016,5 +1138,6 @@ export {
     updateCurrentScaleDisplay,
     getPrimaryScaleChords,
     getAllSelectedScaleChords,
-    refreshChordsForRootNote
+    refreshChordsForRootNote,
+    initializeNavigationButtons
 }

@@ -758,8 +758,22 @@
             </div>
           </div>
         </span>
-        <span style="width:60%;text-align: left;" class="tableCell">
-          <p>Current Scale:</p><div id="currentScaleNode" style="display: inline-block; font-weight: bold;">C Major</div>
+        <span style="width:30%;text-align: left;" class="tableCell">
+            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
+              <div style="display: flex; align-items: center; gap: 8px; min-width: 180px;">
+                <p style="margin: 0; font-weight: bold; color: #fff;">Root:</p>
+                <button id="prevRootBtn" style="background: linear-gradient(145deg, #555, #333); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: all 0.2s ease;" title="Previous Root (, key)">‹</button>
+                <div id="currentRootNode" style="display: inline-block; font-weight: bold; min-width: 40px; text-align: center; color: #fff; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: 6px; border: 1px solid #666;">C</div>
+                <button id="nextRootBtn" style="background: linear-gradient(145deg, #555, #333); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: all 0.2s ease;" title="Next Root (. key)">›</button>
+              </div>
+              <div style="width: 1px; height: 30px; background: #666; min-width: 1px;"></div>
+              <div style="display: flex; align-items: center; gap: 8px; min-width: 240px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;">
+                <p style="margin: 0; font-weight: bold; color: #fff;">Scale:</p>
+                <button id="prevScaleBtn" style="background: linear-gradient(145deg, #555, #333); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: all 0.2s ease;" title="Previous Scale (N key)">‹</button>
+                <div id="currentScaleNode" style="display: inline-block; font-weight: bold; min-width: 100px; text-align: center; color: #fff; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: 6px; border: 1px solid #666;">C Major</div>
+                <button id="nextScaleBtn" style="background: linear-gradient(145deg, #555, #333); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: all 0.2s ease;" title="Next Scale (M key)">›</button>
+              </div>
+            </div>
         </span>
         </span> </div>
 
