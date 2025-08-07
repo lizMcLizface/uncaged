@@ -836,7 +836,6 @@ class Fretboard {
                     const [family, mode] = primaryScale.split('-');
                     // Guard against accessing HeptatonicScales before it's initialized
                     if (!HeptatonicScales || !HeptatonicScales[family]) {
-                        console.warn('HeptatonicScales not yet initialized');
                         return;
                     }
                     const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
@@ -2825,6 +2824,88 @@ function createFretboardControls(fretboard) {
     const chordGrid = createChordButtonGrid();
     if (chordGrid) {
         fretboard.container.appendChild(chordGrid);
+        
+        // Initialize chord grid colors based on current scale (if any)
+        // Use setTimeout to ensure the DOM elements are fully added before updating colors
+        setTimeout(() => {
+            updateChordGridColors();
+        }, 100);
+    }
+}
+
+/**
+ * Analyze how well a chord fits within the current scale
+ * @param {string} rootNote - The root note of the chord
+ * @param {string} chordType - The type of chord
+ * @returns {Object} Object with matchCount, totalNotes, matchPercentage, and color
+ */
+function analyzeChordScaleCompatibility(rootNote, chordType) {
+    try {
+        // Get current scale information
+        const primaryScale = getPrimaryScale();
+        const scaleRootNote = getPrimaryRootNote();
+        
+        if (!primaryScale || !scaleRootNote) {
+            return { matchCount: 0, totalNotes: 0, matchPercentage: 0, color: '#9E9E9E' }; // Grey for no scale
+        }
+        
+        // Get scale notes - check if HeptatonicScales is available
+        const [family, mode] = primaryScale.split('-');
+        if (!HeptatonicScales || !HeptatonicScales[family] || !HeptatonicScales[family][parseInt(mode, 10) - 1]) {
+            // HeptatonicScales not available yet, return neutral grey
+            return { matchCount: 0, totalNotes: 0, matchPercentage: 0, color: '#9E9E9E' };
+        }
+        
+        const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
+        const scaleNotes = getScaleNotes(scaleRootNote, intervals);
+        
+        // Remove octave information from scale notes to get just note names
+        const scaleNoteNames = scaleNotes.map(note => {
+            if (typeof note === 'string' && note.includes('/')) {
+                return note.split('/')[0];
+            }
+            return note;
+        });
+        
+        // Process the chord to get its notes
+        const chordName = rootNote + chordType;
+        const chordInfo = processChord(chordName);
+        
+        if (!chordInfo || !chordInfo.notes || !Array.isArray(chordInfo.notes)) {
+            return { matchCount: 0, totalNotes: 0, matchPercentage: 0, color: '#9E9E9E' };
+        }
+        
+        // Remove octave information from chord notes
+        const chordNotes = chordInfo.notes.map(note => {
+            if (typeof note === 'string' && note.includes('/')) {
+                return note.split('/')[0];
+            }
+            return note;
+        });
+        
+        // Check how many chord notes are in the scale
+        const notesInScale = chordNotes.filter(note => scaleNoteNames.includes(note));
+        const matchCount = notesInScale.length;
+        const totalNotes = chordNotes.length;
+        const matchPercentage = Math.round((matchCount / totalNotes) * 100);
+        
+        // Determine color based on match
+        let color;
+        if (matchCount === 0) {
+            color = '#9E9E9E'; // Grey for no notes in scale
+        } else if (matchCount === totalNotes) {
+            color = '#4A90E2'; // Blue for all notes in scale
+        } else if (matchCount === totalNotes - 1) {
+            color = '#9B59B6'; // Purple for all but one note in scale
+        } else {
+            color = '#F39C12'; // Orange for partial match
+        }
+        
+        return { matchCount, totalNotes, matchPercentage, color };
+        
+    } catch (error) {
+        // Silently return grey color for compatibility errors during initialization
+        return { matchCount: 0, totalNotes: 0, matchPercentage: 0, color: '#9E9E9E' };
     }
 }
 
@@ -2930,13 +3011,17 @@ function createChordButtonGrid() {
         // Create chord button cells - make the cells themselves clickable
         for (let chordType of commonChordTypes) {
             let cell = document.createElement('td');
+            
+            // Analyze chord-scale compatibility for color coding
+            const compatibility = analyzeChordScaleCompatibility(note, chordType);
+            
             cell.style.cssText = `
                 width: 30px;
                 height: 30px;
                 border: 1px solid #333;
                 text-align: center;
                 vertical-align: middle;
-                background: linear-gradient(to bottom, #f8f9fa, #e9ecef);
+                background: ${compatibility.color};
                 cursor: pointer;
                 transition: all 0.2s ease;
                 user-select: none;
@@ -2944,9 +3029,29 @@ function createChordButtonGrid() {
                 position: relative;
             `;
             
+            // Add tooltip showing compatibility info
+            if (compatibility.totalNotes > 0) {
+                cell.title = `${note}${chordType}: ${compatibility.matchCount}/${compatibility.totalNotes} notes in scale (${compatibility.matchPercentage}%)`;
+            } else {
+                cell.title = `${note}${chordType}: No scale selected or chord analysis failed`;
+            }
+            
+            // Store original color for hover effects
+            cell.dataset.originalColor = compatibility.color;
+            
             // Add hover and click functionality directly to the cell
             cell.addEventListener('mouseenter', () => {
-                cell.style.background = 'linear-gradient(to bottom, #e2e6ea, #dae0e5)';
+                // Lighten the background color for hover effect
+                const originalColor = cell.dataset.originalColor;
+                let hoverColor = originalColor;
+                
+                // Create a lighter version of the original color for hover
+                if (originalColor === '#4A90E2') hoverColor = '#6BA6F0'; // Lighter blue
+                else if (originalColor === '#9B59B6') hoverColor = '#B57BC6'; // Lighter purple
+                else if (originalColor === '#F39C12') hoverColor = '#F5B041'; // Lighter orange
+                else if (originalColor === '#9E9E9E') hoverColor = '#BDBDBD'; // Lighter grey
+                
+                cell.style.background = hoverColor;
                 cell.style.transform = 'scale(1.1)';
                 cell.style.zIndex = '10';
                 
@@ -2955,7 +3060,7 @@ function createChordButtonGrid() {
             });
             
             cell.addEventListener('mouseleave', () => {
-                cell.style.background = 'linear-gradient(to bottom, #f8f9fa, #e9ecef)';
+                cell.style.background = cell.dataset.originalColor;
                 cell.style.transform = 'scale(1)';
                 cell.style.zIndex = '1';
                 
@@ -2977,7 +3082,111 @@ function createChordButtonGrid() {
     gridContainer.appendChild(gridLabel);
     gridContainer.appendChild(grid);
     
+    // Add color coding legend
+    const legend = document.createElement('div');
+    legend.style.cssText = `
+        margin-top: 10px;
+        padding: 8px;
+        font-size: 11px;
+        color: #333;
+        text-align: center;
+        line-height: 1.4;
+    `;
+    legend.innerHTML = `
+        <strong>Scale Compatibility Legend:</strong>
+        <span style="background:#4A90E2; color:white; padding:2px 6px; margin:0 2px; border-radius:3px;">All notes</span>
+        <span style="background:#9B59B6; color:white; padding:2px 6px; margin:0 2px; border-radius:3px;">All but one</span>
+        <span style="background:#F39C12; color:white; padding:2px 6px; margin:0 2px; border-radius:3px;">Partial</span>
+        <span style="background:#9E9E9E; color:white; padding:2px 6px; margin:0 2px; border-radius:3px;">No match</span>
+    `;
+    gridContainer.appendChild(legend);
+    
     return gridContainer;
+}
+
+/**
+ * Update chord grid colors based on current scale
+ */
+function updateChordGridColors() {
+    const gridContainer = document.getElementById('chordButtonGridContainer');
+    if (!gridContainer) {
+        // Grid not ready yet, try again in a bit
+        setTimeout(updateChordGridColors, 100);
+        return;
+    }
+    
+    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const commonChordTypes = ['Major', 'Minor', '7', '5', 'dim', 'dim7', 'aug', 'sus2', 'sus4', 'maj7', 'm7', 'm7b5'];
+    
+    // Find all chord cells and update their colors
+    const table = gridContainer.querySelector('table');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tr');
+    
+    // Skip header row (index 0), start from note rows (index 1)
+    for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        const noteIndex = i - 1; // Adjust for header row
+        const note = chromaticNotes[noteIndex];
+        const cells = row.querySelectorAll('td');
+        
+        // Skip note label cell (index 0), start from chord cells (index 1)
+        for (let j = 1; j < cells.length; j++) {
+            const cell = cells[j];
+            const chordTypeIndex = j - 1; // Adjust for note label cell
+            const chordType = commonChordTypes[chordTypeIndex];
+            
+            // Analyze chord-scale compatibility for new color
+            const compatibility = analyzeChordScaleCompatibility(note, chordType);
+            
+            // Update cell color and tooltip
+            cell.style.background = compatibility.color;
+            cell.dataset.originalColor = compatibility.color;
+            
+            if (compatibility.totalNotes > 0) {
+                cell.title = `${note}${chordType}: ${compatibility.matchCount}/${compatibility.totalNotes} notes in scale (${compatibility.matchPercentage}%)`;
+            } else {
+                cell.title = `${note}${chordType}: No scale selected or chord analysis failed`;
+            }
+        }
+    }
+}
+
+/**
+ * Force refresh of fretboard and chord grid (useful for manual calls)
+ */
+function refreshFretboardDisplay() {
+    try {
+        const primaryScale = getPrimaryScale();
+        const rootNote = getPrimaryRootNote();
+        
+        if (primaryScale && rootNote && HeptatonicScales && Object.keys(HeptatonicScales).length > 0) {
+            console.log('Manually refreshing fretboard display');
+            
+            // Update chord grid colors first
+            updateChordGridColors();
+            
+            // Then restore the appropriate fretboard display
+            if (currentChordGridSelection) {
+                // Re-apply chord grid selection with new scale context
+                showChordPatternOnFretboard(currentChordGridSelection.note, currentChordGridSelection.chordType, false);
+            } else if (currentDisplayedChord === 0) {
+                // Show scale
+                showScaleOnFretboard();
+            } else if (currentDisplayedChord !== null && currentDisplayedChord > 0) {
+                // Show Roman numeral chord
+                showChordOnFretboard(currentDisplayedChord - 1);
+            } else {
+                // Default to showing scale
+                showScaleOnFretboard();
+            }
+        } else {
+            console.log('Cannot refresh: no scale selected or HeptatonicScales not available');
+        }
+    } catch (error) {
+        console.warn('Error refreshing fretboard display:', error);
+    }
 }
 
 /**
@@ -3456,6 +3665,12 @@ window.addEventListener('scaleChanged', (event) => {
     lastScaleData = currentScaleData;
     
     updateFretboardsForScaleChange(event.detail);
+    updateChordGridColors(); // Update chord grid colors when scale changes
+    
+    // If there's a current chord grid selection, re-apply it with the new scale context
+    if (currentChordGridSelection) {
+        showChordPatternOnFretboard(currentChordGridSelection.note, currentChordGridSelection.chordType, false);
+    }
 });
 
 /**
@@ -3763,6 +3978,9 @@ export {
     quickChordPattern,
     showChordOnFretboard,
     showScaleOnFretboard,
+    analyzeChordScaleCompatibility,
+    updateChordGridColors,
+    refreshFretboardDisplay,
     currentDisplayedChord,
     GUITAR_TUNING,
     SCALE_COLORS
@@ -3770,13 +3988,47 @@ export {
 
 
 
-// Initialize Fretboard
+// Initialize Fretboard - defer until DOM is ready
 let mainFretboard = null;
-try {
-    mainFretboard = initializeFretboard();
-    console.log('Fretboard initialized successfully');
-} catch (error) {
-    console.warn('Failed to initialize fretboard:', error);
+
+// Function to initialize fretboard with proper scale display
+function initializeFretboardWithScale() {
+    try {
+        mainFretboard = initializeFretboard();
+        console.log('Fretboard initialized successfully');
+        
+        // Force a scale visualization and chord grid color update after initialization
+        // Use setTimeout to ensure all modules are fully loaded
+        setTimeout(() => {
+            // Check if we have HeptatonicScales available
+            if (HeptatonicScales && Object.keys(HeptatonicScales).length > 0) {
+                // Force show the scale if one is selected
+                const primaryScale = getPrimaryScale();
+                const rootNote = getPrimaryRootNote();
+                
+                if (primaryScale && rootNote) {
+                    console.log('Refreshing fretboard display with current scale');
+                    showScaleOnFretboard();
+                    updateChordGridColors();
+                } else {
+                    console.log('No primary scale selected, fretboard initialized without scale display');
+                }
+            } else {
+                console.warn('HeptatonicScales not yet available during fretboard initialization');
+            }
+        }, 250); // Give extra time for all modules to initialize
+        
+    } catch (error) {
+        console.warn('Failed to initialize fretboard:', error);
+    }
+}
+
+// Initialize when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initializeFretboardWithScale);
+} else {
+    // DOM is already ready, initialize now but with a small delay
+    setTimeout(initializeFretboardWithScale, 100);
 }
 
 // Make fretboard globally accessible for other modules
@@ -3795,3 +4047,8 @@ window.showAllChordPatterns = showAllChordPatterns;
 window.getChordPatterns = getChordPatterns;
 window.getPatternsByChordType = getPatternsByChordType;
 window.quickChordPattern = quickChordPattern;
+
+// Make chord grid analysis functions globally accessible for console use
+window.analyzeChordScaleCompatibility = analyzeChordScaleCompatibility;
+window.updateChordGridColors = updateChordGridColors;
+window.refreshFretboardDisplay = refreshFretboardDisplay;
