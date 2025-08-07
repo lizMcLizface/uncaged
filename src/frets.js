@@ -58,6 +58,33 @@ const DEFAULT_COLORS = {
 };
 
 /**
+ * Utility function to add both mouse and touch event listeners for better mobile support
+ * @param {HTMLElement} element - The element to add events to
+ * @param {string} eventType - Type of event: 'enter', 'leave', 'click'
+ * @param {function} handler - The event handler function
+ */
+function addInteractiveEvent(element, eventType, handler) {
+    switch (eventType) {
+        case 'enter':
+            element.addEventListener('mouseenter', handler);
+            element.addEventListener('touchstart', handler, { passive: true });
+            break;
+        case 'leave':
+            element.addEventListener('mouseleave', handler);
+            element.addEventListener('touchend', handler, { passive: true });
+            element.addEventListener('touchcancel', handler, { passive: true });
+            break;
+        case 'click':
+            element.addEventListener('click', handler);
+            element.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                handler(e);
+            });
+            break;
+    }
+}
+
+/**
  * Class representing a guitar fretboard
  */
 class Fretboard {
@@ -102,6 +129,16 @@ class Fretboard {
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             overflow: visible; /* Allow content to extend beyond bounds for labels */
         `;
+        
+        // Add mobile-specific styles
+        if (window.innerWidth <= 768) {
+            this.fretboardElement.style.cssText += `
+                margin: 5px 0 !important;
+                padding: 20px 10px 30px 10px !important;
+                height: 200px !important;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+            `;
+        }
         
         // Add CSS animations and styles for subscale features
         this.addSubscaleStyles();
@@ -431,8 +468,8 @@ class Fretboard {
                     transition: all 0.2s ease;
                 `;
                 
-                // Add hover effect
-                fretElement.addEventListener('mouseenter', () => {
+                // Add hover effect with touch support
+                addInteractiveEvent(fretElement, 'enter', () => {
                     if (!this.markers.has(`${stringIndex}-${fret}`)) {
                         if (fret === 0) {
                             fretElement.style.transform = 'translateY(-50%) scale(1.1)';
@@ -442,7 +479,7 @@ class Fretboard {
                     }
                 });
                 
-                fretElement.addEventListener('mouseleave', () => {
+                addInteractiveEvent(fretElement, 'leave', () => {
                     if (!this.markers.has(`${stringIndex}-${fret}`)) {
                         if (fret === 0) {
                             fretElement.style.transform = 'translateY(-50%) scale(1)';
@@ -1931,7 +1968,7 @@ function createFretboardControls(fretboard) {
     clearButton.addEventListener('mouseleave', () => {
         clearButton.style.cssText = buttonStyle;
     });
-    clearButton.addEventListener('click', () => {
+    addInteractiveEvent(clearButton, 'click', () => {
         // Clear hover state flag
         isInHoverState = false;
         
@@ -1958,7 +1995,7 @@ function createFretboardControls(fretboard) {
     showAllButton.addEventListener('mouseleave', () => {
         showAllButton.style.cssText = buttonStyle;
     });
-    showAllButton.addEventListener('click', () => {
+    addInteractiveEvent(showAllButton, 'click', () => {
         fretboard.markAllNotes();
         // Remove this fretboard from the scale tracking set since it's now showing all notes
         fretboardsShowingScale.delete(fretboard.containerId);
@@ -1970,17 +2007,17 @@ function createFretboardControls(fretboard) {
     showScaleButton.style.cssText = buttonStyle + `
         background: linear-gradient(to bottom, #ff6b35, #e55a2b);
     `;
-    showScaleButton.addEventListener('mouseenter', () => {
+    addInteractiveEvent(showScaleButton, 'enter', () => {
         showScaleButton.style.cssText = buttonStyle + buttonHoverStyle + `
             background: linear-gradient(to bottom, #ff7b45, #f56a3b);
         `;
     });
-    showScaleButton.addEventListener('mouseleave', () => {
+    addInteractiveEvent(showScaleButton, 'leave', () => {
         showScaleButton.style.cssText = buttonStyle + `
             background: linear-gradient(to bottom, #ff6b35, #e55a2b);
         `;
     });
-    showScaleButton.addEventListener('click', () => {
+    addInteractiveEvent(showScaleButton, 'click', () => {
         // Get current scale from the scale generator
         try {
             const primaryScale = getPrimaryScale();
@@ -2029,7 +2066,7 @@ function createFretboardControls(fretboard) {
             background: linear-gradient(to bottom, #dc3545, #c82333);
         `;
     });
-    clearBoxesButton.addEventListener('click', () => {
+    addInteractiveEvent(clearBoxesButton, 'click', () => {
         fretboard.clearSubscaleBoxes();
     });
     
@@ -2049,7 +2086,7 @@ function createFretboardControls(fretboard) {
             background: linear-gradient(to bottom, #28a745, #1e7e34);
         `;
     });
-    demoBoxButton.addEventListener('click', () => {
+    addInteractiveEvent(demoBoxButton, 'click', () => {
         // Create a demo subscale box (3-string span, 3-fret span)
         fretboard.drawSubscaleBox(
             'demo-box',
@@ -2110,7 +2147,7 @@ function createFretboardControls(fretboard) {
             font-size: 12px;
         `;
     });
-    markNoteButton.addEventListener('click', () => {
+    addInteractiveEvent(markNoteButton, 'click', () => {
         const note = noteInput.value.trim();
         if (note) {
             fretboard.markNote(note, {
@@ -2140,7 +2177,7 @@ function createFretboardControls(fretboard) {
             background: linear-gradient(to bottom, #fd7e14, #e85d04);
         `;
     });
-    demoNotesButton.addEventListener('click', () => {
+    addInteractiveEvent(demoNotesButton, 'click', () => {
         fretboard.markMultipleNotes([
             {
                 note: 'C',
@@ -3092,7 +3129,7 @@ function createChordButtonGrid() {
             cell.dataset.originalColor = compatibility.color;
             
             // Add hover and click functionality directly to the cell
-            cell.addEventListener('mouseenter', () => {
+            addInteractiveEvent(cell, 'enter', () => {
                 // Lighten the background color for hover effect
                 const originalColor = cell.dataset.originalColor;
                 let hoverColor = originalColor;
@@ -3111,7 +3148,7 @@ function createChordButtonGrid() {
                 showChordPatternOnFretboard(note, chordType, true);
             });
             
-            cell.addEventListener('mouseleave', () => {
+            addInteractiveEvent(cell, 'leave', () => {
                 cell.style.background = cell.dataset.originalColor;
                 cell.style.transform = 'scale(1)';
                 cell.style.zIndex = '1';
@@ -3120,7 +3157,7 @@ function createChordButtonGrid() {
                 restoreFretboardState();
             });
             
-            cell.addEventListener('click', () => {
+            addInteractiveEvent(cell, 'click', () => {
                 // Toggle persistent display
                 showChordPatternOnFretboard(note, chordType, false);
             });

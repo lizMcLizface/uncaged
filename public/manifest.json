@@ -1,6 +1,6 @@
 {
-  "short_name": "Midiano",
-  "name": "The ill-tempered piano - Music Theory & Synthesis",
+  "short_name": "unCAGED",
+  "name": "unCAGED - A guitar fretboard visualization tool for exploring scales and chords.",
   "icons": [
     {
       "src": "favicon.svg",
@@ -25,6 +25,7 @@
   ],
   "start_url": ".",
   "display": "standalone",
-  "theme_color": "#000000",
+  "orientation": "landscape",
+  "theme_color": "#2563eb",
   "background_color": "#ffffff"
 }

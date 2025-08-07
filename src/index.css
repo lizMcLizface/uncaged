@@ -1603,27 +1603,231 @@ h3 {
 
 /* Responsive fretboard for smaller screens */
 @media (max-width: 768px) {
+  /* Force landscape orientation with better portrait handling */
+  @media screen and (orientation: portrait) {
+    html {
+      transform: rotate(-90deg);
+      transform-origin: left top;
+      width: 100vh;
+      height: 100vw;
+      overflow-x: hidden;
+      position: absolute;
+      top: 100%;
+      left: 0;
+    }
+    
+    body {
+      width: 100vh;
+      height: 100vw;
+      overflow-x: hidden;
+      margin: 0;
+      padding: 0;
+    }
+    
+    .main-content {
+      height: 100vw;
+      width: 100vh;
+      overflow-y: auto;
+    }
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+  }
+
+  /* Prioritize fretboard display */
   .fretboard {
     font-size: 10px;
+    width: 100% !important;
+    margin: 5px 0 !important;
+    order: 1 !important;
+    flex-shrink: 0 !important;
+    height: 200px !important;
   }
   
   .fretboard .neck-container {
-    height: 120px;
-    margin: 0 10px;
+    height: 120px !important;
+    margin: 0 5px !important;
   }
   
   .fretboard .note-marker {
-    width: 20px;
-    height: 20px;
-    font-size: 9px;
+    width: 16px !important;
+    height: 16px !important;
+    font-size: 8px !important;
   }
   
   .fretboard .position-marker {
-    width: 10px;
-    height: 10px;
+    width: 8px !important;
+    height: 8px !important;
   }
   
   .fretboard .fret-wire {
-    width: 2px;
+    width: 1px !important;
+  }
+
+  /* Mobile layout for main containers with proper ordering */
+  #fretNotPlaceholder {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    padding: 5px !important;
+    height: calc(100vh - 60px) !important;
+    overflow-y: auto !important;
+  }
+
+  /* Scale controls mobile optimization - order 3 */
+  #scaleControlsContainer,
+  #placeholderContent {
+    order: 3 !important;
+    width: 100% !important;
+    flex-shrink: 1 !important;
+  }
+
+  #scaleControlsContainer table,
+  #placeholderContent table {
+    width: 100% !important;
+    font-size: 10px !important;
+    margin: 5px 0 !important;
+  }
+
+  #scaleControlsContainer td,
+  #placeholderContent td {
+    padding: 2px 3px !important;
+    font-size: 9px !important;
+  }
+
+  /* Chord grid mobile layout - order 2, below fretboard, 100% width */
+  #chordButtonGridContainer {
+    order: 2 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 10px 0 !important;
+    flex-shrink: 1 !important;
+  }
+
+  #chordButtonGridContainer table {
+    width: 100% !important;
+  }
+
+  #chordButtonGridContainer td,
+  #chordButtonGridContainer th {
+    width: auto !important;
+    min-width: 20px !important;
+    height: 20px !important;
+    font-size: 8px !important;
+    padding: 1px !important;
+  }
+
+  /* Fretboard controls mobile */
+  .fretboard-controls {
+    order: 1 !important;
+    flex-wrap: wrap !important;
+    gap: 3px !important;
+    margin: 5px 0 !important;
+    justify-content: center !important;
+  }
+
+  .fretboard-controls button {
+    min-width: 28px !important;
+    height: 28px !important;
+    font-size: 10px !important;
+    padding: 3px !important;
+    margin: 1px !important;
+  }
+
+  /* Toggle switch mobile adjustments */
+  .fretboard-controls > div:first-child {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 3px !important;
+    width: 100% !important;
+  }
+
+  /* Compact header for mobile */
+  .selectionContainer {
+    flex-direction: row !important;
+    max-height: 50px !important;
+    padding: 2px !important;
+    display: flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+  }
+
+  .selectionContainer .tableCell {
+    width: auto !important;
+    margin-bottom: 0 !important;
+    padding: 2px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .selectionContainer .tableCell h3 {
+    font-size: 14px !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+  }
+
+  /* Cross reference mobile */
+  .cross-reference-container {
+    order: 4 !important;
+    overflow-x: auto !important;
+    margin: 10px 0 !important;
+  }
+
+  .cross-reference-container table {
+    min-width: 300px !important;
+    font-size: 8px !important;
+  }
+
+  .cross-reference-container td,
+  .cross-reference-container th {
+    padding: 1px !important;
+    font-size: 7px !important;
+  }
+
+  /* Keyboard mobile adjustments */
+  #keyboard {
+    height: 60px !important;
+    padding: 0 !important;
+  }
+
+  .key {
+    font-size: 8px !important;
+  }
+
+  .key.black {
+    height: 40px !important;
+  }
+
+  .key.white {
+    height: 60px !important;
+  }
+}
+
+/* Tablet landscape adjustments */
+@media (min-width: 769px) and (max-width: 1024px) and (orientation: landscape) {
+  #fretNotPlaceholder {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 20px !important;
+  }
+
+  #chordButtonGridContainer {
+    order: 2 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .fretboard {
+    order: 1 !important;
+  }
+
+  #scaleControlsContainer,
+  #placeholderContent {
+    order: 3 !important;
   }
 }

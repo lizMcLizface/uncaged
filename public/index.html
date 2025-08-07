@@ -4,11 +4,15 @@
     <meta charset="utf-8" />
     <link rel="icon" href="%PUBLIC_URL%/favicon.svg" type="image/svg+xml" />
     <!-- <link rel="icon" href="%PUBLIC_URL%/favicon.ico" /> -->
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, maximum-scale=1, shrink-to-fit=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="screen-orientation" content="landscape" />
     <meta name="theme-color" content="#2563eb" />
     <meta
       name="description"
-      content="The ill-tempered piano - A comprehensive music theory and synthesis platform"
+      content="unCAGE - A guitar fretboard visualization tool for exploring scales and chords."
     />
     <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.svg" />
     <!-- <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-+0n0xVW2eSR5OomGNYDnhzAbDsOXxcvSN1TPprVMTNDbiYZCxYbOOl7+AMvyTG2x" crossorigin="anonymous">
@@ -28,7 +32,7 @@
       work correctly both with client-side routing and a non-root public URL.
       Learn how to configure a non-root public URL by running `npm run build`.
     -->
-    <title>The ill-tempered piano</title>
+    <title>unCAGED</title>
   </head>
   <body>  <style>
       .tab {
@@ -172,6 +176,513 @@
       
       .help-button:hover {
         background-color: #f0f0f0;
+      }
+      
+        #scaleControlsContainer table,
+        #placeholderContent table {
+          width: 100% !important;
+          margin: 5px 0 !important;
+        }
+
+        #scaleControlsContainer td,
+        #placeholderContent td {
+          padding: 2px 3px !important;
+        }
+
+        /* Fretboard controls mobile layout */
+        .fretboard-controls {
+          flex-wrap: wrap !important;
+          gap: 3px !important;
+          margin: 5px 0 !important;
+          justify-content: center !important;
+        }
+
+        .fretboard-controls button {
+          min-width: 44px !important; /* Apple's recommended 44px minimum touch target */
+          min-height: 44px !important;
+          font-size: 10px !important;
+          padding: 3px !important;
+          margin: 1px !important;
+          touch-action: manipulation; /* Prevent zoom on double-tap */
+          -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1); /* Subtle tap highlight */
+        }
+
+        /* Force chord grid first, then scale controls below it */
+        #chordButtonGridContainer {
+          order: 1 !important;
+          width: 100% !important;
+          max-width: 600px !important; /* Set reasonable maximum width for all screens */
+          margin: 5px auto !important; /* Center the grid */
+          padding: 0 !important; /* Remove padding */
+          flex-shrink: 1 !important;
+          overflow: hidden !important; /* Prevent content from overflowing container */
+        }
+
+        #chordButtonGridContainer table {
+          width: 100% !important;
+          max-width: 100% !important; /* Ensure table doesn't exceed container width */
+          margin: 0 !important; /* Remove table margin */
+          border-spacing: 0 !important; /* Remove cell spacing */
+          border-collapse: collapse !important; /* Collapse borders */
+          table-layout: fixed !important; /* Force table to respect width constraints */
+        }
+
+        #chordButtonGridContainer td,
+        #chordButtonGridContainer th {
+          width: auto !important;
+          min-width: 20px !important;
+          height: 20px !important;
+          font-size: 8px !important;
+          padding: 1px !important;
+          margin: 0 !important; /* Remove cell margin */
+          border: none !important; /* Remove borders that add space */
+        }
+
+        /* Compact chord grid label */
+        #chordButtonGridContainer h3,
+        #chordButtonGridContainer h4,
+        #chordButtonGridContainer .grid-label {
+          margin: 2px 0 !important; /* Minimal margin for labels */
+          padding: 0 !important;
+          font-size: 12px !important;
+          line-height: 1.2 !important;
+        }
+        
+        #scaleControlsContainer,
+        #placeholderContent {
+          order: 2 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          margin: 5px 0 !important; /* Reduced margin to match chord grid */
+          flex-shrink: 1 !important;
+        }
+        /* Better touch targets for chord grid */
+        #chordButtonGridContainer td,
+        #chordButtonGridContainer th {
+          min-width: 30px !important;
+          min-height: 30px !important;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        }
+
+        /* Better touch targets for scale controls */
+        #scaleControlsContainer td,
+        #placeholderContent td {
+          min-height: 32px !important;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        }
+
+
+      /* Mobile styles - Force landscape orientation and optimize layout */
+      @media screen and (max-width: 768px) {
+        /* Force landscape orientation */
+        @media screen and (orientation: portrait) {
+          html {
+            transform: rotate(-90deg);
+            transform-origin: left top;
+            width: 100vh;
+            height: 100vw;
+            overflow-x: hidden;
+            position: absolute;
+            top: 100%;
+            left: 0;
+          }
+          
+          body {
+            width: 100vh;
+            height: 100vw;
+            overflow-x: hidden;
+          }
+          
+          .main-content {
+            height: 100vw;
+            width: 100vh;
+            overflow-y: auto;
+          }
+        }
+
+        /* Mobile layout adjustments */
+        body {
+          font-size: 14px;
+          margin: 0;
+          padding: 0;
+        }
+
+        .main-content {
+          margin-left: 0;
+          padding: 5px;
+        }
+
+        /* Compact header for mobile */
+        .selectionContainer {
+          max-height: 50px !important;
+          padding: 2px;
+          display: flex !important;
+          flex-direction: row !important;
+          flex-wrap: nowrap !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+        }
+
+        .selectionContainer .tableCell {
+          margin-bottom: 0 !important;
+          padding: 2px !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+        }
+
+        .selectionContainer .tableCell h3 {
+          font-size: 14px !important;
+          margin: 0 !important;
+          white-space: nowrap !important;
+        }
+
+        /* Compress the unCAGED title and help section */
+        .selectionContainer .tableCell:first-child {
+          width: 20% !important;
+          min-width: 60px !important;
+        }
+
+        .selectionContainer .tableCell:nth-child(2) {
+          width: 15% !important;
+          min-width: 40px !important;
+        }
+
+        .selectionContainer .tableCell:last-child {
+          width: 65% !important;
+          text-align: left !important;
+        }
+
+        .selectionContainer .tableCell:last-child p {
+          font-size: 11px !important;
+          margin: 0 !important;
+          display: inline !important;
+        }
+
+        #currentScaleNode {
+          font-size: 12px !important;
+          font-weight: bold !important;
+        }
+
+        /* Help dropdown adjustments for mobile */
+        .help-dropdown {
+          min-width: 90vw !important;
+          max-width: 90vw !important;
+          left: -80vw;
+          font-size: 12px;
+          padding: 15px;
+        }
+
+        .help-dropdown h4 {
+          font-size: 16px;
+        }
+
+        .help-dropdown h5 {
+          font-size: 14px;
+        }
+
+        .help-dropdown p {
+          font-size: 12px;
+          line-height: 1.4;
+        }
+
+        /* Mobile-specific layout for fretboard content */
+        #fretNotPlaceholder {
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+          padding: 5px;
+          height: calc(100vh - 60px); /* Reserve space for header */
+          overflow-y: auto;
+        }
+
+        /* Fretboard goes below chord grid and scale controls */
+        .fretboard {
+          order: 3 !important;
+          width: 100% !important;
+          margin: 5px 0 !important;
+          flex-shrink: 0 !important;
+          height: 200px !important; /* Fixed height for fretboard */
+        }
+
+        .fretboard .neck-container {
+          height: 120px !important;
+          margin: 0 5px !important;
+        }
+
+        .fretboard .note-marker {
+          width: 16px !important;
+          height: 16px !important;
+          font-size: 8px !important;
+        }
+
+        .fretboard .position-marker {
+          width: 8px !important;
+          height: 8px !important;
+        }
+
+        .fretboard .fret-wire {
+          width: 1px !important;
+        }
+
+        /* Force chord grid first, then scale controls below it */
+        #chordButtonGridContainer {
+          order: 1 !important;
+          width: 100% !important;
+          max-width: 300px !important; /* Limit maximum width on small screens */
+          margin: 5px auto !important; /* Center the grid and reduced margin */
+          padding: 0 !important; /* Remove padding */
+          flex-shrink: 1 !important;
+          overflow: hidden !important; /* Prevent content from overflowing container */
+        }
+
+        #chordButtonGridContainer table {
+          width: 100% !important;
+          max-width: 100% !important; /* Ensure table doesn't exceed container width */
+          margin: 0 !important; /* Remove table margin */
+          border-spacing: 0 !important; /* Remove cell spacing */
+          border-collapse: collapse !important; /* Collapse borders */
+          table-layout: fixed !important; /* Force table to respect width constraints */
+        }
+
+        #chordButtonGridContainer td,
+        #chordButtonGridContainer th {
+          width: auto !important;
+          min-width: 10px !important;
+          max-width: 10px !important;
+          height: 20px !important;
+          font-size: 8px !important;
+          padding: 1px !important;
+          margin: 0 !important; /* Remove cell margin */
+          border: none !important; /* Remove borders that add space */
+        }
+
+        /* Compact chord grid label */
+        #chordButtonGridContainer h3,
+        #chordButtonGridContainer h4,
+        #chordButtonGridContainer .grid-label {
+          margin: 2px 0 !important; /* Minimal margin for labels */
+          padding: 0 !important;
+          font-size: 12px !important;
+          line-height: 1.2 !important;
+        }
+
+        /* Scale controls go below chord grid */
+        #scaleControlsContainer,
+        #placeholderContent {
+          order: 2 !important;
+          width: 100% !important;
+          flex-shrink: 1 !important;
+          margin: 5px 0 !important; /* Reduced margin */
+          padding: 0 !important; /* Remove padding */
+        }
+
+        #scaleControlsContainer table,
+        #placeholderContent table {
+          width: 100% !important;
+          margin: 0 !important; /* Remove table margin */
+          border-spacing: 0 !important; /* Remove cell spacing */
+          border-collapse: collapse !important; /* Collapse borders */
+        }
+
+        #scaleControlsContainer td,
+        #placeholderContent td {
+          padding: 2px 3px !important;
+          margin: 0 !important; /* Remove cell margin */
+          border: none !important; /* Remove borders that add space */
+        }
+
+        /* Compact scale control labels */
+        #scaleControlsContainer h3,
+        #scaleControlsContainer h4,
+        #placeholderContent h3,
+        #placeholderContent h4 {
+          margin: 2px 0 !important; /* Minimal margin for labels */
+          padding: 0 !important;
+          font-size: 12px !important;
+          line-height: 1.2 !important;
+        }
+
+        /* Fretboard controls mobile layout */
+        .fretboard-controls {
+          flex-wrap: wrap !important;
+          gap: 3px !important;
+          margin: 5px 0 !important;
+          justify-content: center !important;
+        }
+
+        .fretboard-controls button {
+          min-width: 44px !important; /* Apple's recommended 44px minimum touch target */
+          min-height: 44px !important;
+          font-size: 10px !important;
+          padding: 3px !important;
+          margin: 1px !important;
+          touch-action: manipulation; /* Prevent zoom on double-tap */
+          -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1); /* Subtle tap highlight */
+        }
+
+        /* Better touch targets for chord grid */
+        #chordButtonGridContainer td,
+        #chordButtonGridContainer th {
+          min-width: 30px !important;
+          min-height: 30px !important;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        }
+
+        /* Better touch targets for scale controls */
+        #scaleControlsContainer td,
+        #placeholderContent td {
+          min-height: 32px !important;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: rgba(0, 0, 0, 0.1);
+        }
+
+        /* Prevent text selection on touch interface elements */
+        .fretboard-controls,
+        #chordButtonGridContainer,
+        #scaleControlsContainer,
+        #placeholderContent {
+          -webkit-user-select: none;
+          -moz-user-select: none;
+          -ms-user-select: none;
+          user-select: none;
+        }
+
+        /* Cross reference tables mobile adjustments */
+        .cross-reference-container {
+          order: 4;
+          overflow-x: auto;
+          margin: 15px 0;
+        }
+
+        .cross-reference-container table {
+          min-width: 300px;
+          font-size: 10px !important;
+        }
+      }
+
+      /* Tablet landscape optimization - Match portrait layout order */
+      @media screen and (min-width: 769px) and (max-width: 1024px) and (orientation: landscape) {
+        .main-content {
+          padding: 15px;
+        }
+
+        .help-dropdown {
+          min-width: 80vw !important;
+          max-width: 80vw !important;
+          left: -70vw;
+        }
+
+        #fretNotPlaceholder {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        /* Force chord grid first, then scale controls, then fretboard for consistency */
+        #chordButtonGridContainer {
+          order: 1 !important;
+          width: 100% !important;
+          max-width: 500px !important; /* Limit maximum width on tablet screens */
+          margin: 5px auto !important; /* Center the grid and reduced margin */
+          padding: 0 !important; /* Remove padding */
+          flex-shrink: 1 !important;
+          overflow: hidden !important; /* Prevent content from overflowing container */
+        }
+
+        #chordButtonGridContainer table {
+          width: 100% !important;
+          max-width: 100% !important; /* Ensure table doesn't exceed container width */
+          margin: 0 !important; /* Remove table margin */
+          border-spacing: 0 !important; /* Remove cell spacing */
+          border-collapse: collapse !important; /* Collapse borders */
+          table-layout: fixed !important; /* Force table to respect width constraints */
+        }
+
+        #chordButtonGridContainer td,
+        #chordButtonGridContainer th {
+          width: auto !important;
+          min-width: 25px !important;
+          height: 25px !important;
+          font-size: 10px !important;
+          padding: 2px !important;
+          margin: 0 !important; /* Remove cell margin */
+          border: none !important; /* Remove borders that add space */
+        }
+
+        /* Compact chord grid label for tablet */
+        #chordButtonGridContainer h3,
+        #chordButtonGridContainer h4,
+        #chordButtonGridContainer .grid-label {
+          margin: 3px 0 !important; /* Minimal margin for labels */
+          padding: 0 !important;
+          font-size: 14px !important;
+          line-height: 1.2 !important;
+        }
+
+        #scaleControlsContainer,
+        #placeholderContent {
+          order: 2 !important;
+          width: 100% !important;
+          flex-shrink: 1 !important;
+          margin: 5px 0 !important; /* Reduced margin */
+          padding: 0 !important; /* Remove padding */
+        }
+
+        #scaleControlsContainer table,
+        #placeholderContent table {
+          width: 100% !important;
+          font-size: 12px !important;
+          margin: 0 !important; /* Remove table margin */
+          border-spacing: 0 !important; /* Remove cell spacing */
+          border-collapse: collapse !important; /* Collapse borders */
+        }
+
+        #scaleControlsContainer td,
+        #placeholderContent td {
+          padding: 3px 4px !important;
+          font-size: 11px !important;
+          margin: 0 !important; /* Remove cell margin */
+          border: none !important; /* Remove borders that add space */
+        }
+
+        /* Compact scale control labels for tablet */
+        #scaleControlsContainer h3,
+        #scaleControlsContainer h4,
+        #placeholderContent h3,
+        #placeholderContent h4 {
+          margin: 3px 0 !important; /* Minimal margin for labels */
+          padding: 0 !important;
+          font-size: 14px !important;
+          line-height: 1.2 !important;
+        }
+
+        .fretboard {
+          order: 3 !important;
+          width: 100% !important;
+          margin: 5px 0 !important;
+          flex-shrink: 0 !important;
+          height: 250px !important; /* Slightly larger for landscape */
+        }
+
+        .fretboard .neck-container {
+          height: 150px !important;
+          margin: 0 10px !important;
+        }
+
+        .fretboard .note-marker {
+          width: 20px !important;
+          height: 20px !important;
+          font-size: 10px !important;
+        }
+
+        .fretboard .position-marker {
+          width: 10px !important;
+          height: 10px !important;
+        }
       }
     </style>
     <!-- <div class="tab" id="mainTabBar"
@@ -374,6 +885,141 @@ function reset_animation() {
     })
 }
 // Get the element with id="defaultOpen" and click on it
-document.getElementById("defaultOpen").click();
+<!-- document.getElementById("defaultOpen").click(); -->
+
+// Mobile layout reorganization function
+function reorganizeForMobile() {
+  if (window.innerWidth <= 768) {
+    const fretNotPlaceholder = document.getElementById('fretNotPlaceholder');
+    if (fretNotPlaceholder) {
+      // Set initial layout styles
+      fretNotPlaceholder.style.display = 'flex';
+      fretNotPlaceholder.style.flexDirection = 'column';
+      fretNotPlaceholder.style.gap = '10px';
+      fretNotPlaceholder.style.height = 'calc(100vh - 60px)';
+      fretNotPlaceholder.style.overflowY = 'auto';
+      
+      // Wait for content to be dynamically loaded
+      const checkForContent = setInterval(() => {
+        const chordGrid = document.getElementById('chordButtonGridContainer');
+        const scaleControls = document.getElementById('scaleControlsContainer') || 
+                             document.getElementById('placeholderContent');
+        const fretboard = fretNotPlaceholder.querySelector('.fretboard');
+        
+        if (chordGrid || scaleControls || fretboard) {
+          // Force reorganization with consistent priority order (chord grid first, scale controls second)
+          if (chordGrid) {
+            chordGrid.style.order = '1';
+            chordGrid.style.width = '100%';
+            chordGrid.style.maxWidth = '100%';
+            chordGrid.style.flexShrink = '1';
+            chordGrid.style.margin = '10px 0';
+          }
+          
+          if (scaleControls) {
+            scaleControls.style.order = '2';
+            scaleControls.style.width = '100%';
+            scaleControls.style.flexShrink = '1';
+          }
+          
+          if (fretboard) {
+            fretboard.style.order = '3';
+            fretboard.style.flexShrink = '0';
+            fretboard.style.height = window.innerWidth <= 768 ? '200px' : '250px';
+            fretboard.style.width = '100%';
+            fretboard.style.margin = '5px 0';
+          }
+          
+          clearInterval(checkForContent);
+        }
+      }, 500);
+      
+      // Clear interval after 10 seconds to prevent infinite checking
+      setTimeout(() => clearInterval(checkForContent), 10000);
+    }
+    
+    // Optimize header layout for mobile
+    const selectionContainer = document.querySelector('.selectionContainer');
+    if (selectionContainer) {
+      selectionContainer.style.display = 'flex';
+      selectionContainer.style.flexDirection = 'row';
+      selectionContainer.style.flexWrap = 'nowrap';
+      selectionContainer.style.alignItems = 'center';
+      selectionContainer.style.justifyContent = 'space-between';
+      selectionContainer.style.maxHeight = '50px';
+      selectionContainer.style.padding = '2px';
+      
+      const tableCells = selectionContainer.querySelectorAll('.tableCell');
+      if (tableCells.length >= 3) {
+        tableCells[0].style.width = '20%'; // unCAGED title
+        tableCells[0].style.minWidth = '60px';
+        tableCells[1].style.width = '15%'; // Help
+        tableCells[1].style.minWidth = '40px';
+        tableCells[2].style.width = '65%'; // Current Scale
+        tableCells[2].style.textAlign = 'left';
+      }
+    }
+  }
+}
+
+// Screen orientation management for mobile
+function handleOrientationChange() {
+  if (window.innerWidth <= 768) {
+    // Force landscape on mobile devices
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('landscape').catch(() => {
+        // Fallback if orientation lock fails
+        console.log('Could not lock screen orientation');
+      });
+    }
+  }
+}
+
+// Initialize mobile optimizations
+document.addEventListener('DOMContentLoaded', () => {
+  reorganizeForMobile();
+  handleOrientationChange();
+});
+
+// Handle window resize
+window.addEventListener('resize', () => {
+  reorganizeForMobile();
+  handleOrientationChange();
+});
+
+// Handle orientation change
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => {
+    reorganizeForMobile();
+    handleOrientationChange();
+  }, 100);
+});
+
+// Mutation observer to handle dynamically added content
+const observer = new MutationObserver((mutations) => {
+  mutations.forEach((mutation) => {
+    if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+      // Check if important elements were added
+      mutation.addedNodes.forEach((node) => {
+        if (node.nodeType === Node.ELEMENT_NODE) {
+          if (node.id === 'chordButtonGridContainer' || 
+              node.id === 'scaleControlsContainer' ||
+              node.className && node.className.includes('fretboard')) {
+            setTimeout(reorganizeForMobile, 100);
+          }
+        }
+      });
+    }
+  });
+});
+
+// Start observing
+const fretNotPlaceholder = document.getElementById('fretNotPlaceholder');
+if (fretNotPlaceholder) {
+  observer.observe(fretNotPlaceholder, {
+    childList: true,
+    subtree: true
+  });
+}
   </script>
 </html>
