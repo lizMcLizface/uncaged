@@ -834,6 +834,11 @@ class Fretboard {
                 
                 if (primaryScale && rootNote) {
                     const [family, mode] = primaryScale.split('-');
+                    // Guard against accessing HeptatonicScales before it's initialized
+                    if (!HeptatonicScales || !HeptatonicScales[family]) {
+                        console.warn('HeptatonicScales not yet initialized');
+                        return;
+                    }
                     const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
                     const scaleNotes = getScaleNotes(rootNote, intervals);
                     const normalizedScaleNotes = scaleNotes.map(note => this.extractNoteName(note));
@@ -1969,6 +1974,11 @@ function createFretboardControls(fretboard) {
             }
             
             const [family, mode] = primaryScale.split('-');
+            // Guard against accessing HeptatonicScales before it's initialized
+            if (!HeptatonicScales || !HeptatonicScales[family]) {
+                console.warn('HeptatonicScales not yet initialized');
+                return;
+            }
             const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
             const rootNote = getPrimaryRootNote();
             const scaleNotes = getScaleNotes(rootNote, intervals);
@@ -2989,6 +2999,11 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
         
         if (primaryScale && scaleRootNote) {
             const [family, mode] = primaryScale.split('-');
+            // Guard against accessing HeptatonicScales before it's initialized
+            if (!HeptatonicScales || !HeptatonicScales[family]) {
+                console.warn('HeptatonicScales not yet initialized');
+                return;
+            }
             const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
             const scaleNotes = getScaleNotes(scaleRootNote, intervals);
             
@@ -3183,6 +3198,11 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
         
         // Get scale intervals
         const [family, mode] = primaryScale.split('-');
+        // Guard against accessing HeptatonicScales before it's initialized
+        if (!HeptatonicScales || !HeptatonicScales[family]) {
+            console.warn('HeptatonicScales not yet initialized');
+            return;
+        }
         const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
         
         // Generate chords
@@ -3267,6 +3287,11 @@ function showScaleOnFretboard(isTemporary = false) {
         }
         
         const [family, mode] = primaryScale.split('-');
+        // Guard against accessing HeptatonicScales before it's initialized
+        if (!HeptatonicScales || !HeptatonicScales[family]) {
+            console.warn('HeptatonicScales not yet initialized');
+            return;
+        }
         const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
         const scaleNotes = getScaleNotes(rootNote, intervals);
         
@@ -3380,6 +3405,11 @@ function updateFretboardsForScaleChange(scaleData) {
                     } else {
                         // Chord is selected (adjust index for chord array)
                         const [family, mode] = primaryScale.split('-');
+                        // Guard against accessing HeptatonicScales before it's initialized
+                        if (!HeptatonicScales || !HeptatonicScales[family]) {
+                            console.warn('HeptatonicScales not yet initialized, skipping chord update');
+                            return;
+                        }
                         const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
                         const chordLength = currentChordType === 'sevenths' ? 4 : 3;
                         const syntheticChords = generateSyntheticChords({ intervals }, chordLength, rootNote);

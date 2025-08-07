@@ -430,7 +430,7 @@ input:checked + .slider:before {
   border: 1px solid #ccc;
   width: 100%;
   border-left: none;
-  height: 1010px;
+  /* height: 1010px; */
   display: none;
   font-size: 18pt;
 }

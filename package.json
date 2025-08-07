@@ -1,5 +1,5 @@
 {
-  "homepage": "http://liz.moe",
+  "homepage": "http://liz.moe/uncaged",
   "name": "piano-app",
   "version": "0.1.1",
   "private": true,
@@ -15,9 +15,7 @@
   },
   "scripts": {
     "predeploy": "npm run build",
-    "deploy": "npm run deploy:cname && npm run deploy:gh-pages",
-    "deploy:cname": "echo liz.moe > ./build/CNAME",
-    "deploy:gh-pages": "gh-pages -d build",
+    "deploy": "gh-pages -d build",
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
