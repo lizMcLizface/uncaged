@@ -130,15 +130,16 @@ class Fretboard {
             overflow: visible; /* Allow content to extend beyond bounds for labels */
         `;
         
-        // // Add mobile-specific styles
-        // if (window.innerWidth <= 768) {
-        //     this.fretboardElement.style.cssText += `
-        //         margin: 5px 0 !important;
-        //         padding: 20px 10px 30px 10px !important;
-        //         height: 200px !important;
-        //         box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
-        //     `;
-        // }
+        // Add mobile-specific styles
+        if (window.innerWidth <= 768) {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            this.fretboardElement.style.cssText += `
+                margin: ${isLandscape ? '2px 0' : '5px 0'} !important;
+                padding: ${isLandscape ? '8px 5px 12px 5px' : '15px 8px 20px 8px'} !important;
+                height: ${isLandscape ? '100px' : '160px'} !important;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+            `;
+        }
         
         // Add CSS animations and styles for subscale features
         this.addSubscaleStyles();
@@ -213,10 +214,36 @@ class Fretboard {
      * Add fret number labels under each fret wire
      */
     addFretNumbers() {
+        // Calculate responsive font size and spacing
+        let fontSize = 12;
+        let padding = '2px 4px';
+        let minWidth = 20;
+        
+        if (window.innerWidth <= 768) {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            if (isLandscape) {
+                fontSize = 9;
+                padding = '1px 2px';
+                minWidth = 15;
+            } else {
+                fontSize = 10;
+                padding = '1px 3px';
+                minWidth = 18;
+            }
+        }
+        
         const fretNumberRow = document.createElement('div');
+        
+        // Calculate responsive bottom positioning
+        let bottomPosition = 10;
+        if (window.innerWidth <= 768) {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            bottomPosition = isLandscape ? 5 : 8;
+        }
+        
         fretNumberRow.style.cssText = `
             position: absolute;
-            bottom: 10px; /* Position within the container padding */
+            bottom: ${bottomPosition}px; /* Position within the container padding */
             left: 0;
             right: 0;
             z-index: 10;
@@ -230,13 +257,13 @@ class Fretboard {
             left: 0%;
             transform: translateX(-50%);
             text-align: center;
-            font-size: 12px;
+            font-size: ${fontSize}px;
             font-weight: bold;
             color: #333;
-            min-width: 20px;
+            min-width: ${minWidth}px;
             background: rgba(255, 255, 255, 0.8);
             border-radius: 3px;
-            padding: 2px 4px;
+            padding: ${padding};
             border: 1px solid #ccc;
         `;
         fretNumberRow.appendChild(nutLabel);
@@ -254,13 +281,13 @@ class Fretboard {
                 left: ${fretPosition}%;
                 transform: translateX(-50%);
                 text-align: center;
-                font-size: 12px;
+                font-size: ${fontSize}px;
                 font-weight: bold;
                 color: #333;
-                min-width: 20px;
+                min-width: ${minWidth}px;
                 background: rgba(255, 255, 255, 0.8);
                 border-radius: 3px;
-                // padding: 2px 4px;
+                padding: ${padding};
                 border: 1px solid #ccc;
             `;
             fretNumberRow.appendChild(fretLabel);
@@ -273,13 +300,50 @@ class Fretboard {
      * Add string name labels
      */
     addStringNames() {
+        // Calculate responsive sizing
+        let containerWidth = 40;
+        let containerLeft = -50;
+        let labelHeight = 24;
+        let fontSize = 12;
+        
+        if (window.innerWidth <= 768) {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            if (isLandscape) {
+                containerWidth = 22;
+                containerLeft = -27;
+                labelHeight = 14;
+                fontSize = 8;
+            } else {
+                containerWidth = 32;
+                containerLeft = -40;
+                labelHeight = 20;
+                fontSize = 10;
+            }
+        }
+        
         const stringContainer = document.createElement('div');
+        
+        // Calculate responsive positioning
+        let topPosition = 20;
+        let bottomPosition = 20;
+        
+        if (window.innerWidth <= 768) {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            if (isLandscape) {
+                topPosition = 8;
+                bottomPosition = 12;
+            } else {
+                topPosition = 15;
+                bottomPosition = 20;
+            }
+        }
+        
         stringContainer.style.cssText = `
             position: absolute;
-            left: -50px;
-            top: 20px; /* Adjusted to align with neck container */
-            bottom: 20px; /* Adjusted to align with neck container */
-            width: 40px;
+            left: ${containerLeft}px;
+            top: ${topPosition}px; /* Adjusted to align with neck container */
+            bottom: ${bottomPosition}px; /* Adjusted to align with neck container */
+            width: ${containerWidth}px;
             display: flex;
             flex-direction: column;
             justify-content: space-between;
@@ -297,8 +361,8 @@ class Fretboard {
                 color: #333;
                 background-color: rgba(255, 255, 255, 0.9);
                 border-radius: 6px;
-                height: 24px;
-                font-size: 12px;
+                height: ${labelHeight}px;
+                font-size: ${fontSize}px;
                 box-shadow: 0 2px 4px rgba(0,0,0,0.2);
             `;
             stringContainer.appendChild(stringLabel);
@@ -313,9 +377,17 @@ class Fretboard {
     createNeckStructure() {
         const neckContainer = document.createElement('div');
         neckContainer.className = 'neck-container';
+        
+        // Calculate responsive height for mobile
+        let neckHeight = 160;
+        if (window.innerWidth <= 768) {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            neckHeight = isLandscape ? 70 : 120;
+        }
+        
         neckContainer.style.cssText = `
             position: relative;
-            height: 160px;
+            height: ${neckHeight}px;
             width: 100%;
             margin: 0;
         `;
@@ -458,12 +530,19 @@ class Fretboard {
                 const stringPosition = (stringIndex / (this.tuning.length - 1)) * 100;
                 const fretPosition = this.calculateFretPosition(fret);
                 
+                // Calculate responsive fret element size
+                let fretSize = 30;
+                if (window.innerWidth <= 768) {
+                    const isLandscape = window.innerWidth > window.innerHeight;
+                    fretSize = isLandscape ? 18 : 25;
+                }
+                
                 fretElement.style.cssText = `
                     position: absolute;
                     left: ${fretPosition}%;
                     top: ${stringPosition}%;
-                    width: 30px;
-                    height: 30px;
+                    width: ${fretSize}px;
+                    height: ${fretSize}px;
                     transform: ${fret === 0 ? 'translateY(-50%)' : 'translate(-50%, -50%)'};
                     display: flex;
                     align-items: center;
@@ -622,10 +701,25 @@ class Fretboard {
         marker.textContent = label;
         
         if (useCustomStyle) {
+            // Calculate responsive marker size
+            let baseSize = size;
+            if (window.innerWidth <= 768) {
+                const isLandscape = window.innerWidth > window.innerHeight;
+                baseSize = isLandscape ? Math.floor(size * 0.65) : Math.floor(size * 0.85);
+            }
+            
             // Use the new custom styling system
-            const markerSize = isRoot ? Math.max(size, 28) : size;
-            const fontSize = Math.max(8, Math.floor(markerSize * 0.4));
-            const borderWidthPx = isRoot ? Math.max(borderWidth, 3) : borderWidth;
+            const markerSize = isRoot ? Math.max(baseSize, 18) : baseSize;
+            const fontSize = Math.max(6, Math.floor(markerSize * 0.4));
+            let borderWidthPx = isRoot ? Math.max(borderWidth, 2) : Math.max(borderWidth - 1, 1);
+            
+            // Further reduce border width for mobile landscape
+            if (window.innerWidth <= 768) {
+                const isLandscape = window.innerWidth > window.innerHeight;
+                if (isLandscape) {
+                    borderWidthPx = Math.max(borderWidthPx - 1, 1);
+                }
+            }
             
             marker.style.cssText = `
                 position: absolute;
@@ -648,23 +742,39 @@ class Fretboard {
                 ${(isRoot && !disableAnimation) ? 'animation: rootPulse 2s infinite ease-in-out;' : ''}
             `;
         } else {
+            // Calculate responsive marker size for original styling
+            let markerWidth = 28;
+            let markerHeight = 28;
+            let fontSize = isRoot ? 12 : 10;
+            
+            if (window.innerWidth <= 768) {
+                const isLandscape = window.innerWidth > window.innerHeight;
+                if (isLandscape) {
+                    markerWidth = markerHeight = 16;
+                    fontSize = isRoot ? 7 : 6;
+                } else {
+                    markerWidth = markerHeight = 20;
+                    fontSize = isRoot ? 9 : 7;
+                }
+            }
+            
             // Use the original styling system
             marker.style.cssText = `
                 position: absolute;
                 top: 50%;
                 left: 0px;
                 right: 0px;
-                transform: translate(-14px, -14px);
+                transform: translate(-${Math.floor(markerWidth/2)}px, -${Math.floor(markerHeight/2)}px);
                 padding:0;
                 background: ${color};
                 color: ${textColor};
-                width: ${isRoot ? '28px' : '28px'};
-                height: ${isRoot ? '28px' : '28px'};
+                width: ${markerWidth}px;
+                height: ${markerHeight}px;
                 border-radius: 50%;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: ${isRoot ? '12px' : '10px'};
+                font-size: ${fontSize}px;
                 font-weight: bold;
                 border: ${isRoot ? '3px solid rgba(255,255,255,0.6)' : '2px solid rgba(255,255,255,0.3)'};
                 box-shadow: 0 ${isRoot ? '3px 8px' : '2px 6px'} rgba(0,0,0,0.4);
@@ -1184,13 +1294,33 @@ class Fretboard {
             boxContainer.appendChild(labelElement);
         }
         
-        // Position the container relative to the fret grid
+        // Position the container relative to the fret grid (responsive padding)
+        let topPadding = 40;
+        let leftPadding = 40;
+        let rightPadding = 40;
+        let bottomPadding = 60;
+        
+        if (window.innerWidth <= 768) {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            if (isLandscape) {
+                topPadding = 15;
+                leftPadding = 10;
+                rightPadding = 10;
+                bottomPadding = 25;
+            } else {
+                topPadding = 25;
+                leftPadding = 20;
+                rightPadding = 20;
+                bottomPadding = 35;
+            }
+        }
+        
         boxContainer.style.cssText = `
             position: absolute;
-            top: 40px; /* Adjusted for new padding */
-            left: 40px; /* Adjusted for new padding */
-            right: 40px; /* Adjusted for new padding */
-            bottom: 60px; /* Adjusted for new padding */
+            top: ${topPadding}px;
+            left: ${leftPadding}px;
+            right: ${rightPadding}px;
+            bottom: ${bottomPadding}px;
             pointer-events: none;
             z-index: 8;
         `;
@@ -1387,13 +1517,33 @@ class Fretboard {
             lineContainer.appendChild(labelElement);
         }
         
-        // Position the container relative to the fret grid
+        // Position the container relative to the fret grid (responsive padding)
+        let topPadding = 40;
+        let leftPadding = 20;
+        let rightPadding = 20;
+        let bottomPadding = 60;
+        
+        if (window.innerWidth <= 768) {
+            const isLandscape = window.innerWidth > window.innerHeight;
+            if (isLandscape) {
+                topPadding = 15;
+                leftPadding = 5;
+                rightPadding = 5;
+                bottomPadding = 25;
+            } else {
+                topPadding = 25;
+                leftPadding = 10;
+                rightPadding = 10;
+                bottomPadding = 35;
+            }
+        }
+        
         lineContainer.style.cssText = `
             position: absolute;
-            top: 40px; /* Adjusted for new padding */
-            left: 20px; /* Adjusted for new padding */
-            right: 20px; /* Adjusted for new padding */
-            bottom: 60px; /* Adjusted for new padding */
+            top: ${topPadding}px;
+            left: ${leftPadding}px;
+            right: ${rightPadding}px;
+            bottom: ${bottomPadding}px;
             pointer-events: none;
             z-index: 12;
         `;
