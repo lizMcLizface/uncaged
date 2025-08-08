@@ -125,20 +125,20 @@ class Fretboard {
             background: #f5f5f5;
             border-radius: 12px;
             margin: 20px 0;
-            padding: 40px 20px 60px 20px; /* Increased top and bottom padding for boxes and labels */
+            padding: 20px; /* Reduced padding since elements are now properly contained */
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             overflow: visible; /* Allow content to extend beyond bounds for labels */
         `;
         
-        // Add mobile-specific styles
-        if (window.innerWidth <= 768) {
-            this.fretboardElement.style.cssText += `
-                margin: 5px 0 !important;
-                padding: 20px 10px 30px 10px !important;
-                height: 200px !important;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
-            `;
-        }
+        // // Add mobile-specific styles
+        // if (window.innerWidth <= 768) {
+        //     this.fretboardElement.style.cssText += `
+        //         margin: 5px 0 !important;
+        //         padding: 20px 10px 30px 10px !important;
+        //         height: 200px !important;
+        //         box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
+        //     `;
+        // }
         
         // Add CSS animations and styles for subscale features
         this.addSubscaleStyles();
@@ -217,8 +217,8 @@ class Fretboard {
         fretNumberRow.style.cssText = `
             position: absolute;
             bottom: 10px; /* Position within the container padding */
-            left: 40px; /* Match fret grid left margin exactly */
-            right: 60px; /* Match fret grid right margin exactly */
+            left: 0;
+            right: 0;
             z-index: 10;
         `;
         
@@ -260,7 +260,7 @@ class Fretboard {
                 min-width: 20px;
                 background: rgba(255, 255, 255, 0.8);
                 border-radius: 3px;
-                padding: 2px 4px;
+                // padding: 2px 4px;
                 border: 1px solid #ccc;
             `;
             fretNumberRow.appendChild(fretLabel);
@@ -277,8 +277,8 @@ class Fretboard {
         stringContainer.style.cssText = `
             position: absolute;
             left: -50px;
-            top: 40px; /* Adjusted for new padding */
-            bottom: 60px; /* Adjusted for new padding */
+            top: 20px; /* Adjusted to align with neck container */
+            bottom: 20px; /* Adjusted to align with neck container */
             width: 40px;
             display: flex;
             flex-direction: column;
@@ -316,8 +316,12 @@ class Fretboard {
         neckContainer.style.cssText = `
             position: relative;
             height: 160px;
-            margin: 0 40px 0 40px; /* Adjusted for new padding */
+            width: 100%;
+            margin: 0;
         `;
+        
+        // Store reference to neck container for fret grid
+        this.neckContainer = neckContainer;
         
         // Create strings
         this.tuning.forEach((stringNote, stringIndex) => {
@@ -373,7 +377,7 @@ class Fretboard {
         }
         
         // Add position markers (dots) - centered between fret wires
-        const dotPositions = [3, 5, 7, 9, 12, 15];
+        const dotPositions = [3, 5, 7, 9, 12, 15, 18];
         const doubleDotPositions = [12];
         
         dotPositions.forEach(fret => {
@@ -433,10 +437,10 @@ class Fretboard {
         fretGrid.className = 'fret-grid';
         fretGrid.style.cssText = `
             position: absolute;
-            top: 40px; /* Adjusted for new padding */
-            left: 40px; /* Match neck container margins exactly */
-            right: 60px; /* Match neck container margins exactly */
-            bottom: 60px; /* Adjusted for new padding */
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             z-index: 10;
         `;
         
@@ -493,7 +497,8 @@ class Fretboard {
             }
         });
         
-        this.fretboardElement.appendChild(fretGrid);
+        // Add the fret grid to the neck container instead of the main fretboard element
+        this.neckContainer.appendChild(fretGrid);
     }
     
     /**
@@ -647,12 +652,14 @@ class Fretboard {
             marker.style.cssText = `
                 position: absolute;
                 top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
+                left: 0px;
+                right: 0px;
+                transform: translate(-14px, -14px);
+                padding:0;
                 background: ${color};
                 color: ${textColor};
-                width: ${isRoot ? '28px' : '24px'};
-                height: ${isRoot ? '28px' : '24px'};
+                width: ${isRoot ? '28px' : '28px'};
+                height: ${isRoot ? '28px' : '28px'};
                 border-radius: 50%;
                 display: flex;
                 align-items: center;
@@ -1274,6 +1281,7 @@ class Fretboard {
         
         // Calculate positions for each point
         const positions = points.map(point => {
+            // console.log(`Calculating position for point: ${JSON.stringify(point)}`);
             const stringPosition = (point.string / (this.tuning.length - 1)) * 100;
             const fretPosition = this.calculateFretPosition(point.fret);
             return { x: fretPosition, y: stringPosition };
@@ -1383,8 +1391,8 @@ class Fretboard {
         lineContainer.style.cssText = `
             position: absolute;
             top: 40px; /* Adjusted for new padding */
-            left: 40px; /* Adjusted for new padding */
-            right: 40px; /* Adjusted for new padding */
+            left: 20px; /* Adjusted for new padding */
+            right: 20px; /* Adjusted for new padding */
             bottom: 60px; /* Adjusted for new padding */
             pointer-events: none;
             z-index: 12;
@@ -3372,8 +3380,8 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                         'Major': 'major',
                         'Minor': 'minor',
                         '7': 'dominant7',
-                        'maj7': 'major7',
-                        'm7': 'minor7',
+                        'maj7': 'maj7',
+                        'm7': 'min7',
                         'dim': 'dim',
                         'dim7': 'dim7',
                         'aug': 'aug',
@@ -3399,8 +3407,8 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                             
                             // Color cycle for chord pattern lines
                             const CHORD_LINE_COLORS = [
-                                '#ff6b35', '#4ecdc4', '#45b7d1', '#f9ca24', '#f0932b',
-                                '#eb4d4b', '#6c5ce7', '#a55eea', '#26de81', '#fd79a8'
+                                '#ff6b35', '#4ecdc4', '#d145caff', '#f9ca24', '#f0932b',
+                                '#eb4d4b', '#6c5ce7', '#15a1e7ff', '#26de81', '#fd79a8'
                             ];
                             
                             // Add chord pattern lines on top of the traditional markers
@@ -3415,7 +3423,7 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                                 if (linePoints.length >= 2) {
                                     fretboard.drawChordLine(`${chordName}-pattern-${matchIndex}`, linePoints, {
                                         color: lineColor,
-                                        lineWidth: 30,
+                                        lineWidth: 60,
                                         style: 'solid',
                                         opacity: 0.7,
                                     });
