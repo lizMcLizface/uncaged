@@ -543,7 +543,7 @@ class Fretboard {
                     top: ${stringPosition}%;
                     width: ${fretSize}px;
                     height: ${fretSize}px;
-                    transform: ${fret === 0 ? 'translateY(-50%)' : 'translate(-50%, -50%)'};
+                    transform: translate(-50%, -50%);
                     display: flex;
                     align-items: center;
                     justify-content: center;
@@ -554,21 +554,13 @@ class Fretboard {
                 // Add hover effect with touch support
                 addInteractiveEvent(fretElement, 'enter', () => {
                     if (!this.markers.has(`${stringIndex}-${fret}`)) {
-                        if (fret === 0) {
-                            fretElement.style.transform = 'translateY(-50%) scale(1.1)';
-                        } else {
-                            fretElement.style.transform = 'translate(-50%, -50%) scale(1.1)';
-                        }
+                        fretElement.style.transform = 'translate(-50%, -50%) scale(1.1)';
                     }
                 });
                 
                 addInteractiveEvent(fretElement, 'leave', () => {
                     if (!this.markers.has(`${stringIndex}-${fret}`)) {
-                        if (fret === 0) {
-                            fretElement.style.transform = 'translateY(-50%) scale(1)';
-                        } else {
-                            fretElement.style.transform = 'translate(-50%, -50%) scale(1)';
-                        }
+                        fretElement.style.transform = 'translate(-50%, -50%) scale(1)';
                     }
                 });
                 
@@ -648,12 +640,8 @@ class Fretboard {
                 if (existingMarker) {
                     existingMarker.remove();
                 }
-                // Reset transform based on fret position
-                if (fret === 0) {
-                    fretElement.style.transform = 'translateY(-50%) scale(1)';
-                } else {
-                    fretElement.style.transform = 'translate(-50%, -50%) scale(1)';
-                }
+                // Reset transform consistently for all frets
+                fretElement.style.transform = 'translate(-50%, -50%) scale(1)';
             }
         });
         this.markers.clear();
@@ -811,8 +799,13 @@ class Fretboard {
                 // Show full note with octave (e.g., "C/4")
                 
                 this.markFret(stringIndex, fret, {
-                    color: DEFAULT_COLORS.secondary,
-                    label: note
+                    backgroundColor: '#ffffff',
+                    borderColor: DEFAULT_COLORS.secondary,
+                    borderWidth: 2,
+                    textColor: '#333333',
+                    size: 24,
+                    label: note,
+                    useCustomStyle: true
                 });
             }
         });
@@ -838,10 +831,18 @@ class Fretboard {
                     const scaleDegree = scaleIndex + 1;
                     const isRoot = noteName === normalizedRoot;
                     
+                    // Map scale colors to border colors for the new styling
+                    const scaleColor = isRoot ? SCALE_COLORS[1] : SCALE_COLORS[scaleDegree] || DEFAULT_COLORS.primary;
+                    
                     this.markFret(stringIndex, fret, {
-                        color: isRoot ? SCALE_COLORS[1] : SCALE_COLORS[scaleDegree] || DEFAULT_COLORS.primary,
+                        backgroundColor: '#ffffff',
+                        borderColor: scaleColor,
+                        borderWidth: isRoot ? 4 : 3,
+                        textColor: '#333333',
+                        size: isRoot ? 28 : 24,
                         label: noteName,
-                        isRoot: isRoot
+                        isRoot: isRoot,
+                        useCustomStyle: true
                     });
                 }
             }
@@ -1517,38 +1518,18 @@ class Fretboard {
             lineContainer.appendChild(labelElement);
         }
         
-        // Position the container relative to the fret grid (responsive padding)
-        let topPadding = 40;
-        let leftPadding = 20;
-        let rightPadding = 20;
-        let bottomPadding = 60;
-        
-        if (window.innerWidth <= 768) {
-            const isLandscape = window.innerWidth > window.innerHeight;
-            if (isLandscape) {
-                topPadding = 15;
-                leftPadding = 5;
-                rightPadding = 5;
-                bottomPadding = 25;
-            } else {
-                topPadding = 25;
-                leftPadding = 10;
-                rightPadding = 10;
-                bottomPadding = 35;
-            }
-        }
-        
         lineContainer.style.cssText = `
             position: absolute;
-            top: ${topPadding}px;
-            left: ${leftPadding}px;
-            right: ${rightPadding}px;
-            bottom: ${bottomPadding}px;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             pointer-events: none;
             z-index: 12;
         `;
         
-        this.fretboardElement.appendChild(lineContainer);
+        // Add the chord line to the neck container to align with fret grid
+        this.neckContainer.appendChild(lineContainer);
         
         // Store line data
         if (!this.chordLines) {
