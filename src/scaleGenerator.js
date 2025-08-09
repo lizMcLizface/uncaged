@@ -26,6 +26,100 @@ let selectedRootNote = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯',
 // Primary root note index for navigation through multiple selected root notes
 let primaryRootNoteIndex = 0;
 
+// Global object to store user's enharmonic display preferences
+// Maps chromatic positions to preferred display (sharp or flat)
+let enharmonicDisplayPreferences = {
+    1: 'C♯',  // Default to sharp for C♯/D♭
+    3: 'D♯',  // Default to sharp for D♯/E♭
+    6: 'F♯',  // Default to sharp for F♯/G♭
+    8: 'G♯',  // Default to sharp for G♯/A♭
+    10: 'A♯'  // Default to sharp for A♯/B♭
+};
+
+// Helper function to get chromatic position of a note
+function getChromaticPosition(note) {
+    const chromaticNotes = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    const flatToSharp = { 'D♭': 'C♯', 'E♭': 'D♯', 'G♭': 'F♯', 'A♭': 'G♯', 'B♭': 'A♯' };
+    
+    // Convert flat to sharp for lookup
+    const normalizedNote = flatToSharp[note] || note;
+    return chromaticNotes.indexOf(normalizedNote);
+}
+
+// Helper function to get the preferred display for a note
+function getPreferredDisplay(note) {
+    const position = getChromaticPosition(note);
+    if (position !== -1 && enharmonicDisplayPreferences[position]) {
+        return enharmonicDisplayPreferences[position];
+    }
+    return note; // Return original if no preference or not an enharmonic note
+}
+
+// Helper function to set enharmonic display preference
+function setEnharmonicPreference(note) {
+    const position = getChromaticPosition(note);
+    if (position !== -1) {
+        enharmonicDisplayPreferences[position] = note;
+    }
+}
+
+// Helper function to sort root notes in chromatic order
+function sortRootNotesChronomatically(noteArray) {
+    if (!Array.isArray(noteArray)) return noteArray;
+    
+    // Define chromatic order including both sharp and flat versions
+    const chromaticOrder = [
+        'C', 'C♯', 'D♭', 'D', 'D♯', 'E♭', 'E', 'F', 'F♯', 'G♭', 'G', 'G♯', 'A♭', 'A', 'A♯', 'B♭', 'B'
+    ];
+    
+    // Create a map for quick lookup of chromatic positions
+    const chromaticPositions = {};
+    chromaticOrder.forEach((note, index) => {
+        chromaticPositions[note] = index;
+    });
+    
+    // Sort the array based on chromatic positions
+    return noteArray.slice().sort((a, b) => {
+        const posA = chromaticPositions[a] !== undefined ? chromaticPositions[a] : 999;
+        const posB = chromaticPositions[b] !== undefined ? chromaticPositions[b] : 999;
+        return posA - posB;
+    });
+}
+
+// Helper function to sort root notes and update the primary index accordingly
+function sortRootNotesAndUpdateIndex(noteArray, currentPrimaryNote) {
+    if (!Array.isArray(noteArray)) return noteArray;
+    
+    // Define enharmonic equivalents for finding the correct index
+    const enharmonicPairs = {
+        'C♯': 'D♭', 'D♭': 'C♯',
+        'D♯': 'E♭', 'E♭': 'D♯', 
+        'F♯': 'G♭', 'G♭': 'F♯',
+        'G♯': 'A♭', 'A♭': 'G♯',
+        'A♯': 'B♭', 'B♭': 'A♯'
+    };
+    
+    const sortedArray = sortRootNotesChronomatically(noteArray);
+    
+    // Update primary index to match the new position of the current primary note or its enharmonic equivalent
+    if (currentPrimaryNote) {
+        let newIndex = sortedArray.indexOf(currentPrimaryNote);
+        
+        // If exact match not found, try to find enharmonic equivalent
+        if (newIndex === -1 && enharmonicPairs[currentPrimaryNote]) {
+            const enharmonicEquivalent = enharmonicPairs[currentPrimaryNote];
+            newIndex = sortedArray.indexOf(enharmonicEquivalent);
+        }
+        
+        // Only update the index if we found a match (either exact or enharmonic)
+        if (newIndex !== -1) {
+            primaryRootNoteIndex = newIndex;
+        }
+    }
+    
+    return sortedArray;
+}
+
 // Function to get the current primary scale
 function getPrimaryScale() {
     if (selectedScales.length === 0) return null;
@@ -53,14 +147,19 @@ function navigateToPreviousScale() {
 
 // Function to get the current primary root note
 function getPrimaryRootNote() {
+    let rootNote;
     if (Array.isArray(selectedRootNote)) {
         if (selectedRootNote.length === 0) return 'C';
         if (primaryRootNoteIndex >= selectedRootNote.length) {
             primaryRootNoteIndex = 0; // Reset if index is out of bounds
         }
-        return selectedRootNote[primaryRootNoteIndex];
+        rootNote = selectedRootNote[primaryRootNoteIndex];
+    } else {
+        rootNote = selectedRootNote;
     }
-    return selectedRootNote;
+    
+    // Return the preferred display version of this root note
+    return getPreferredDisplay(rootNote);
 }
 
 // Function to navigate to next root note
@@ -264,6 +363,15 @@ function intToRoman(num){
 // Create a table for selecting root notes
 function createRootNoteTable() {
     const chromaticNotes = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    
+    // Define enharmonic equivalents for accidental notes
+    const enharmonicPairs = {
+        'C♯': 'D♭',
+        'D♯': 'E♭', 
+        'F♯': 'G♭',
+        'G♯': 'A♭',
+        'A♯': 'B♭'
+    };
 
     let rootTableContainer = document.createElement('div');
     rootTableContainer.style.marginBottom = '15px';
@@ -295,10 +403,29 @@ function createRootNoteTable() {
     
     allCell.textContent = 'All';
     
-    // Check if all notes are selected
+    // Check if all notes are selected (considering only one version of each enharmonic pair)
     let allNotesSelected = false;
     if (Array.isArray(selectedRootNote)) {
-        allNotesSelected = (selectedRootNote.length === chromaticNotes.length);
+        // Count unique chromatic positions, considering enharmonic equivalents
+        const selectedChromaticPositions = new Set();
+        selectedRootNote.forEach(note => {
+            // Map each note to its chromatic position
+            const chromaticIndex = chromaticNotes.indexOf(note);
+            if (chromaticIndex !== -1) {
+                selectedChromaticPositions.add(chromaticIndex);
+            } else {
+                // Check if it's an enharmonic equivalent
+                for (const [sharp, flat] of Object.entries(enharmonicPairs)) {
+                    if (note === flat) {
+                        const sharpIndex = chromaticNotes.indexOf(sharp);
+                        if (sharpIndex !== -1) {
+                            selectedChromaticPositions.add(sharpIndex);
+                        }
+                    }
+                }
+            }
+        });
+        allNotesSelected = (selectedChromaticPositions.size === chromaticNotes.length);
     }
     
     if (allNotesSelected) {
@@ -322,10 +449,35 @@ function createRootNoteTable() {
             return;
         } else {
             // In multiple mode, toggle between all selected and just 'C'
-            if (Array.isArray(selectedRootNote) && selectedRootNote.length === chromaticNotes.length) {
-                // All are selected, reset to just 'C'
-                selectedRootNote = 'C';
-                primaryRootNoteIndex = 0;
+            if (Array.isArray(selectedRootNote)) {
+                // Count unique chromatic positions to check if all are selected
+                const selectedChromaticPositions = new Set();
+                selectedRootNote.forEach(note => {
+                    const chromaticIndex = chromaticNotes.indexOf(note);
+                    if (chromaticIndex !== -1) {
+                        selectedChromaticPositions.add(chromaticIndex);
+                    } else {
+                        // Check if it's an enharmonic equivalent
+                        for (const [sharp, flat] of Object.entries(enharmonicPairs)) {
+                            if (note === flat) {
+                                const sharpIndex = chromaticNotes.indexOf(sharp);
+                                if (sharpIndex !== -1) {
+                                    selectedChromaticPositions.add(sharpIndex);
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                if (selectedChromaticPositions.size === chromaticNotes.length) {
+                    // All are selected, reset to just 'C'
+                    selectedRootNote = 'C';
+                    primaryRootNoteIndex = 0;
+                } else {
+                    // Not all selected, select all (using sharp versions by default)
+                    selectedRootNote = [...chromaticNotes];
+                    primaryRootNoteIndex = 0;
+                }
             } else {
                 // Not all selected, select all
                 selectedRootNote = [...chromaticNotes];
@@ -390,42 +542,30 @@ function createRootNoteTable() {
     
     row.appendChild(allCell);
     
-    for (let note of chromaticNotes) {
-        let cell = document.createElement('td');
-        cell.style.border = '1px solid #ccc';
-        cell.style.padding = '6px 8px';
-        cell.style.textAlign = 'center';
-        cell.style.cursor = 'pointer';
-        cell.style.userSelect = 'none';
-        cell.style.fontWeight = 'bold';
-        cell.style.fontSize = '12px';
-        cell.style.minWidth = '32px';
-        
-        cell.textContent = note;
-        
-        // Check if this note is currently selected
-        let isSelected = false;
+    // Helper function to check if a note is selected
+    function isNoteSelected(note) {
         if (exclusiveMode) {
-            isSelected = (note === selectedRootNote);
-        } else {
-            // In multiple mode, selectedRootNote can be an array
+            // Check if the note or its enharmonic equivalent is selected
+            const position = getChromaticPosition(note);
             if (Array.isArray(selectedRootNote)) {
-                isSelected = selectedRootNote.includes(note);
+                return selectedRootNote.some(selectedNote => getChromaticPosition(selectedNote) === position);
             } else {
-                isSelected = (note === selectedRootNote);
+                return getChromaticPosition(selectedRootNote) === position;
+            }
+        } else {
+            if (Array.isArray(selectedRootNote)) {
+                // Check if the note or its enharmonic equivalent is selected
+                const position = getChromaticPosition(note);
+                return selectedRootNote.some(selectedNote => getChromaticPosition(selectedNote) === position);
+            } else {
+                return getChromaticPosition(selectedRootNote) === getChromaticPosition(note);
             }
         }
-        
-        if (isSelected) {
-            cell.style.backgroundColor = '#2196F3';
-            cell.style.color = 'white';
-        } else {
-            cell.style.backgroundColor = '';
-            cell.style.color = '';
-        }
-        
-        // Add click event to select root note
-        cell.onclick = function() {
+    }
+    
+    // Helper function to create a click handler for a note
+    function createNoteClickHandler(note, alternativeNote = null) {
+        return function() {
             console.log('Root note clicked:', note, 'Current selectedRootNote:', selectedRootNote);
             
             // Remove any existing tooltips
@@ -435,6 +575,27 @@ function createRootNoteTable() {
                     tooltip.parentNode.removeChild(tooltip);
                 }
             });
+            
+            // If there's an alternative note and it's currently selected, switch the display preference
+            // This handles enharmonic switching (e.g., D♯ ↔ E♭) without changing the actual selection
+            if (alternativeNote && isNoteSelected(alternativeNote)) {
+                console.log(`Switching display preference from ${getPreferredDisplay(alternativeNote)} to ${note}`);
+                console.log(`Selected root notes before: ${Array.isArray(selectedRootNote) ? selectedRootNote.join(', ') : selectedRootNote}`);
+                console.log(`Primary index before: ${primaryRootNoteIndex}`);
+                
+                // Update the enharmonic display preference to the newly clicked note
+                setEnharmonicPreference(note);
+                
+                console.log(`Selected root notes after: ${Array.isArray(selectedRootNote) ? selectedRootNote.join(', ') : selectedRootNote}`);
+                console.log(`Primary index after: ${primaryRootNoteIndex}`);
+                console.log(`getPrimaryRootNote() now returns: ${getPrimaryRootNote()}`);
+                
+                // Refresh the display to show the new enharmonic preference
+                refreshChordsForRootNote();
+                createHeptatonicScaleTable();
+                updateCurrentScaleDisplay();
+                return;
+            }
             
             if (exclusiveMode) {
                 // In exclusive mode, always select the clicked note
@@ -465,6 +626,9 @@ function createRootNoteTable() {
                     } else {
                         // Note is not selected, add it
                         selectedRootNote.push(note);
+                        // Sort the array chronomatically and update primary index
+                        const currentPrimary = getPrimaryRootNote();
+                        selectedRootNote = sortRootNotesAndUpdateIndex(selectedRootNote, currentPrimary);
                         refreshChordsForRootNote(); // Refresh chords for new root note
                     }
                 } else {
@@ -477,7 +641,9 @@ function createRootNoteTable() {
                     } else {
                         // Clicking a different note - convert to array with both
                         selectedRootNote = [selectedRootNote, note];
-                        primaryRootNoteIndex = 0;
+                        // Sort the array chronomatically and update primary index
+                        const currentPrimary = getPrimaryRootNote();
+                        selectedRootNote = sortRootNotesAndUpdateIndex(selectedRootNote, currentPrimary);
                         refreshChordsForRootNote(); // Refresh chords for new root notes
                     }
                 }
@@ -490,72 +656,293 @@ function createRootNoteTable() {
             createHeptatonicScaleTable();
             updateCurrentScaleDisplay();
         };
+    }
+    
+    for (let note of chromaticNotes) {
+        let cell = document.createElement('td');
+        cell.style.border = '1px solid #ccc';
+        cell.style.padding = '0';
+        cell.style.textAlign = 'center';
+        cell.style.userSelect = 'none';
+        cell.style.fontWeight = 'bold';
+        cell.style.fontSize = '12px';
+        cell.style.minWidth = '32px';
+        cell.style.position = 'relative';
         
-        // Add hover effects and tooltips
-        cell.onmouseover = function() {
-            if (!isSelected) {
-                cell.style.backgroundColor = '#6a8090ff';
+        // Check if this note has an enharmonic equivalent
+        if (enharmonicPairs[note]) {
+            // Create split cell with both sharp and flat versions
+            const flatNote = enharmonicPairs[note];
+            
+            // Create two sub-divs for the split cell
+            let topDiv = document.createElement('div');
+            topDiv.style.height = '50%';
+            topDiv.style.display = 'flex';
+            topDiv.style.alignItems = 'center';
+            topDiv.style.justifyContent = 'center';
+            topDiv.style.cursor = 'pointer';
+            topDiv.style.padding = '3px 4px';
+            topDiv.style.borderBottom = '0.5px solid #ccc';
+            topDiv.textContent = note; // Sharp version
+            
+            let bottomDiv = document.createElement('div');
+            bottomDiv.style.height = '50%';
+            bottomDiv.style.display = 'flex';
+            bottomDiv.style.alignItems = 'center';
+            bottomDiv.style.justifyContent = 'center';
+            bottomDiv.style.cursor = 'pointer';
+            bottomDiv.style.padding = '3px 4px';
+            bottomDiv.textContent = flatNote; // Flat version
+            
+            // Check selection status - only show the preferred enharmonic version as selected
+            const chromaticPos = getChromaticPosition(note);
+            const isThisChromaticPositionSelected = (exclusiveMode ? 
+                getChromaticPosition(selectedRootNote) === chromaticPos :
+                (Array.isArray(selectedRootNote) ? 
+                    selectedRootNote.some(sel => getChromaticPosition(sel) === chromaticPos) :
+                    getChromaticPosition(selectedRootNote) === chromaticPos));
+            
+            const preferredNote = getPreferredDisplay(note);
+            const sharpSelected = isThisChromaticPositionSelected && preferredNote === note;
+            const flatSelected = isThisChromaticPositionSelected && preferredNote === flatNote;
+            
+            // Style the selected version
+            if (sharpSelected) {
+                topDiv.style.backgroundColor = '#2196F3';
+                topDiv.style.color = 'white';
+            }
+            if (flatSelected) {
+                bottomDiv.style.backgroundColor = '#2196F3';
+                bottomDiv.style.color = 'white';
             }
             
-            // Add tooltip
-            let tooltip = document.createElement('div');
-            tooltip.className = 'scale-tooltip';
-            tooltip.style.position = 'absolute';
-            tooltip.style.background = '#000';
-            tooltip.style.color = 'white';
-            tooltip.style.border = '1px solid #ccc';
-            tooltip.style.padding = '4px 8px';
-            tooltip.style.zIndex = 1000;
-            tooltip.style.fontSize = '11px';
+            // Add click handlers
+            topDiv.onclick = createNoteClickHandler(note, flatNote);
+            bottomDiv.onclick = createNoteClickHandler(flatNote, note);
             
-            let tooltipText = `<strong>Root Note:</strong> ${note}<br>`;
-            if (exclusiveMode) {
-                tooltipText += `<em>Click to ${isSelected ? 'keep selected' : 'select'}</em>`;
-            } else {
-                tooltipText += `<em>Click to ${isSelected ? 'deselect' : 'select'}</em>`;
-            }
-            tooltip.innerHTML = tooltipText;
-
-            let firstScaleId = selectedScales[0];
-            let [family, mode] = firstScaleId.split('-');
-            let scales = HeptatonicScales;
-            // console.log('note: ', note, 'family: ', family, 'mode: ', mode);
-            let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-            let scaleNotes = getScaleNotes(note, intervals);
-
-            // console.log("Scale Notes for", scaleName, ":", scaleNotes);
-            highlightKeysForScales(scaleNotes);
-            
-            document.body.appendChild(tooltip);
-
-            cell.onmousemove = function(e) {
-                tooltip.style.left = (e.pageX + 10) + 'px';
-                tooltip.style.top = (e.pageY + 10) + 'px';
-            };
-        };
-        
-        cell.onmouseleave = function() {
-            if (!isSelected) {
-                cell.style.backgroundColor = '';
-            }
-            
-            // Remove tooltip
-            const existingTooltips = document.querySelectorAll('.scale-tooltip');
-            existingTooltips.forEach(tooltip => {
-                if (tooltip.parentNode) {
-                    tooltip.parentNode.removeChild(tooltip);
+            // Add hover effects for sharp version
+            topDiv.onmouseover = function() {
+                if (!sharpSelected) {
+                    topDiv.style.backgroundColor = '#6a8090ff';
                 }
-            });
-            let scales = HeptatonicScales;
-            let firstScaleId = selectedScales[0];
-            let [family, mode] = firstScaleId.split('-');
-            let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-            let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
-            console.log('Generated scale notes for table with root:', getPrimaryRootNote(), 'Notes:', scaleNotes);
-            // console.log("Scale Notes for", scaleName, ":", scaleNotes);
-            highlightKeysForScales(scaleNotes);
-            cell.onmousemove = null;
-        };
+                
+                // Add tooltip and keyboard highlighting
+                let tooltip = document.createElement('div');
+                tooltip.className = 'scale-tooltip';
+                tooltip.style.position = 'absolute';
+                tooltip.style.background = '#000';
+                tooltip.style.color = 'white';
+                tooltip.style.border = '1px solid #ccc';
+                tooltip.style.padding = '4px 8px';
+                tooltip.style.zIndex = 1000;
+                tooltip.style.fontSize = '11px';
+                
+                let tooltipText = `<strong>Root Note:</strong> ${note}<br>`;
+                if (exclusiveMode) {
+                    tooltipText += `<em>Click to ${sharpSelected ? 'keep selected' : (isThisChromaticPositionSelected ? 'switch to sharp' : 'select')}</em>`;
+                } else {
+                    tooltipText += `<em>Click to ${sharpSelected ? 'deselect' : (isThisChromaticPositionSelected ? 'switch to sharp' : 'select')}</em>`;
+                }
+                tooltip.innerHTML = tooltipText;
+
+                // Highlight keyboard for preview
+                if (selectedScales.length > 0) {
+                    let firstScaleId = selectedScales[0];
+                    let [family, mode] = firstScaleId.split('-');
+                    let scales = HeptatonicScales;
+                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                    let scaleNotes = getScaleNotes(note, intervals);
+                    highlightKeysForScales(scaleNotes);
+                }
+                
+                document.body.appendChild(tooltip);
+
+                topDiv.onmousemove = function(e) {
+                    tooltip.style.left = (e.pageX + 10) + 'px';
+                    tooltip.style.top = (e.pageY + 10) + 'px';
+                };
+            };
+            
+            topDiv.onmouseleave = function() {
+                if (!sharpSelected) {
+                    topDiv.style.backgroundColor = '';
+                }
+                
+                // Remove tooltip and restore original keyboard highlighting
+                const existingTooltips = document.querySelectorAll('.scale-tooltip');
+                existingTooltips.forEach(tooltip => {
+                    if (tooltip.parentNode) {
+                        tooltip.parentNode.removeChild(tooltip);
+                    }
+                });
+                
+                // Restore original scale highlighting
+                if (selectedScales.length > 0) {
+                    let scales = HeptatonicScales;
+                    let firstScaleId = selectedScales[0];
+                    let [family, mode] = firstScaleId.split('-');
+                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                    let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
+                    highlightKeysForScales(scaleNotes);
+                }
+                topDiv.onmousemove = null;
+            };
+            
+            // Add hover effects for flat version (similar to sharp)
+            bottomDiv.onmouseover = function() {
+                if (!flatSelected) {
+                    bottomDiv.style.backgroundColor = '#6a8090ff';
+                }
+                
+                let tooltip = document.createElement('div');
+                tooltip.className = 'scale-tooltip';
+                tooltip.style.position = 'absolute';
+                tooltip.style.background = '#000';
+                tooltip.style.color = 'white';
+                tooltip.style.border = '1px solid #ccc';
+                tooltip.style.padding = '4px 8px';
+                tooltip.style.zIndex = 1000;
+                tooltip.style.fontSize = '11px';
+                
+                let tooltipText = `<strong>Root Note:</strong> ${flatNote}<br>`;
+                if (exclusiveMode) {
+                    tooltipText += `<em>Click to ${flatSelected ? 'keep selected' : (isThisChromaticPositionSelected ? 'switch to flat' : 'select')}</em>`;
+                } else {
+                    tooltipText += `<em>Click to ${flatSelected ? 'deselect' : (isThisChromaticPositionSelected ? 'switch to flat' : 'select')}</em>`;
+                }
+                tooltip.innerHTML = tooltipText;
+
+                // Highlight keyboard for preview
+                if (selectedScales.length > 0) {
+                    let firstScaleId = selectedScales[0];
+                    let [family, mode] = firstScaleId.split('-');
+                    let scales = HeptatonicScales;
+                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                    let scaleNotes = getScaleNotes(flatNote, intervals);
+                    highlightKeysForScales(scaleNotes);
+                }
+                
+                document.body.appendChild(tooltip);
+
+                bottomDiv.onmousemove = function(e) {
+                    tooltip.style.left = (e.pageX + 10) + 'px';
+                    tooltip.style.top = (e.pageY + 10) + 'px';
+                };
+            };
+            
+            bottomDiv.onmouseleave = function() {
+                if (!flatSelected) {
+                    bottomDiv.style.backgroundColor = '';
+                }
+                
+                const existingTooltips = document.querySelectorAll('.scale-tooltip');
+                existingTooltips.forEach(tooltip => {
+                    if (tooltip.parentNode) {
+                        tooltip.parentNode.removeChild(tooltip);
+                    }
+                });
+                
+                // Restore original scale highlighting
+                if (selectedScales.length > 0) {
+                    let scales = HeptatonicScales;
+                    let firstScaleId = selectedScales[0];
+                    let [family, mode] = firstScaleId.split('-');
+                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                    let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
+                    highlightKeysForScales(scaleNotes);
+                }
+                bottomDiv.onmousemove = null;
+            };
+            
+            cell.appendChild(topDiv);
+            cell.appendChild(bottomDiv);
+            
+        } else {
+            // Regular note cell (no enharmonic equivalent)
+            cell.style.padding = '6px 8px';
+            cell.style.cursor = 'pointer';
+            cell.textContent = note;
+            
+            // Check if this note is currently selected
+            let isSelected = isNoteSelected(note);
+            
+            if (isSelected) {
+                cell.style.backgroundColor = '#2196F3';
+                cell.style.color = 'white';
+            } else {
+                cell.style.backgroundColor = '';
+                cell.style.color = '';
+            }
+            
+            // Add click event to select root note
+            cell.onclick = createNoteClickHandler(note);
+            
+            // Add hover effects and tooltips
+            cell.onmouseover = function() {
+                if (!isSelected) {
+                    cell.style.backgroundColor = '#6a8090ff';
+                }
+                
+                // Add tooltip
+                let tooltip = document.createElement('div');
+                tooltip.className = 'scale-tooltip';
+                tooltip.style.position = 'absolute';
+                tooltip.style.background = '#000';
+                tooltip.style.color = 'white';
+                tooltip.style.border = '1px solid #ccc';
+                tooltip.style.padding = '4px 8px';
+                tooltip.style.zIndex = 1000;
+                tooltip.style.fontSize = '11px';
+                
+                let tooltipText = `<strong>Root Note:</strong> ${note}<br>`;
+                if (exclusiveMode) {
+                    tooltipText += `<em>Click to ${isSelected ? 'keep selected' : 'select'}</em>`;
+                } else {
+                    tooltipText += `<em>Click to ${isSelected ? 'deselect' : 'select'}</em>`;
+                }
+                tooltip.innerHTML = tooltipText;
+
+                if (selectedScales.length > 0) {
+                    let firstScaleId = selectedScales[0];
+                    let [family, mode] = firstScaleId.split('-');
+                    let scales = HeptatonicScales;
+                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                    let scaleNotes = getScaleNotes(note, intervals);
+                    highlightKeysForScales(scaleNotes);
+                }
+                
+                document.body.appendChild(tooltip);
+
+                cell.onmousemove = function(e) {
+                    tooltip.style.left = (e.pageX + 10) + 'px';
+                    tooltip.style.top = (e.pageY + 10) + 'px';
+                };
+            };
+            
+            cell.onmouseleave = function() {
+                if (!isSelected) {
+                    cell.style.backgroundColor = '';
+                }
+                
+                // Remove tooltip
+                const existingTooltips = document.querySelectorAll('.scale-tooltip');
+                existingTooltips.forEach(tooltip => {
+                    if (tooltip.parentNode) {
+                        tooltip.parentNode.removeChild(tooltip);
+                    }
+                });
+                
+                if (selectedScales.length > 0) {
+                    let scales = HeptatonicScales;
+                    let firstScaleId = selectedScales[0];
+                    let [family, mode] = firstScaleId.split('-');
+                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                    let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
+                    highlightKeysForScales(scaleNotes);
+                }
+                cell.onmousemove = null;
+            };
+        }
         
         row.appendChild(cell);
     }
