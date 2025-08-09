@@ -1,6 +1,6 @@
 import {scales, getScaleNotes} from './scales';
 import { chords } from './chords';
-import { areArraysEnharmonicEquivalent, normalizeNote } from './notation';
+import { areArraysEnharmonicEquivalent, normalizeNote, noteToMidi as notationNoteToMidi, midiToNote as notationMidiToNote } from './notation';
 
 function intervalToSemitones(interval) {
     switch (interval) {
@@ -179,58 +179,6 @@ function chordToIntervals(chordType) {
             throw new Error(`Unknown chord type: ${chordName}`);
     }
 }
-
-function noteToMidi(note) { // Note is of format C -> default to C/4, or C/4
-    note = note.trim()
-        .replace('♯', '#')
-        .replace('♭', 'b')
-        .replace('𝄫', 'bb')
-        .replace('𝄪', '##');
-    let octave;
-    if (note.includes('/')) {
-        [note, octave] = note.split('/');
-        octave = parseInt(octave, 10);
-    } else {
-        octave = 4; // Default octave if not specified
-    }
-
-    const noteToMidiMap = {
-        'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11,
-        'C#': 1, 'D#': 3, 'F#': 6, 'G#': 8, 'A#': 10,
-        'Bb': 10, 'Cb': 11, 'B#': 0, 'E#': 5,
-    };
-
-    if (!(note in noteToMidiMap)) {
-        throw new Error(`Unknown note: ${note}`);
-    }
-
-    const midiNote = noteToMidiMap[note] + (octave + 1) * 12;
-    return midiNote;
-}
-
-function midiToNote(midiNote) {
-    if (typeof midiNote !== 'number' || midiNote < 0) {
-        throw new Error("MIDI note must be a non-negative integer");
-    }
-
-    const octave = Math.floor(midiNote / 12) - 1;
-    const noteIndex = midiNote % 12;
-
-    const indexToNoteMap = {
-        0: 'C', 1: 'C#', 2: 'D', 3: 'D#', 4: 'E',
-        5: 'F', 6: 'F#', 7: 'G', 8: 'G#', 9: 'A',
-        10: 'A#', 11: 'B'
-    };
-
-    if (!(noteIndex in indexToNoteMap)) {
-        throw new Error(`Unknown MIDI note index: ${noteIndex}`);
-    }
-
-    return `${indexToNoteMap[noteIndex]}/${octave}`;
-}
-
-
-
 
 function resolveChord(chordName) {
     chordName = chordName.replace(/\s+/g, '')
@@ -428,7 +376,7 @@ function processChord(chordName) {
 
     let intervals = chordToIntervals(chordType);
 
-    const rootMidi = noteToMidi(rootNote);
+    const rootMidi = notationNoteToMidi(rootNote);
 
     // Handle suspended chords
     if (suspended) {
@@ -467,17 +415,17 @@ function processChord(chordName) {
         if (noteMidi >= 128) {
             throw new Error("MIDI note out of range");
         }
-        notes.push(midiToNote(noteMidi));
+        notes.push(notationMidiToNote(noteMidi));
     }
 
     // Handle bass note
     if (bassNote) {
-        const bassMidi = noteToMidi(bassNote);
+        const bassMidi = notationNoteToMidi(bassNote);
         let bassInterval = bassMidi - rootMidi;
         if (bassInterval < 0) {
             bassInterval += 12;
         }
-        notes.push(midiToNote(bassMidi));
+        notes.push(notationMidiToNote(bassMidi));
     }
 
     return {
@@ -626,4 +574,4 @@ function identifySyntheticChords(scale, length = 3, root = 'C') {
 // console.log('Identified Chords:', identifiedChords);
 
 
-export { intervalToSemitones, chordToIntervals, noteToMidi, midiToNote, resolveChord, processChord, matchChord, generateSyntheticChords, identifySyntheticChords };
+export { intervalToSemitones, chordToIntervals, notationNoteToMidi as noteToMidi, notationMidiToNote as midiToNote, resolveChord, processChord, matchChord, generateSyntheticChords, identifySyntheticChords };
