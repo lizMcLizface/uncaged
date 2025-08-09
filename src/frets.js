@@ -3841,6 +3841,7 @@ function updateFretboardsForScaleChange(scaleData) {
         
         console.log(`Updating fretboards for scale change: ${rootNote} ${primaryScale}`);
 
+        console.log('Scale notes:', scaleNotes);
         const [family, mode] = primaryScale.split('-');
         const scaleName = `${rootNote} ${family} (Mode ${mode})`;
         updateChordInfoDisplay(scaleName, scaleNotes);
@@ -3921,6 +3922,7 @@ window.addEventListener('scaleChanged', (event) => {
     
     lastScaleUpdateTime = now;
     lastScaleData = currentScaleData;
+    console.log('Scale changed:', currentScaleData);
     
     updateFretboardsForScaleChange(event.detail);
     updateChordGridColors(); // Update chord grid colors when scale changes

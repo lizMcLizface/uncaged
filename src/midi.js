@@ -1,8 +1,19 @@
+function normalizeNote2(note) {
+    if (typeof note !== 'string') return note;
+    
+    return note.trim()
+        .replace(/♯/g, '#')
+        .replace(/♭/g, 'b')
+        .replace(/𝄪/g, '##')
+        .replace(/𝄫/g, 'bb')
+        .replace(/♮/g, ''); // Natural symbol cancels accidentals
+}
 
 function noteToMidi(note){
     var pitch = note[0].toLowerCase();
     var octave = parseInt(note.slice(-1));
-    var sliced = note.slice(1,-2);
+    var normalizedNote = normalizeNote2(note);
+    var sliced = normalizedNote.slice(1,-2);
     // console.log('pos:', pitch, octave, sliced);
     var offset = 0;
     switch(sliced){

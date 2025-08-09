@@ -21,7 +21,7 @@ let exclusiveMode = false; // Toggle between exclusive and multiple selection mo
 let primaryScaleIndex = 0;
 
 // Global variable to store selected root notes (can be array or single string)
-let selectedRootNote = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']; // Default to C
+let selectedRootNote = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B']; // Default to C
 
 // Primary root note index for navigation through multiple selected root notes
 let primaryRootNoteIndex = 0;
@@ -122,6 +122,8 @@ function updateCurrentScaleDisplay() {
     const scaleName = scales[family][parseInt(mode, 10) - 1].name;
     const rootNote = getPrimaryRootNote();
     
+    console.log('updateCurrentScaleDisplay - Scale:', scaleName, 'Root:', rootNote);
+    
     // Display format: "Root ScaleName" for scale, just root note for root display
     currentScaleNode.textContent = `${scaleName}`;
     if (currentRootNode) {
@@ -142,7 +144,10 @@ function updateCurrentScaleDisplay() {
 
     // Update keyboard highlighting for the primary scale
     const intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+    console.log('Updating scale notes for display:', rootNote, intervals);
     const scaleNotes = getScaleNotes(rootNote, intervals);
+
+    console.log('Scale notes for display:', scaleNotes);
     highlightKeysForScales(scaleNotes);
     highlightScaleNotes(scaleNotes);
 
@@ -258,8 +263,8 @@ function intToRoman(num){
 
 // Create a table for selecting root notes
 function createRootNoteTable() {
-    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    
+    const chromaticNotes = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+
     let rootTableContainer = document.createElement('div');
     rootTableContainer.style.marginBottom = '15px';
     
@@ -421,6 +426,8 @@ function createRootNoteTable() {
         
         // Add click event to select root note
         cell.onclick = function() {
+            console.log('Root note clicked:', note, 'Current selectedRootNote:', selectedRootNote);
+            
             // Remove any existing tooltips
             const existingTooltips = document.querySelectorAll('.scale-tooltip');
             existingTooltips.forEach(tooltip => {
@@ -433,6 +440,7 @@ function createRootNoteTable() {
                 // In exclusive mode, always select the clicked note
                 selectedRootNote = note;
                 primaryRootNoteIndex = 0;
+                console.log('Set root note to:', selectedRootNote);
                 refreshChordsForRootNote(); // Refresh chords for new root note
             } else {
                 // In multiple mode, toggle selection
@@ -475,7 +483,9 @@ function createRootNoteTable() {
                 }
             }
             
-            // console.log('Selected root note(s):', selectedRootNote);
+            console.log('Final selectedRootNote:', selectedRootNote, 'Primary index:', primaryRootNoteIndex);
+            console.log('getPrimaryRootNote() returns:', getPrimaryRootNote());
+            
             // Refresh both tables to update visual state
             createHeptatonicScaleTable();
             updateCurrentScaleDisplay();
@@ -541,6 +551,7 @@ function createRootNoteTable() {
             let [family, mode] = firstScaleId.split('-');
             let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
             let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
+            console.log('Generated scale notes for table with root:', getPrimaryRootNote(), 'Notes:', scaleNotes);
             // console.log("Scale Notes for", scaleName, ":", scaleNotes);
             highlightKeysForScales(scaleNotes);
             cell.onmousemove = null;
