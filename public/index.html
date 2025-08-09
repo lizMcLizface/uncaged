@@ -284,6 +284,7 @@
             width: 100vh;
             height: 100vw;
             overflow-x: hidden;
+            overflow-x: hidden;
             position: absolute;
             top: 100%;
             left: 0;
@@ -296,8 +297,8 @@
           }
           
           .main-content {
-            height: 100vw;
-            width: 100vh;
+            height: 100%;
+            width: 100%;
             overflow-y: auto;
           }
         }
@@ -311,7 +312,6 @@
 
         .main-content {
           margin-left: 0;
-          padding: 5px;
         }
 
         /* Compact header for mobile */
@@ -566,9 +566,7 @@
 
       /* Tablet landscape optimization - Match portrait layout order */
       @media screen and (min-width: 769px) and (max-width: 1024px) and (orientation: landscape) {
-        .main-content {
-          padding: 15px;
-        }
+
 
         .help-dropdown {
           min-width: 80vw !important;
@@ -706,12 +704,12 @@
      
       <div class="selectionContainer" width="100%" style="max-height:120px;">
         <span style="width:30%;text-align: left;" class="tableCell">
-          <h3>unCAGED</h3>
+          <h1>unCAGED</h1>
         </span>
         <span style="width:10%;text-align: left;" class="tableCell" id="helpButton">
           <div class="help-dropdown-container">
             <div class="help-button" style="display: flex; justify-content: center; align-items: center; height: 10%;">
-              <h3>Help</h3>
+              <p>Help</p>
             </div>
             <div class="help-dropdown">
               <h4>unCAGED help</h4>

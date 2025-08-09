@@ -20,7 +20,7 @@ import { context,
 import {processChord} from './intervals';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
 import {createHeptatonicScaleTable, selectedRootNote, selectedScales} from './scaleGenerator';
-import {chords, processedChords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
+import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from './midi';
 import {createScaleChordCrossReference, updateCrossReferenceDisplay} from './cross';
 

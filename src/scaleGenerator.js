@@ -1,5 +1,5 @@
 import $ from 'jquery';
-import {HeptatonicScales, scales, highlightKeysForScales, getScaleNotes, precomputeScaleChords, getChordsForScale} from './scales';
+import {HeptatonicScales, scales, highlightKeysForScales, getScaleNotes, precomputeScaleChords, getChordsForScale, translateNotes, stripOctave} from './scales';
 import {identifySyntheticChords} from './intervals';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
 

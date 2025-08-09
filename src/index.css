@@ -1831,3 +1831,29 @@ h3 {
     order: 3 !important;
   }
 }
+
+/* Adjust top banner height for desktop landscape mode */
+@media (min-width: 1025px) and (orientation: landscape) {
+  .top-banner {
+    height: 80px !important; /* Reduce height for better appearance */
+  }
+}
+
+/* Fix overlapping elements in mobile landscape mode */
+@media (max-width: 768px) and (orientation: landscape) {
+  .fretboard {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px; /* Add spacing to prevent overlap */
+  }
+
+  .key.black, .key.white {
+    height: auto !important; /* Ensure keys resize properly */
+  }
+}
+
+/* Remove unnecessary scrollbar */
+html, body {
+  overflow-y: auto !important; /* Only show scrollbar when content overflows */
+}

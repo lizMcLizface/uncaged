@@ -22,13 +22,32 @@ let chords = {
 
 let processedChords = {};
 
-for (let key in chords) {
-    processedChords[key] = chords[key].map(suffix => {
-        return {
-            suffix: suffix,
-            process: processChord('C' + suffix)
-        };
-    });
+// Initialize processed chords lazily to avoid circular dependency issues
+function initializeProcessedChords() {
+    if (Object.keys(processedChords).length === 0) {
+        for (let key in chords) {
+            processedChords[key] = chords[key].map(suffix => {
+                try {
+                    return {
+                        suffix: suffix,
+                        process: processChord('C' + suffix)
+                    };
+                } catch (error) {
+                    console.warn(`Failed to process chord C${suffix}:`, error);
+                    return {
+                        suffix: suffix,
+                        process: null
+                    };
+                }
+            });
+        }
+    }
+    return processedChords;
+}
+
+// Get processed chords (initializes if needed)
+function getProcessedChords() {
+    return initializeProcessedChords();
 }
 
 // console.log("Processed Chords:", processedChords);
@@ -827,8 +846,9 @@ function createChordSuffixTable() {
     }
 }
 
-export {chords, processedChords, highlightKeysForChords, 
+export {chords, highlightKeysForChords, 
     createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes,
-    getElementByNote, getElementByMIDI, keys_chords, createChordButtonGrid, commonChordTypes, chordPatternMatchers
+    getElementByNote, getElementByMIDI, keys_chords, createChordButtonGrid, commonChordTypes, chordPatternMatchers,
+    getProcessedChords
 };
 

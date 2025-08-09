@@ -1,5 +1,6 @@
 import {scales, getScaleNotes} from './scales';
 import { chords } from './chords';
+import { areArraysEnharmonicEquivalent, normalizeNote } from './notation';
 
 function intervalToSemitones(interval) {
     switch (interval) {
@@ -508,7 +509,7 @@ function matchChord(inputChord, chords, verbose = false) {
             if (verbose) {
                 console.log(`  ${chord.padEnd(16)}: ${chordNotes.join(', ')}`);
             }
-            if (chordNotes.length === inputChord.length && chordNotes.join(',') === inputChord.join(',')) {
+            if (chordNotes.length === inputChord.length && areArraysEnharmonicEquivalent(chordNotes, inputChord)) {
                 candidates.push(chord);
             }
         }
@@ -525,7 +526,7 @@ function matchChord(inputChord, chords, verbose = false) {
                 if (verbose) {
                     console.log(`  ${chord.padEnd(16)}sus2: ${chordNotes.join(', ')}`);
                 }
-                if (chordNotes.length === inputChord.length && chordNotes.join(',') === inputChord.join(',')) {
+                if (chordNotes.length === inputChord.length && areArraysEnharmonicEquivalent(chordNotes, inputChord)) {
                     candidates.push(chord + 'sus2');
                 }
             }
@@ -543,7 +544,7 @@ function matchChord(inputChord, chords, verbose = false) {
                 if (verbose) {
                     console.log(`  ${chord.padEnd(16)}sus4: ${chordNotes.join(', ')}`);
                 }
-                if (chordNotes.length === inputChord.length && chordNotes.join(',') === inputChord.join(',')) {
+                if (chordNotes.length === inputChord.length && areArraysEnharmonicEquivalent(chordNotes, inputChord)) {
                     candidates.push(chord + 'sus4');
                 }
             }

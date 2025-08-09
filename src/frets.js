@@ -1,8 +1,19 @@
 import {processChord, generateSyntheticChords} from './intervals';
-import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
+import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, translateNotes, stripOctave} from './scales';
 import {createHeptatonicScaleTable, selectedRootNote, selectedScales, getPrimaryScale, getPrimaryRootNote} from './scaleGenerator';
-import {chords, processedChords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
+import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from './midi';
+import {
+    midiToNote as notationMidiToNote, 
+    noteToMidi as notationNoteToMidi,
+    translateNotes as notationTranslateNotes,
+    stripOctave as notationStripOctave,
+    areEnharmonicEquivalent,
+    findEnharmonicMatch,
+    noteArrayContains,
+    filterEnharmonicMatches,
+    normalizeNote
+} from './notation';
 import {getChordPatterns, getPatternsByChordType} from './chordPatterns';
 
 // Standard guitar tuning (lowest to highest strings) - displayed from top to bottom
@@ -573,26 +584,21 @@ class Fretboard {
     }
     
     /**
-     * Calculate the note at a specific string and fret
+     * Calculate the note at a specific string and fret using enhanced notation
      */
     calculateNote(openStringNote, fret) {
-        const openMidi = noteToMidi(openStringNote);
+        const openMidi = notationNoteToMidi(openStringNote);
         const frettedMidi = openMidi + fret + 12; // Add 12 to correct octave offset
-        return noteToName(frettedMidi);
+        return notationMidiToNote(frettedMidi);
     }
     
     /**
      * Extract note name without octave from a full note string
-     * Handles both "C/4" and "C4" formats
+     * Handles both "C/4" and "C4" formats, with proper notation support
      */
     extractNoteName(noteString) {
         if (!noteString) return '';
-        // Handle format like "C/4" or "C#/4"
-        if (noteString.includes('/')) {
-            return noteString.split('/')[0];
-        }
-        // Handle format like "C4" or "C#4" (fallback)
-        return noteString.replace(/\d+$/, '');
+        return notationStripOctave(noteString);
     }
     
     /**
@@ -817,8 +823,9 @@ class Fretboard {
     markScale(scaleNotes, rootNote) {
         this.clearMarkers();
         
-        // Normalize scale notes (remove octave numbers)
-        const normalizedScaleNotes = scaleNotes.map(note => this.extractNoteName(note));
+        // Normalize scale notes (remove octave numbers) and translate to proper notation
+        const translatedScaleNotes = notationTranslateNotes(scaleNotes);
+        const normalizedScaleNotes = translatedScaleNotes.map(note => this.extractNoteName(note));
         const normalizedRoot = this.extractNoteName(rootNote);
         
         this.tuning.forEach((stringNote, stringIndex) => {
@@ -826,13 +833,18 @@ class Fretboard {
                 const note = this.calculateNote(stringNote, fret);
                 const noteName = this.extractNoteName(note);
                 
-                const scaleIndex = normalizedScaleNotes.indexOf(noteName);
-                if (scaleIndex !== -1) {
+                // Use enharmonic matching to find the note in the scale
+                const matchedScaleNote = findEnharmonicMatch(noteName, normalizedScaleNotes);
+                if (matchedScaleNote) {
+                    const scaleIndex = normalizedScaleNotes.indexOf(matchedScaleNote);
                     const scaleDegree = scaleIndex + 1;
-                    const isRoot = noteName === normalizedRoot;
+                    const isRoot = areEnharmonicEquivalent(noteName, normalizedRoot);
                     
                     // Map scale colors to border colors for the new styling
                     const scaleColor = isRoot ? SCALE_COLORS[1] : SCALE_COLORS[scaleDegree] || DEFAULT_COLORS.primary;
+                    
+                    // Use the properly notated note name for display
+                    const displayNoteName = matchedScaleNote;
                     
                     this.markFret(stringIndex, fret, {
                         backgroundColor: '#ffffff',
@@ -840,7 +852,7 @@ class Fretboard {
                         borderWidth: isRoot ? 4 : 3,
                         textColor: '#333333',
                         size: isRoot ? 28 : 24,
-                        label: noteName,
+                        label: displayNoteName,
                         isRoot: isRoot,
                         useCustomStyle: true
                     });
@@ -906,11 +918,11 @@ class Fretboard {
                 let shouldMark = false;
                 
                 if (hasSpecificOctave) {
-                    // Match both note name and octave
-                    shouldMark = (noteName === targetNoteName && noteOctave === targetOctave);
+                    // Match both note name and octave using enharmonic equivalence
+                    shouldMark = (areEnharmonicEquivalent(noteName, targetNoteName) && noteOctave === targetOctave);
                 } else {
-                    // Match just the note name, any octave
-                    shouldMark = (noteName === targetNoteName);
+                    // Match just the note name using enharmonic equivalence
+                    shouldMark = areEnharmonicEquivalent(noteName, targetNoteName);
                 }
                 
                 if (shouldMark) {
@@ -995,7 +1007,8 @@ class Fretboard {
                     }
                     const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
                     const scaleNotes = getScaleNotes(rootNote, intervals);
-                    const normalizedScaleNotes = scaleNotes.map(note => this.extractNoteName(note));
+                    const translatedScaleNotes = notationTranslateNotes(scaleNotes);
+                    const normalizedScaleNotes = translatedScaleNotes.map(note => this.extractNoteName(note));
                     
                     // Mark all scale notes with subtle grey markers (no labels)
                     this.tuning.forEach((stringNote, stringIndex) => {
@@ -1003,7 +1016,8 @@ class Fretboard {
                             const note = this.calculateNote(stringNote, fret);
                             const noteName = this.extractNoteName(note);
                             
-                            if (normalizedScaleNotes.includes(noteName)) {
+                            // Use enharmonic matching for scale context
+                            if (noteArrayContains(normalizedScaleNotes, noteName)) {
                                 this.markFret(stringIndex, fret, {
                                     backgroundColor: '#f8f9fa',
                                     borderColor: '#dee2e6',
@@ -1027,10 +1041,13 @@ class Fretboard {
         const colorMap = [rootColor, thirdColor, fifthColor, seventhColor];
         const roleNames = ['Root', '3rd', '5th', '7th'];
         
+        // Translate chord notes to proper notation
+        const translatedChordNotes = notationTranslateNotes(chordNotes);
+        
         // Find all positions for each chord tone and mark them with prominent colors
         const chordPositions = [];
         
-        chordNotes.forEach((note, index) => {
+        translatedChordNotes.forEach((note, index) => {
             const noteName = this.extractNoteName(note);
             const positions = this.findNotePositions(noteName);
             
@@ -1178,11 +1195,11 @@ class Fretboard {
                 let shouldInclude = false;
                 
                 if (hasSpecificOctave) {
-                    // Match both note name and octave
-                    shouldInclude = (noteName === targetNoteName && noteOctave === targetOctave);
+                    // Match both note name and octave using enharmonic equivalence
+                    shouldInclude = (areEnharmonicEquivalent(noteName, targetNoteName) && noteOctave === targetOctave);
                 } else {
-                    // Match just the note name, any octave
-                    shouldInclude = (noteName === targetNoteName);
+                    // Match just the note name using enharmonic equivalence
+                    shouldInclude = areEnharmonicEquivalent(noteName, targetNoteName);
                 }
                 
                 if (shouldInclude) {
@@ -1609,11 +1626,11 @@ class Fretboard {
                 let isMatch = false;
                 
                 if (hasSpecificOctave) {
-                    // Match both note name and octave
-                    isMatch = fretNoteName === targetNoteName && fretOctave === targetOctave;
+                    // Match both note name and octave using enharmonic equivalence
+                    isMatch = areEnharmonicEquivalent(fretNoteName, targetNoteName) && fretOctave === targetOctave;
                 } else {
-                    // Match note name only (any octave)
-                    isMatch = fretNoteName === targetNoteName;
+                    // Match note name only using enharmonic equivalence
+                    isMatch = areEnharmonicEquivalent(fretNoteName, targetNoteName);
                 }
                 
                 if (isMatch) {
@@ -1788,8 +1805,8 @@ class Fretboard {
         const patterns = getChordPatterns();
         const matches = [];
         
-        // Convert chord notes to a set for easy lookup
-        const chordNoteSet = new Set(chordNotes.map(note => this.extractNoteName(note)));
+        // Convert chord notes to a set for easy lookup, normalizing the notation
+        const chordNoteSet = new Set(chordNotes.map(note => normalizeNote(this.extractNoteName(note))));
         
         // Extract just the note name from the root note (remove octave)
         const rootNoteName = this.extractNoteName(rootNote);
@@ -1827,11 +1844,11 @@ class Fretboard {
                     const noteAtPosition = this.getNoteAt(pos.string, pos.fret);
                     if (noteAtPosition) {
                         // console.log(`Found note ${noteAtPosition} at position ${pos.string}:${pos.fret}`);
-                        const noteName = this.extractNoteName(noteAtPosition);
+                        const noteName = normalizeNote(this.extractNoteName(noteAtPosition));
                         patternNotes.push(noteName);
                         
-                        // Check if this note is in the chord
-                        if (!chordNoteSet.has(noteName)) {
+                        // Check if this note is in the chord using enharmonic matching
+                        if (!noteArrayContains(Array.from(chordNoteSet), noteName)) {
                             isValidMatch = false;
                             // console.log(`Pattern ${name} for root ${rootNoteName} at fret ${rootPos.fret} - note ${noteName} not in chord [${Array.from(chordNoteSet).join(', ')}]`);
                             break;
@@ -1844,9 +1861,11 @@ class Fretboard {
                 }
                 
                 if (isValidMatch && patternNotes.length > 0) {
-                    // Additional check: ensure all chord notes are represented in the pattern
-                    const patternNoteSet = new Set(patternNotes);
-                    const allChordNotesPresent = Array.from(chordNoteSet).every(chordNote => patternNoteSet.has(chordNote));
+                    // Additional check: ensure all chord notes are represented in the pattern using enharmonic matching
+                    const chordNotesArray = Array.from(chordNoteSet);
+                    const allChordNotesPresent = chordNotesArray.every(chordNote => 
+                        noteArrayContains(patternNotes, chordNote)
+                    );
                     
                     if (allChordNotesPresent) {
                         matches.push({
@@ -3087,13 +3106,9 @@ function analyzeChordScaleCompatibility(rootNote, chordType) {
         const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
         const scaleNotes = getScaleNotes(scaleRootNote, intervals);
         
-        // Remove octave information from scale notes to get just note names
-        const scaleNoteNames = scaleNotes.map(note => {
-            if (typeof note === 'string' && note.includes('/')) {
-                return note.split('/')[0];
-            }
-            return note;
-        });
+        // Translate scale notes to proper notation and remove octave information
+        const translatedScaleNotes = notationTranslateNotes(scaleNotes);
+        const scaleNoteNames = translatedScaleNotes.map(note => notationStripOctave(note));
         
         // Process the chord to get its notes
         const chordName = rootNote + chordType;
@@ -3103,16 +3118,12 @@ function analyzeChordScaleCompatibility(rootNote, chordType) {
             return { matchCount: 0, totalNotes: 0, matchPercentage: 0, color: '#9E9E9E' };
         }
         
-        // Remove octave information from chord notes
-        const chordNotes = chordInfo.notes.map(note => {
-            if (typeof note === 'string' && note.includes('/')) {
-                return note.split('/')[0];
-            }
-            return note;
-        });
+        // Translate chord notes to proper notation and remove octave information
+        const translatedChordNotes = notationTranslateNotes(chordInfo.notes);
+        const chordNotes = translatedChordNotes.map(note => notationStripOctave(note));
         
-        // Check how many chord notes are in the scale
-        const notesInScale = chordNotes.filter(note => scaleNoteNames.includes(note));
+        // Check how many chord notes are in the scale using enharmonic matching
+        const notesInScale = chordNotes.filter(note => noteArrayContains(scaleNoteNames, note));
         const matchCount = notesInScale.length;
         const totalNotes = chordNotes.length;
         const matchPercentage = Math.round((matchCount / totalNotes) * 100);
@@ -3449,6 +3460,9 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
             const chordInfo = processChord(chordName);
             
             if (chordInfo && chordInfo.notes) {
+                // Translate chord notes to match current scale context
+                const translatedChordNotes = notationTranslateNotes(chordInfo.notes);
+                
                 // Get the fretboard instance
                 const fretboard = getFretboard('fretNotPlaceholder');
                 if (fretboard) {
@@ -3476,7 +3490,7 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                     });
                     
                     // Then, mark chord notes with their usual colorings
-                    const chordNotes = chordInfo.notes.map(note => 
+                    const chordNotes = translatedChordNotes.map(note => 
                         typeof note === 'string' && note.includes('/') ? note.split('/')[0] : note
                     );
                     
@@ -3489,7 +3503,7 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                     
                     chordNotes.forEach((note, index) => {
                         const positions = fretboard.findNotePositions(note);
-                        const isInScale = scaleNoteNames.includes(note);
+                        const isInScale = noteArrayContains(scaleNoteNames, note);
                         const isRoot = index === 0;
                         
                         positions.forEach(pos => {
@@ -3765,9 +3779,22 @@ function updateChordInfoDisplay(chordName = null, chordNotes = null) {
     }
     
     if (chordName && chordNotes) {
-        // Show chord information
+        // Translate notes to proper notation if scale context is available
+        const translatedNotes = notationTranslateNotes(chordNotes);
+        const displayNotes = translatedNotes.map(note => notationStripOctave(note));
+        
+        // Log for debugging the notation system
+        if (JSON.stringify(chordNotes) !== JSON.stringify(displayNotes)) {
+            console.log('🎵 Notation Translation:', {
+                original: chordNotes.map(note => notationStripOctave(note)),
+                translated: displayNotes,
+                chord: chordName
+            });
+        }
+        
+        // Show chord information with properly notated notes
         chordNameDisplay.textContent = chordName;
-        chordNotesDisplay.textContent = `Notes: ${chordNotes.join(' - ')}`;
+        chordNotesDisplay.textContent = `Notes: ${displayNotes.join(' - ')}`;
         chordInfoContainer.style.display = 'block';
     } else {
         // Hide chord information
@@ -3813,7 +3840,10 @@ function updateFretboardsForScaleChange(scaleData) {
         }
         
         console.log(`Updating fretboards for scale change: ${rootNote} ${primaryScale}`);
-        
+
+        const [family, mode] = primaryScale.split('-');
+        const scaleName = `${rootNote} ${family} (Mode ${mode})`;
+        updateChordInfoDisplay(scaleName, scaleNotes);
         // Update all fretboards that are showing the scale
         fretboardsShowingScale.forEach(containerId => {
             const fretboard = fretboardInstances.get(containerId);
@@ -4281,3 +4311,58 @@ window.analyzeChordScaleCompatibility = analyzeChordScaleCompatibility;
 window.updateChordGridColors = updateChordGridColors;
 window.refreshFretboardDisplay = refreshFretboardDisplay;
 window.updateFretboardsForScaleChange = updateFretboardsForScaleChange;
+
+// Make notation functions globally accessible for testing
+window.testNotationSystem = function() {
+    console.log('🎵 Testing Musical Notation System');
+    console.log('=====================================');
+    
+    // Test scale generation with proper enharmonics
+    const scales = [
+        { root: 'C', intervals: ['W', 'W', 'H', 'W', 'W', 'W', 'H'], name: 'C Major' },
+        { root: 'F#', intervals: ['W', 'W', 'H', 'W', 'W', 'W', 'H'], name: 'F# Major' },
+        { root: 'Db', intervals: ['W', 'W', 'H', 'W', 'W', 'W', 'H'], name: 'Db Major' },
+        { root: 'A', intervals: ['W', 'H', 'W', 'W', 'H', 'W', 'W'], name: 'A Minor' }
+    ];
+    
+    scales.forEach(scale => {
+        console.log(`\n${scale.name} Scale:`);
+        
+        // Generate scale using the new notation system
+        const scaleNotes = getScaleNotes(scale.root, scale.intervals);
+        const displayNotes = scaleNotes.map(note => stripOctave(note));
+        console.log(`  Proper notation: ${displayNotes.join(' - ')}`);
+        
+        // Compare with original system for reference
+        const oldScaleNotes = scale.intervals.reduce((acc, interval, i) => {
+            if (i === 0) return [scale.root];
+            const semitones = interval === 'W' ? 2 : interval === 'H' ? 1 : 3;
+            const lastMidi = noteToMidi(acc[acc.length - 1] + '/4');
+            const nextMidi = lastMidi + semitones;
+            const nextNote = noteToName(nextMidi).split('/')[0];
+            acc.push(nextNote);
+            return acc;
+        }, []);
+        console.log(`  Old chromatic:   ${oldScaleNotes.join(' - ')}`);
+    });
+    
+    console.log(`\n✨ Enhanced notation system active!`);
+};
+
+window.testScaleContext = function() {
+    console.log('🎵 Testing Scale Context Translation');
+    console.log('===================================');
+    
+    // Test note translation with F# Major
+    const intervals = ['W', 'W', 'H', 'W', 'W', 'W', 'H'];
+    const scaleNotes = getScaleNotes('F#', intervals);
+    
+    console.log('F# Major scale with proper notation:');
+    console.log('Scale notes:', scaleNotes.map(n => stripOctave(n)).join(' - '));
+    
+    // Test translation of chord notes in this context
+    const testChord = ['F#', 'A#', 'C#']; // F# Major chord
+    const translated = translateNotes(testChord);
+    console.log('F# Major chord - Original:', testChord.join(' - '));
+    console.log('F# Major chord - Proper:  ', translated.map(n => stripOctave(n)).join(' - '));
+};

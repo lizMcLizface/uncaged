@@ -1,4 +1,13 @@
 import { noteToMidi, noteToName } from './midi';
+import { 
+    midiToNote as notationMidiToNote, 
+    noteToMidi as notationNoteToMidi,
+    setScaleContext,
+    getScaleContext,
+    translateNotes,
+    generateProperScale,
+    stripOctave
+} from './notation';
 import { identifySyntheticChords } from './intervals';
 
 // Cache for precomputed chords
@@ -570,6 +579,14 @@ function getChordCacheStats() {
 
 function getScaleNotes(rootNote, intervals) {
     // console.log("Generating scale notes for root:", rootNote, "with intervals:", intervals);
+    
+    // Set up the scale context for proper notation
+    setScaleContext(rootNote, intervals);
+    
+    // Generate the scale with proper enharmonic spelling
+    const properScale = generateProperScale(rootNote, intervals);
+    
+    // Convert to the format expected by the rest of the application (with octaves)
     let rootNoteMidi = noteToMidi(rootNote + "/5");
     let notes = [rootNoteMidi];
     for (let i = 0; i < intervals.length; i++) {
@@ -585,9 +602,16 @@ function getScaleNotes(rootNote, intervals) {
         }
         notes.push(rootNoteMidi);
     }
+    
+    // Use the scale context to get properly spelled note names
+    const scaleContext = getScaleContext();
     return notes.map(midi => { 
-        let noteName = noteToName(midi);
-        return noteName ? noteName : midi; // Fallback to MIDI number if name is not found
+        if (scaleContext) {
+            return scaleContext.getNoteName(midi);
+        } else {
+            let noteName = noteToName(midi);
+            return noteName ? noteName : midi; // Fallback to MIDI number if name is not found
+        }
     });
 }
 
@@ -603,5 +627,10 @@ export {
     getPrecomputedChords,
     getChordsForScale,
     clearChordCache,
-    getChordCacheStats
+    getChordCacheStats,
+    setScaleContext,
+    getScaleContext,
+    translateNotes,
+    generateProperScale,
+    stripOctave
 };
