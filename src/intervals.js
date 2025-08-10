@@ -180,89 +180,7 @@ function chordToIntervals(chordType) {
     }
 }
 
-function resolveChord(chordName) {
-    chordName = chordName.replace(/\s+/g, '')
-        .replace(/Major/gi, 'maj')
-        .replace(/Minor/gi, 'min');
-
-    
-    let flatNotes = [];
-    if (chordName.includes('b3') || chordName.includes('b5') || chordName.includes('b7')) {
-        if (chordName.includes('b3')) {
-            flatNotes.push(3);
-            chordName = chordName.replace('b3', '');
-        }
-        if (chordName.includes('b5')) {
-            flatNotes.push(5);
-            chordName = chordName.replace('b5', '');
-        }
-        if (chordName.includes('b7')) {
-            flatNotes.push(7);
-            chordName = chordName.replace('b7', '');
-        }
-    }
-
-    // Regex for root note and chord type
-    const noteRegex = /^([A-G](?:b|#|♮|♭|♯|𝄫|𝄪|)?)(.*)$/;
-    const noteRegex2 = /^(.*)\/([A-G](?:b|#|♮|♭|♯|𝄫|𝄪|)?)$/;
-
-    let result = chordName.match(noteRegex);
-    if (!result) {
-        throw new Error("Invalid chord name: No root note found");
-    }
-    const rootNote = result[1];
-    let subString = result[2];
-
-    result = subString.match(noteRegex2);
-    let chordType, bassNote;
-    if (result) {
-        chordType = result[1];
-        bassNote = result[2];
-    } else {
-        chordType = subString;
-        bassNote = null;
-    }
-
-    let suspended = null;
-    if (chordType.includes('sus')) {
-        if (chordType.includes('sus2')) {
-            suspended = 'sus2';
-            chordType = chordType.replace('sus2', '');
-        } else if (chordType.includes('sus4')) {
-            suspended = 'sus4';
-            chordType = chordType.replace('sus4', '');
-        } else if (chordType.includes('sus')) {
-            suspended = 'sus4';
-            chordType = chordType.replace('sus', '');
-        }
-    }
-
-    let addedTone = null;
-    if (chordType.includes('add')) {
-        const addMatch = chordType.match(/add(\d+)/);
-        if (addMatch) {
-            addedTone = addMatch[1];
-            chordType = chordType.replace(`add${addedTone}`, '');
-        }
-    }
-
-    let noTone = null;
-    if (chordType.includes('no')) {
-        const noMatch = chordType.match(/no(\d+)/);
-        if (noMatch) {
-            noTone = noMatch[1];
-            chordType = chordType.replace(`no${noTone}`, '');
-        }
-    }
-
-    chordType = chordType.replace(/♯/g, '#')
-        .replace(/♭/g, 'b')
-        .replace(/𝄫/g, 'bb')
-        .replace(/𝄪/g, '##')
-        .replace(/♮/g, '')
-        .replace(/°/g, 'o')
-        .replace(/Δ/g, 'D');
-
+function resolveChordType(chordType) {
     let chord = null;
     if (['', 'maj', 'M', 'Δ', 'D'].includes(chordType)) {
         chord = 'Major Triad';
@@ -352,6 +270,140 @@ function resolveChord(chordName) {
     } else {
         throw new Error(`Unknown chord type: ${chordType}`);
     }
+    return chord;
+}
+
+function resolveChord(chordName) {
+    chordName = chordName.replace(/\s+/g, '')
+        .replace(/Major/gi, 'maj')
+        .replace(/Minor/gi, 'min');
+
+    
+    let flatNotes = [];
+    if (chordName.includes('b3') || chordName.includes('b5') || chordName.includes('b7') || chordName.includes('b9') || chordName.includes('b11') || chordName.includes('b13')) {
+        if (chordName.includes('b3')) {
+            flatNotes.push(3);
+            chordName = chordName.replace('b3', '');
+        }
+        if (chordName.includes('b5')) {
+            flatNotes.push(5);
+            chordName = chordName.replace('b5', '');
+        }
+        if (chordName.includes('b7')) {
+            flatNotes.push(7);
+            chordName = chordName.replace('b7', '');
+        }
+        if (chordName.includes('b9')) {
+            flatNotes.push(9);
+            chordName = chordName.replace('b9', '');
+        }
+        if (chordName.includes('b11')) {
+            flatNotes.push(11);
+            chordName = chordName.replace('b11', '');
+        }
+        if (chordName.includes('b13')) {
+            flatNotes.push(13);
+            chordName = chordName.replace('b13', '');
+        }
+    }
+
+    let sharpNotes = [];
+    if (chordName.includes('#3') || chordName.includes('#5') || chordName.includes('#7') || chordName.includes('#9') || chordName.includes('#11') || chordName.includes('#13')) {
+        if (chordName.includes('#3')) {
+            sharpNotes.push(3);
+            chordName = chordName.replace('#3', '');
+        }
+        if (chordName.includes('#5')) {
+            sharpNotes.push(5);
+            chordName = chordName.replace('#5', '');
+        }
+        if (chordName.includes('#7')) {
+            sharpNotes.push(7);
+            chordName = chordName.replace('#7', '');
+        }
+        if (chordName.includes('#9')) {
+            sharpNotes.push(9);
+            chordName = chordName.replace('#9', '');
+        }
+        if (chordName.includes('#11')) {
+            sharpNotes.push(11);
+            chordName = chordName.replace('#11', '');
+        }
+        if (chordName.includes('#13')) {
+            sharpNotes.push(13);
+            chordName = chordName.replace('#13', '');
+        }
+    }
+
+    // Regex for root note and chord type
+    const noteRegex = /^([A-G](?:b|#|♮|♭|♯|𝄫|𝄪|)?)(.*)$/;
+    const noteRegex2 = /^(.*)\/([A-G](?:b|#|♮|♭|♯|𝄫|𝄪|)?)$/;
+
+    let result = chordName.match(noteRegex);
+    if (!result) {
+        throw new Error("Invalid chord name: No root note found");
+    }
+    const rootNote = result[1];
+    let subString = result[2];
+
+    result = subString.match(noteRegex2);
+    let chordType, bassNote;
+    if (result) {
+        chordType = result[1];
+        bassNote = result[2];
+    } else {
+        chordType = subString;
+        bassNote = null;
+    }
+
+    let suspended = null;
+    if (chordType.includes('sus')) {
+        if (chordType.includes('sus2')) {
+            suspended = 'sus2';
+            chordType = chordType.replace('sus2', '');
+        } else if (chordType.includes('sus4')) {
+            suspended = 'sus4';
+            chordType = chordType.replace('sus4', '');
+        } else if (chordType.includes('sus')) {
+            suspended = 'sus4';
+            chordType = chordType.replace('sus', '');
+        }
+    }
+
+    let addedTone = null;
+    if (chordType.includes('add')) {
+        const addMatch = chordType.match(/add(\d+)/);
+        if (addMatch) {
+            addedTone = addMatch[1];
+            chordType = chordType.replace(`add${addedTone}`, '');
+        }
+    }
+
+    let noTone = null;
+    if (chordType.includes('no')) {
+        const noMatch = chordType.match(/no(\d+)/);
+        if (noMatch) {
+            noTone = noMatch[1];
+            chordType = chordType.replace(`no${noTone}`, '');
+        }
+    }
+
+    chordType = chordType.replace(/♯/g, '#')
+        .replace(/♭/g, 'b')
+        .replace(/𝄫/g, 'bb')
+        .replace(/𝄪/g, '##')
+        .replace(/♮/g, '')
+        .replace(/°/g, 'o')
+        .replace(/Δ/g, 'D');
+    let chord = null;
+    try {
+        chord = resolveChordType(chordType);
+    } catch (error) {
+        console.error(`Error resolving chord type: ${chordType}`);
+        throw new Error(`Invalid chord type: ${chordType}`);
+    }
+    // console.log(`Resolved chord: ${chord} for chord name: ${chordName}`);
+    // console.log(`Root Note: ${rootNote}, Chord Type: ${chord}, Suspended: ${suspended}, Added Tone: ${addedTone}, Bass Note: ${bassNote}, No Tone: ${noTone}, Flat Notes: ${flatNotes}, Sharp Notes: ${sharpNotes}`);
 
     return {
         rootNote,
@@ -360,7 +412,8 @@ function resolveChord(chordName) {
         addedTone,
         bassNote,
         noTone,
-        flatNotes
+        flatNotes,
+        sharpNotes
     };
 }
 function processChord(chordName) {
@@ -373,6 +426,7 @@ function processChord(chordName) {
     const bassNote = chord.bassNote;
     const noTone = chord.noTone;
     const flatNotes = chord.flatNotes;
+    const sharpNotes = chord.sharpNotes;
 
     let intervals = chordToIntervals(chordType);
 
@@ -391,16 +445,85 @@ function processChord(chordName) {
             if (note === 3) {
                 intervals[1] = 'm3';
             } else if (note === 5) {
-                intervals[2] = 'd5';
+                if (intervals.length > 2) {
+                    intervals[2] = 'd5';
+                }
+                else{
+                    intervals.push('d5');
+                }
             } else if (note === 7) {
-                intervals[3] = 'm7';
+                if (intervals.length > 3) {
+                    intervals[3] = 'm7';
+                } else {
+                    intervals.push('m7');
+                }
+            } else if (note === 9) {
+                if (intervals.length > 4) {
+                    intervals[4] = 'm9';
+                } else {
+                    intervals.push('m9');
+                }
+            } else if (note === 11) {
+                if (intervals.length > 5) {
+                    intervals[5] = 'P11';
+                } else {
+                    intervals.push('P11');
+                }
+            } else if (note === 13) {
+                if (intervals.length > 6) {
+                    intervals[6] = 'M13';
+                } else {
+                    intervals.push('M13');
+                }
+            }
+        }
+    }
+    if (sharpNotes && sharpNotes.length > 0) {
+        for (const note of sharpNotes) {
+            if (note === 3) {
+                intervals[1] = 'A3';
+            } else if (note === 5) {
+                if (intervals.length > 2) {
+                    intervals[2] = 'A5';
+                } else {
+                    intervals.push('A5');
+                }
+            } else if (note === 7) {
+                if (intervals.length > 3) {
+                    intervals[3] = 'A7';
+                } else {
+                    intervals.push('A7');
+                }
+            } else if (note === 9) {
+                if (intervals.length > 4) {
+                    intervals[4] = 'A9';
+                } else {
+                    intervals.push('A9');
+                }
+            } else if (note === 11) {
+                if (intervals.length > 5) {
+                    intervals[5] = 'A11';
+                } else {
+                    intervals.push('A11');
+                }
+            } else if (note === 13) {
+                if (intervals.length > 6) {
+                    intervals[6] = 'A13';
+                } else {
+                    intervals.push('A13');
+                }
             }
         }
     }
 
     // Handle added tones
     if (addedTone) {
-        intervals.push(`M${addedTone}`);
+        if (addedTone === '4') 
+            intervals.push('P4');
+        else if (addedTone === '11')
+            intervals.push('P11');
+        else
+            intervals.push(`M${addedTone}`);
     }
 
     // Handle omitted tones

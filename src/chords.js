@@ -20,6 +20,36 @@ let chords = {
     'thirteens': chordSuffixesThirteens
 }
 
+// Missing chord suffixes to be added later:a
+// sus24 = sus2add4 (supported)
+// m2 = madd2 (supported)
+// 6m = min6 (supported)
+// 6/9 = 6add9 (supported)
+// M#11
+// M7sus24
+// 57 = 7no3 (supported)
+// 7#9
+// M7b9
+// m7b9
+// mM7b9
+// +M7b9
+// +7b9
+// ø7b9
+// 7/6 = 7add6 (supported)
+// 7/6sus2 = 7sus2add6 (supported)
+// 7sus24 = 7sus2add4 (supported)
+// 7#11
+// 7b13
+// M7#11
+// m7#11
+// 7b13sus
+// +M7#9
+// +7#9
+// 7#9#11 
+// m11b5b9 
+// m11b9 
+// M9#11
+
 let processedChords = {};
 
 // Initialize processed chords lazily to avoid circular dependency issues

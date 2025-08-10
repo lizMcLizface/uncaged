@@ -31,8 +31,8 @@ let selectedPatternIndexes = new Map(); // Map of chord index to selected patter
 
 // Configuration constants
 const CHORD_LINE_CONFIG = {
-    normalWidth: 6,
-    highlightedWidth: 8,
+    normalWidth: 60,
+    highlightedWidth: 80,
     normalOpacity: 0.7,
     highlightedOpacity: 0.9,
     hoverOpacity: 1.0
@@ -1258,16 +1258,16 @@ function displayAllChordPatterns() {
     
     // Color cycle for different chords
     const colors = [
-        '#ff6b35', // Orange
-        '#4ecdc4', // Teal  
-        '#45b7d1', // Blue
-        '#f9ca24', // Yellow
-        '#f0932b', // Dark orange
-        '#eb4d4b', // Red
-        '#6c5ce7', // Purple
-        '#a55eea', // Light purple
-        '#26de81', // Green
-        '#fd79a8'  // Pink
+        '#1f77b4', // blue
+        '#ff7f0e', // orange  
+        '#2ca02c', // green
+        '#d62728', // red
+        '#9467bd', // purple
+        '#8c564b', // brown
+        '#e377c2', // pink
+        '#7f7f7f', // gray
+        '#bcbd22', // olive
+        '#17becf'  // cyan
     ];
     
     currentProgression.forEach((chord, index) => {
