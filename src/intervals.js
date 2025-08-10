@@ -356,35 +356,44 @@ function resolveChord(chordName) {
         bassNote = null;
     }
 
-    let suspended = null;
+    let suspended = [];
     if (chordType.includes('sus')) {
-        if (chordType.includes('sus2')) {
-            suspended = 'sus2';
-            chordType = chordType.replace('sus2', '');
-        } else if (chordType.includes('sus4')) {
-            suspended = 'sus4';
-            chordType = chordType.replace('sus4', '');
+        // Find all sus patterns - sus2, sus4, or just sus (defaults to sus4)
+        const susMatches = chordType.match(/sus(\d+)/g);
+        if (susMatches) {
+            for (const match of susMatches) {
+                const susNumber = match.replace('sus', '');
+                suspended.push(`sus${susNumber}`);
+                chordType = chordType.replace(match, '');
+            }
         } else if (chordType.includes('sus')) {
-            suspended = 'sus4';
+            // Handle plain 'sus' which defaults to sus4
+            suspended.push('sus4');
             chordType = chordType.replace('sus', '');
         }
     }
 
-    let addedTone = null;
+    let addedTones = [];
     if (chordType.includes('add')) {
-        const addMatch = chordType.match(/add(\d+)/);
-        if (addMatch) {
-            addedTone = addMatch[1];
-            chordType = chordType.replace(`add${addedTone}`, '');
+        const addMatches = chordType.match(/add(\d+)/g);
+        if (addMatches) {
+            for (const match of addMatches) {
+                const addNumber = match.replace('add', '');
+                addedTones.push(addNumber);
+                chordType = chordType.replace(match, '');
+            }
         }
     }
 
-    let noTone = null;
+    let noTones = [];
     if (chordType.includes('no')) {
-        const noMatch = chordType.match(/no(\d+)/);
-        if (noMatch) {
-            noTone = noMatch[1];
-            chordType = chordType.replace(`no${noTone}`, '');
+        const noMatches = chordType.match(/no(\d+)/g);
+        if (noMatches) {
+            for (const match of noMatches) {
+                const noNumber = match.replace('no', '');
+                noTones.push(noNumber);
+                chordType = chordType.replace(match, '');
+            }
         }
     }
 
@@ -409,9 +418,9 @@ function resolveChord(chordName) {
         rootNote,
         chordType: chord,
         suspended,
-        addedTone,
+        addedTones,
         bassNote,
-        noTone,
+        noTones,
         flatNotes,
         sharpNotes
     };
@@ -422,9 +431,9 @@ function processChord(chordName) {
     const rootNote = chord.rootNote;
     const chordType = chord.chordType;
     const suspended = chord.suspended;
-    const addedTone = chord.addedTone;
+    const addedTones = chord.addedTones;
     const bassNote = chord.bassNote;
-    const noTone = chord.noTone;
+    const noTones = chord.noTones;
     const flatNotes = chord.flatNotes;
     const sharpNotes = chord.sharpNotes;
 
@@ -433,11 +442,13 @@ function processChord(chordName) {
     const rootMidi = notationNoteToMidi(rootNote);
 
     // Handle suspended chords
-    if (suspended) {
-        if (suspended === 'sus2') {
-            intervals[1] = 'M2';
-        } else if (suspended === 'sus4') {
-            intervals[1] = 'P4';
+    if (suspended && suspended.length > 0) {
+        for (const sus of suspended) {
+            if (sus === 'sus2') {
+                intervals[1] = 'M2';
+            } else if (sus === 'sus4') {
+                intervals[1] = 'P4';
+            }
         }
     }
     if (flatNotes && flatNotes.length > 0) {
@@ -517,18 +528,22 @@ function processChord(chordName) {
     }
 
     // Handle added tones
-    if (addedTone) {
-        if (addedTone === '4') 
-            intervals.push('P4');
-        else if (addedTone === '11')
-            intervals.push('P11');
-        else
-            intervals.push(`M${addedTone}`);
+    if (addedTones && addedTones.length > 0) {
+        for (const addedTone of addedTones) {
+            if (addedTone === '4') 
+                intervals.push('P4');
+            else if (addedTone === '11')
+                intervals.push('P11');
+            else
+                intervals.push(`M${addedTone}`);
+        }
     }
 
     // Handle omitted tones
-    if (noTone) {
-        intervals = intervals.filter(i => !i.includes(noTone));
+    if (noTones && noTones.length > 0) {
+        for (const noTone of noTones) {
+            intervals = intervals.filter(i => !i.includes(noTone));
+        }
     }
 
     const notes = [];
@@ -556,8 +571,8 @@ function processChord(chordName) {
         rootNote,
         chordType,
         suspended,
-        addedTone,
-        noTone,
+        addedTones,
+        noTones,
         intervals,
         rootMidi,
         notes

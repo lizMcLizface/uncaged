@@ -1156,12 +1156,6 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
     if (!fretboard || !chord.chordInfo || !chord.chordInfo.notes) return;
     
     const patterns = getChordPatternMatches(chord);
-    if (patterns.length === 0) return;
-    
-    const selectedPatternIndex = selectedPatternIndexes.get(index) || 0;
-    if (selectedPatternIndex >= patterns.length) return;
-    
-    const pattern = patterns[selectedPatternIndex];
     
     // Clear only chord lines, keep scale context if enabled
     fretboard.clearChordLines();
@@ -1178,13 +1172,43 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
         fretboard.clearMarkers();
     }
     
-    // Display chord with scale context
+    // Display chord notes regardless of whether patterns exist
     const chordNotes = chord.chordInfo.notes.map(note => notationStripOctave(note));
+    
+    // If no patterns are available, show chord notes with enhanced visibility when hovered
+    if (patterns.length === 0) {
+        // Display the chord normally
+        fretboard.displayChord(chordNotes, getChordDisplayName(chord), {
+            clearFirst: false,
+            showLines: false,
+            showScaleContext: showScaleContext
+        });
+        
+        // If highlighted (hovered), add a visual indicator by displaying again with different name
+        if (isHighlighted) {
+            // Add a special indicator to the chord name to show it's being highlighted
+            const highlightedName = `🎯 ${getChordDisplayName(chord)} (Notes Only)`;
+            fretboard.displayChord(chordNotes, highlightedName, {
+                clearFirst: false,
+                showLines: false,
+                showScaleContext: showScaleContext,
+                forceHighlight: true // If this option exists
+            });
+        }
+        return;
+    }
+    
+    // Regular chord display for chords with patterns
     fretboard.displayChord(chordNotes, getChordDisplayName(chord), {
         clearFirst: false,
         showLines: false,
         showScaleContext: showScaleContext
     });
+    
+    const selectedPatternIndex = selectedPatternIndexes.get(index) || 0;
+    if (selectedPatternIndex >= patterns.length) return;
+    
+    const pattern = patterns[selectedPatternIndex];
     
     // Add pattern lines with dynamic styling
     if (pattern.positions.length > 1) {
