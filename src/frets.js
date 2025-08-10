@@ -14,6 +14,7 @@ import {
     filterEnharmonicMatches,
     normalizeNote
 } from './notation';
+import { createChordProgressionUI } from './progressionBuilder';
 import {getChordPatterns, getPatternsByChordType} from './chordPatterns';
 
 // Standard guitar tuning (lowest to highest strings) - displayed from top to bottom
@@ -3032,6 +3033,12 @@ function createFretboardControls(fretboard) {
     
     // Insert controls before the fretboard
     fretboard.container.insertBefore(controlsContainer, fretboard.fretboardElement);
+    
+    // Add chord progression builder
+    const progressionContainer = createChordProgressionUI(fretboard);
+    if (progressionContainer) {
+        fretboard.container.insertBefore(progressionContainer, fretboard.fretboardElement);
+    }
     
     // Create a flex container for scales and chord grid
     const scalesAndChordsContainer = document.createElement('div');
