@@ -1,4 +1,4 @@
-import { processChord, generateSyntheticChords } from './intervals';
+import { processChord, generateSyntheticChords, identifySyntheticChords } from './intervals';
 import { HeptatonicScales, getScaleNotes } from './scales';
 import { getPrimaryScale, getPrimaryRootNote } from './scaleGenerator';
 import { noteToMidi, noteToName } from './midi';
@@ -70,8 +70,8 @@ function parseProgressionInput(progressionText) {
  * @returns {Object|null} Parsed chord data or null if invalid
  */
 function parseChordToken(token) {
-    // Check if it's a Roman numeral - updated pattern to properly handle VII
-    const romanMatch = token.match(/^(b?#?)(i{1,3}v?|iv|v|vi{1,3}|I{1,3}V?|IV|V|VI{1,3})(.*)$/i);
+    // Check if it's a Roman numeral - fixed pattern to properly handle VI and VII
+    const romanMatch = token.match(/^(b?#?)(vii|vi|v|iv|iii|ii|i|VII|VI|V|IV|III|II|I)(.*)$/);
     
     if (romanMatch) {
         return parseRomanNumeral(token);
@@ -90,8 +90,8 @@ function parseRomanNumeral(token) {
     const prefixMatch = token.match(/^([b#]*)/);
     const prefix = prefixMatch ? prefixMatch[1] : '';
     
-    // Extract base roman numeral - updated pattern to properly handle VII
-    const baseMatch = token.slice(prefix.length).match(/^(i{1,3}v?|iv|v|vi{1,3}|I{1,3}V?|IV|V|VI{1,3})/i);
+    // Extract base roman numeral - fixed pattern to properly handle VI and VII
+    const baseMatch = token.slice(prefix.length).match(/^(vii|vi|v|iv|iii|ii|i|VII|VI|V|IV|III|II|I)/);
     if (!baseMatch) return null;
     
     const baseRoman = baseMatch[1];
@@ -189,11 +189,21 @@ function resolveRomanChord(romanChord) {
             return resolveFallbackRomanChord(romanChord, scaleRootNote);
         }
         
-        const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
+        const scaleDefinition = HeptatonicScales[family][parseInt(mode, 10) - 1];
+        const intervals = scaleDefinition.intervals;
         const scaleNotes = getScaleNotes(scaleRootNote, intervals);
         
         if (!scaleNotes || scaleNotes.length < 7) {
             console.warn(`Incomplete scale notes for ${primaryScale}. Using fallback resolution.`);
+            return resolveFallbackRomanChord(romanChord, scaleRootNote);
+        }
+        
+        // Use identifySyntheticChords to get scale-aware chord types
+        let diatonicChords;
+        try {
+            diatonicChords = identifySyntheticChords(scaleDefinition, 3, scaleRootNote);
+        } catch (error) {
+            console.warn(`Failed to identify diatonic chords for ${primaryScale}. Using fallback resolution.`);
             return resolveFallbackRomanChord(romanChord, scaleRootNote);
         }
         
@@ -211,21 +221,35 @@ function resolveRomanChord(romanChord) {
             }
         }
         
-        if (degreeIndex < 0 || degreeIndex >= scaleNotes.length) {
+        if (degreeIndex < 0 || degreeIndex >= scaleNotes.length || degreeIndex >= diatonicChords.length) {
             console.warn(`Invalid degree index ${degreeIndex} for Roman numeral resolution`);
             return resolveFallbackRomanChord(romanChord, scaleRootNote);
         }
         
         const chordRoot = notationStripOctave(scaleNotes[degreeIndex]);
         
-        // Determine chord type
-        let chordType = 'Major'; // Default
+        // Get the scale-appropriate chord type from diatonic analysis
+        const diatonicChord = diatonicChords[degreeIndex];
+        let chordType = '';
         
-        if (romanChord.suffix) {
-            // Parse suffix to determine chord type
-            chordType = romanSuffixToChordType(romanChord.suffix, romanChord.isNaturallyMinor);
-        } else if (romanChord.isNaturallyMinor) {
-            chordType = 'Minor';
+        if (diatonicChord && diatonicChord.matches && diatonicChord.matches.length > 0) {
+            // Use the first match as the primary chord type
+            chordType = diatonicChord.matches[0];
+            
+            // Handle suffix modifications if present
+            if (romanChord.suffix) {
+                chordType = modifyChordTypeWithSuffix(chordType, romanChord.suffix);
+            }
+        } else {
+            // Fallback to traditional Roman numeral interpretation
+            console.warn(`No diatonic chord found for degree ${romanChord.degree}, using traditional interpretation`);
+            if (romanChord.suffix) {
+                chordType = romanSuffixToChordType(romanChord.suffix, romanChord.isNaturallyMinor);
+            } else if (romanChord.isNaturallyMinor) {
+                chordType = 'min';
+            } else {
+                chordType = '';
+            }
         }
         
         // Construct full chord name
@@ -244,7 +268,8 @@ function resolveRomanChord(romanChord) {
                 resolvedChordType: chordType,
                 fullChordName: fullChordName,
                 chordInfo: chordInfo,
-                isInvalid: false // Mark as valid
+                isInvalid: false,
+                diatonicInfo: diatonicChord // Store diatonic chord info for reference
             };
         } catch (error) {
             console.warn(`Failed to process chord ${fullChordName}:`, error);
@@ -252,9 +277,39 @@ function resolveRomanChord(romanChord) {
         }
         
     } catch (error) {
-        console.warn(`Error resolving Roman chord ${romanChord.originalToken}:`, error);
+        console.warn(`Error resolving Roman numeral chord:`, error);
         return resolveFallbackRomanChord(romanChord, scaleRootNote);
     }
+}
+
+/**
+ * Modify a chord type with Roman numeral suffix
+ * @param {string} baseChordType - Base chord type from diatonic analysis
+ * @param {string} suffix - Roman numeral suffix
+ * @returns {string} Modified chord type
+ */
+function modifyChordTypeWithSuffix(baseChordType, suffix) {
+    // Handle common Roman numeral extensions
+    if (suffix.includes('7')) {
+        if (baseChordType === '' || baseChordType === 'maj') {
+            return '7'; // Dominant 7th
+        } else if (baseChordType === 'min' || baseChordType === 'm') {
+            return 'm7'; // Minor 7th
+        } else if (baseChordType === 'dim' || baseChordType === 'o') {
+            return 'dim7'; // Diminished 7th
+        }
+    }
+    
+    if (suffix.includes('9')) {
+        if (baseChordType === '' || baseChordType === 'maj') {
+            return '9'; // Dominant 9th
+        } else if (baseChordType === 'min' || baseChordType === 'm') {
+            return 'm9'; // Minor 9th
+        }
+    }
+    
+    // For now, return the base chord type if we can't handle the suffix
+    return baseChordType;
 }
 
 /**
