@@ -1,12 +1,9 @@
-import { processChord, generateSyntheticChords, identifySyntheticChords } from './intervals';
+import { processChord, identifySyntheticChords } from './intervals';
 import { HeptatonicScales, getScaleNotes } from './scales';
 import { getPrimaryScale, getPrimaryRootNote } from './scaleGenerator';
 import { noteToMidi, noteToName } from './midi';
 import {
-    translateNotes as notationTranslateNotes,
-    stripOctave as notationStripOctave,
-    areEnharmonicEquivalent,
-    noteArrayContains
+    stripOctave as notationStripOctave
 } from './notation';
 
 /**
@@ -29,6 +26,7 @@ let currentProgression = [];
 let hoveredChordIndex = null;
 let selectedPatternIndexes = new Map(); // Map of chord index to selected pattern index
 let showMiniFretboards = false; // Global toggle for mini fretboard visualization
+let useSeventhChords = false; // Global toggle for triads vs seventh chords
 
 // Caching system for performance optimization
 let parsedTokensCache = []; // Cache of parsed tokens from input
@@ -317,8 +315,8 @@ function updateProgressionIncremental(newTokens, changes) {
  * @returns {Object|null} Parsed chord data or null if invalid
  */
 function parseChordToken(token) {
-    // Check if it's a Roman numeral - fixed pattern to properly handle VI and VII
-    const romanMatch = token.match(/^(b?#?)(vii|vi|v|iv|iii|ii|i|VII|VI|V|IV|III|II|I)(.*)$/);
+    // Check if it's a Roman numeral - enhanced pattern to properly handle flat/sharp prefixes
+    const romanMatch = token.match(/^([b#]*)(vii|vi|v|iv|iii|ii|i|VII|VI|V|IV|III|II|I)(.*)$/);
     
     if (romanMatch) {
         return parseRomanNumeral(token);
@@ -454,19 +452,8 @@ function resolveRomanChord(romanChord) {
             return resolveFallbackRomanChord(romanChord, scaleRootNote);
         }
         
-        // Get the root note for this degree
+        // Get the root note for this degree (without prefix modifiers first)
         let degreeIndex = romanChord.degree - 1;
-        
-        // Apply prefix modifiers (b = flat, # = sharp)
-        if (romanChord.prefix) {
-            for (let char of romanChord.prefix) {
-                if (char === 'b') {
-                    degreeIndex = (degreeIndex - 1 + 7) % 7;
-                } else if (char === '#') {
-                    degreeIndex = (degreeIndex + 1) % 7;
-                }
-            }
-        }
         
         if (degreeIndex < 0 || degreeIndex >= scaleNotes.length || degreeIndex >= diatonicChords.length) {
             console.warn(`Invalid degree index ${degreeIndex} for Roman numeral resolution`);
@@ -486,12 +473,18 @@ function resolveRomanChord(romanChord) {
             // Handle suffix modifications if present
             if (romanChord.suffix) {
                 chordType = modifyChordTypeWithSuffix(chordType, romanChord.suffix);
+            } else if (useSeventhChords) {
+                // Apply seventh chord toggle if no explicit suffix
+                chordType = addSeventhToChordType(chordType);
             }
         } else {
             // Fallback to traditional Roman numeral interpretation
             console.warn(`No diatonic chord found for degree ${romanChord.degree}, using traditional interpretation`);
             if (romanChord.suffix) {
                 chordType = romanSuffixToChordType(romanChord.suffix, romanChord.isNaturallyMinor);
+            } else if (useSeventhChords) {
+                // Apply seventh chords based on natural quality
+                chordType = romanChord.isNaturallyMinor ? 'm7' : '7';
             } else if (romanChord.isNaturallyMinor) {
                 chordType = 'min';
             } else {
@@ -503,10 +496,15 @@ function resolveRomanChord(romanChord) {
         const fullChordName = chordRoot + chordType;
         
         try {
-            const chordInfo = processChord(fullChordName);
+            let chordInfo = processChord(fullChordName);
             if (!chordInfo || !chordInfo.notes) {
                 console.warn(`Failed to process chord: ${fullChordName}`);
                 return null;
+            }
+            
+            // Apply prefix modifiers (b = flat, # = sharp) as transposition to the entire chord
+            if (romanChord.prefix) {
+                chordInfo = transposeChordByPrefix(chordInfo, romanChord.prefix);
             }
             
             return {
@@ -560,6 +558,91 @@ function modifyChordTypeWithSuffix(baseChordType, suffix) {
 }
 
 /**
+ * Add seventh to a chord type when seventh toggle is enabled
+ * @param {string} baseChordType - Base chord type
+ * @returns {string} Chord type with seventh added
+ */
+function addSeventhToChordType(baseChordType) {
+    // Handle various chord type formats
+    const lowerType = baseChordType.toLowerCase();
+    
+    if (baseChordType === '' || baseChordType === 'maj' || baseChordType === 'Major') {
+        return '7'; // Dominant 7th for major chords
+    } else if (lowerType === 'min' || lowerType === 'm' || lowerType === 'minor') {
+        return 'm7'; // Minor 7th
+    } else if (lowerType === 'dim' || lowerType === 'o' || lowerType === 'diminished') {
+        return 'dim7'; // Diminished 7th
+    } else if (lowerType === 'aug' || lowerType === '+' || lowerType === 'augmented') {
+        return 'aug7'; // Augmented 7th
+    } else if (lowerType.includes('sus')) {
+        return baseChordType + '7'; // Add 7 to suspended chords (sus27, sus47)
+    }
+    
+    // If we don't know how to add a seventh, return the base type
+    return baseChordType;
+}
+
+/**
+ * Transpose a chord by applying flat/sharp prefix modifiers
+ * @param {Object} chordInfo - Chord info object with notes
+ * @param {string} prefix - Prefix string containing 'b' and/or '#' characters
+ * @returns {Object} Transposed chord info
+ */
+function transposeChordByPrefix(chordInfo, prefix) {
+    if (!prefix || !chordInfo || !chordInfo.notes) {
+        return chordInfo;
+    }
+    
+    // Calculate total semitone shift
+    let semitoneShift = 0;
+    for (let char of prefix) {
+        if (char === 'b') {
+            semitoneShift -= 1; // Flat = down a semitone
+        } else if (char === '#') {
+            semitoneShift += 1; // Sharp = up a semitone
+        }
+    }
+    
+    if (semitoneShift === 0) {
+        return chordInfo;
+    }
+    
+    // Transpose all notes in the chord
+    const transposedNotes = chordInfo.notes.map(note => {
+        const noteMidi = noteToMidi(note);
+        const transposedMidi = noteMidi + semitoneShift;
+        return noteToName(transposedMidi);
+    });
+    
+    // Update chord info with transposed notes
+    const transposedChordInfo = {
+        ...chordInfo,
+        notes: transposedNotes
+    };
+    
+    // Update the chord name if possible
+    if (chordInfo.name) {
+        try {
+            // Try to determine the new root note
+            const originalRootMidi = noteToMidi(chordInfo.notes[0]);
+            const transposedRootMidi = originalRootMidi + semitoneShift;
+            const transposedRoot = noteToName(transposedRootMidi).replace(/\/\d+$/, ''); // Remove octave
+            
+            // Replace the root in the chord name
+            const rootMatch = chordInfo.name.match(/^([A-G][b#]*)/);
+            if (rootMatch) {
+                const oldRoot = rootMatch[1];
+                transposedChordInfo.name = chordInfo.name.replace(oldRoot, transposedRoot);
+            }
+        } catch (error) {
+            console.warn('Could not update chord name after transposition:', error);
+        }
+    }
+    
+    return transposedChordInfo;
+}
+
+/**
  * Fallback resolution for Roman chords when scale is not fully defined
  * @param {Object} romanChord - Roman chord object
  * @param {string} scaleRootNote - Root note of the scale
@@ -570,19 +653,8 @@ function resolveFallbackRomanChord(romanChord, scaleRootNote) {
     const basicMajorIntervals = [0, 2, 4, 5, 7, 9, 11]; // C D E F G A B
     
     try {
-        // Map Roman numeral to chromatic degree
+        // Map Roman numeral to chromatic degree (without prefix modifiers)
         let degreeIndex = romanChord.degree - 1;
-        
-        // Apply prefix modifiers
-        if (romanChord.prefix) {
-            for (let char of romanChord.prefix) {
-                if (char === 'b') {
-                    degreeIndex = (degreeIndex - 1 + 7) % 7;
-                } else if (char === '#') {
-                    degreeIndex = (degreeIndex + 1) % 7;
-                }
-            }
-        }
         
         if (degreeIndex < 0 || degreeIndex >= basicMajorIntervals.length) {
             console.warn(`Invalid fallback degree index: ${degreeIndex}`);
@@ -595,18 +667,28 @@ function resolveFallbackRomanChord(romanChord, scaleRootNote) {
         const chordRootNote = noteToName(chordRootMidi).replace('/4', ''); // Remove octave
         
         // Determine chord type
-        let chordType = 'Major';
+        let chordType = '';
         if (romanChord.suffix) {
             chordType = romanSuffixToChordType(romanChord.suffix, romanChord.isNaturallyMinor);
+        } else if (useSeventhChords) {
+            // Apply seventh chords based on natural quality
+            chordType = romanChord.isNaturallyMinor ? 'm7' : '7';
         } else if (romanChord.isNaturallyMinor) {
-            chordType = 'Minor';
+            chordType = 'min';
+        } else {
+            chordType = '';
         }
         
         const fullChordName = chordRootNote + chordType;
-        const chordInfo = processChord(fullChordName);
+        let chordInfo = processChord(fullChordName);
         
         if (!chordInfo || !chordInfo.notes) {
             return null;
+        }
+        
+        // Apply prefix modifiers as transposition to the entire chord
+        if (romanChord.prefix) {
+            chordInfo = transposeChordByPrefix(chordInfo, romanChord.prefix);
         }
         
         return {
@@ -854,7 +936,7 @@ function createInputSection() {
     const helpText = document.createElement('div');
     helpText.innerHTML = `
         <span style="color: #ccc; font-size: 12px;">
-            Examples: "C7 D#m7b5 Gmajor" or "I IV ii V" or "Cmaj7 Am7 Dm7 G7"
+            Examples: "C7 D#m7b5 Gmajor" or "I IV ii V" or "bIII #V" or "Cmaj7 Am7 Dm7 G7"
         </span>
     `;
     helpText.style.marginBottom = '8px';
@@ -864,7 +946,7 @@ function createInputSection() {
     const input = document.createElement('input');
     input.type = 'text';
     input.id = 'chord-progression-input';
-    input.placeholder = 'e.g., I vi IV V or C Am F G or Cmaj7 Am7 Dm7 G7';
+    input.placeholder = 'e.g., I vi IV V or bIII #V or C Am F G or Cmaj7 Am7 Dm7 G7';
     input.style.cssText = `
         width: 100%;
         padding: 12px;
@@ -874,6 +956,7 @@ function createInputSection() {
         background: #fff;
         color: #333;
         box-sizing: border-box;
+        margin-bottom: 10px;
     `;
     
     // Add input event listener with debouncing
@@ -985,6 +1068,117 @@ function createProgressionControlsSection() {
     miniFretboardToggleContainer.appendChild(miniFretboardToggleCheckbox);
     miniFretboardToggleContainer.appendChild(miniFretboardToggleLabel);
     
+    // Triads vs Sevenths toggle
+    const chordsToggleContainer = document.createElement('div');
+    chordsToggleContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    const chordsToggleCheckbox = document.createElement('input');
+    chordsToggleCheckbox.type = 'checkbox';
+    chordsToggleCheckbox.id = 'chord-progression-sevenths-toggle';
+    chordsToggleCheckbox.checked = useSeventhChords;
+    chordsToggleCheckbox.style.cssText = `
+        transform: scale(1.2);
+    `;
+    
+    // Add change event listener to reprocess progression
+    chordsToggleCheckbox.addEventListener('change', (e) => {
+        useSeventhChords = e.target.checked;
+        
+        // Reprocess the current progression to apply the toggle
+        const inputElement = document.getElementById('chord-progression-input');
+        if (inputElement && inputElement.value.trim()) {
+            updateProgression(inputElement.value);
+        }
+    });
+    
+    const chordsToggleLabel = document.createElement('label');
+    chordsToggleLabel.htmlFor = 'chord-progression-sevenths-toggle';
+    chordsToggleLabel.textContent = 'Use Seventh Chords';
+    chordsToggleLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+    `;
+    
+    chordsToggleContainer.appendChild(chordsToggleCheckbox);
+    chordsToggleContainer.appendChild(chordsToggleLabel);
+    
+    // Predefined progressions dropdown
+    const presetsContainer = document.createElement('div');
+    presetsContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    const presetsLabel = document.createElement('span');
+    presetsLabel.textContent = 'Presets:';
+    presetsLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        font-weight: bold;
+    `;
+    
+    const presetsDropdown = document.createElement('select');
+    presetsDropdown.id = 'chord-progression-presets';
+    presetsDropdown.style.cssText = `
+        padding: 8px;
+        font-size: 14px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        background: #fff;
+        color: #333;
+        cursor: pointer;
+        min-width: 200px;
+    `;
+    
+    // Add predefined chord progressions
+    const presets = [
+        { name: 'Select a preset...', value: '' },
+        { name: 'I-V-vi-IV (Pop progression)', value: 'I V vi IV' },
+        { name: 'vi-IV-I-V (Pop progression)', value: 'vi IV I V' },
+        { name: 'ii-V-I (Jazz standard)', value: 'ii V I' },
+        { name: 'I-vi-ii-V (Jazz circle)', value: 'I vi ii V' },
+        { name: 'I-IV-V-I (Classic cadence)', value: 'I IV V I' },
+        { name: 'vi-V-IV-V (Minor progression)', value: 'vi V IV V' },
+        { name: 'I-bVII-IV-I (Mixolydian)', value: 'I bVII IV I' },
+        { name: 'i-bVI-bVII-i (Minor natural)', value: 'i bVI bVII i' },
+        { name: 'I-iii-vi-IV (Alt pop)', value: 'I iii vi IV' },
+        { name: 'vi-ii-V-I (Jazz turnaround)', value: 'vi ii V I' },
+        { name: 'C-Am-F-G (Key of C)', value: 'C Am F G' },
+        { name: 'Dm7-G7-Cmaj7 (Jazz ii-V-I)', value: 'Dm7 G7 Cmaj7' },
+        { name: 'Am-F-C-G (Key of C minor)', value: 'Am F C G' },
+        { name: 'Cmaj7-Am7-Dm7-G7', value: 'Cmaj7 Am7 Dm7 G7' }
+    ];
+    
+    presets.forEach(preset => {
+        const option = document.createElement('option');
+        option.value = preset.value;
+        option.textContent = preset.name;
+        presetsDropdown.appendChild(option);
+    });
+    
+    // Add change event listener to populate input
+    presetsDropdown.addEventListener('change', (e) => {
+        if (e.target.value) {
+            const inputElement = document.getElementById('chord-progression-input');
+            if (inputElement) {
+                inputElement.value = e.target.value;
+                updateProgression(e.target.value);
+            }
+            // Reset dropdown to "Select a preset..."
+            presetsDropdown.selectedIndex = 0;
+        }
+    });
+    
+    presetsContainer.appendChild(presetsLabel);
+    presetsContainer.appendChild(presetsDropdown);
+    
     // Clear button
     const clearButton = document.createElement('button');
     clearButton.textContent = 'Clear Progression';
@@ -1014,6 +1208,8 @@ function createProgressionControlsSection() {
     
     section.appendChild(scaleToggleContainer);
     section.appendChild(miniFretboardToggleContainer);
+    section.appendChild(chordsToggleContainer);
+    section.appendChild(presetsContainer);
     section.appendChild(clearButton);
     
     return section;
