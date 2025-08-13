@@ -18,6 +18,45 @@ try {
 let selectedScales = ['Major-1']; // Default to first scale
 let exclusiveMode = false; // Toggle between exclusive and multiple selection modes
 
+/**
+ * Smart tooltip positioning function that keeps tooltips within viewport bounds
+ * @param {HTMLElement} tooltip - The tooltip element
+ * @param {MouseEvent} e - The mouse event
+ */
+function positionTooltipSmart(tooltip, e) {
+    // Get tooltip dimensions after it's been added to DOM
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    
+    // Calculate preferred position (bottom-right of cursor)
+    let left = e.pageX + 10;
+    let top = e.pageY + 10;
+    
+    // Check if tooltip would go off the right edge
+    if (left + tooltipRect.width > viewportWidth) {
+        left = e.pageX - tooltipRect.width - 10; // Position to the left of cursor
+    }
+    
+    // Check if tooltip would go off the bottom edge
+    if (top + tooltipRect.height > viewportHeight) {
+        top = e.pageY - tooltipRect.height - 10; // Position above cursor
+    }
+    
+    // Ensure tooltip doesn't go off the left edge
+    if (left < 0) {
+        left = 10; // Small margin from left edge
+    }
+    
+    // Ensure tooltip doesn't go off the top edge
+    if (top < 0) {
+        top = 10; // Small margin from top edge
+    }
+    
+    tooltip.style.left = left + 'px';
+    tooltip.style.top = top + 'px';
+}
+
 // Primary scale index for navigation through multiple selected scales
 let primaryScaleIndex = 0;
 
@@ -521,8 +560,7 @@ function createRootNoteTable() {
         document.body.appendChild(tooltip);
 
         allCell.onmousemove = function(e) {
-            tooltip.style.left = (e.pageX + 10) + 'px';
-            tooltip.style.top = (e.pageY + 10) + 'px';
+            positionTooltipSmart(tooltip, e);
         };
     };
     
@@ -802,8 +840,7 @@ function createRootNoteTable() {
                 document.body.appendChild(tooltip);
 
                 topDiv.onmousemove = function(e) {
-                    tooltip.style.left = (e.pageX + 10) + 'px';
-                    tooltip.style.top = (e.pageY + 10) + 'px';
+                    positionTooltipSmart(tooltip, e);
                 };
             };
             
@@ -912,8 +949,7 @@ function createRootNoteTable() {
                 document.body.appendChild(tooltip);
 
                 bottomDiv.onmousemove = function(e) {
-                    tooltip.style.left = (e.pageX + 10) + 'px';
-                    tooltip.style.top = (e.pageY + 10) + 'px';
+                    positionTooltipSmart(tooltip, e);
                 };
             };
             
@@ -1045,8 +1081,7 @@ function createRootNoteTable() {
                 document.body.appendChild(tooltip);
 
                 cell.onmousemove = function(e) {
-                    tooltip.style.left = (e.pageX + 10) + 'px';
-                    tooltip.style.top = (e.pageY + 10) + 'px';
+                    positionTooltipSmart(tooltip, e);
                 };
             };
             
@@ -1320,8 +1355,7 @@ function createHeptatonicScaleTable() {
                         document.body.appendChild(tooltip);
 
                         cell.onmousemove = function(e) {
-                            tooltip.style.left = (e.pageX + 10) + 'px';
-                            tooltip.style.top = (e.pageY + 10) + 'px';
+                            positionTooltipSmart(tooltip, e);
                         };
                         cell.onmouseleave = function() {
                             document.body.removeChild(tooltip);
@@ -1418,26 +1452,58 @@ function createHeptatonicScaleTable() {
                         tooltip.style.background = '#000';
                         tooltip.style.color = 'white';
                         tooltip.style.border = '1px solid #ccc';
-                        tooltip.style.padding = '4px 8px';
+                        tooltip.style.padding = '8px 12px';
                         tooltip.style.zIndex = 1000;
                         tooltip.style.fontSize = '11px';
-                        tooltip.innerHTML = `
+                        tooltip.style.borderRadius = '4px';
+                        tooltip.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                        
+                        // Create a container for text content
+                        const tooltipContent = document.createElement('div');
+                        
+                        // Format alternative names as bulleted list
+                        let altNamesHtml = '';
+                        if (altNames && altNames.length > 0) {
+                            const altNamesList = altNames.map(name => `• ${name}`).join('<br>');
+                            altNamesHtml = `<br><strong>Alternative Names:</strong><br>${altNamesList}`;
+                        }
+                        
+                        tooltipContent.innerHTML = `
                             <strong>Scale:</strong> ${scaleName}<br>
                             <strong>Interval:</strong> ${interval}<br>
-                            <strong>Alternative Names:</strong> ${altNames.join(', ')}<br>
-                            <em>Click to ${selectedScales.includes(scaleId) ? 'deselect' : 'select'}</em>
+                            <em>Click to ${selectedScales.includes(scaleId) ? 'deselect' : 'select'}</em>${altNamesHtml}
                         `;
+                        tooltip.appendChild(tooltipContent);
+                        
                         let scaleNotes = getScaleNotes(getPrimaryRootNote(), currentScale[j-1].intervals);
                         // console.log("Scale Notes for", scaleName, ":", scaleNotes);
                         highlightKeysForScales(scaleNotes);
+                        
+                        // Add mini piano visualization
+                        try {
+                            const pianoContainer = document.createElement('div');
+                            pianoContainer.style.marginTop = '8px';
+                            pianoContainer.style.padding = '4px';
+                            pianoContainer.style.backgroundColor = 'rgba(255,255,255,0.1)';
+                            pianoContainer.style.borderRadius = '3px';
+                            
+                            const pianoSvg = createScalePiano(scaleNotes, getPrimaryRootNote());
+                            if (pianoSvg) {
+                                pianoContainer.appendChild(pianoSvg);
+                                tooltip.appendChild(pianoContainer);
+                            }
+                        } catch (e) {
+                            console.warn('Error creating mini piano for scale tooltip:', e);
+                        }
+                        
                         if (scales[scaleNames[i-1]][j-1].intervals.length === 7) {
                             let identifiedChords_3 = identifySyntheticChords(scales[scaleNames[i-1]][j-1], 3);
                             let identifiedChords_4 = identifySyntheticChords(scales[scaleNames[i-1]][j-1], 4);
 
                             // console.log('Identified Chords:', identifiedChords);
-                            tooltip.innerHTML += `<br><em>Identified Chords:</em><br>`;
+                            tooltipContent.innerHTML += `<br><em>Identified Chords:</em><br>`;
                             for (let k = 0; k < identifiedChords_3.length; k++) {
-                                tooltip.innerHTML += `${intToRoman(k+1)}: Triad - ${identifiedChords_3[k].matches}, Seventh - ${identifiedChords_4[k].matches}<br>`;
+                                tooltipContent.innerHTML += `${intToRoman(k+1)}: Triad - ${identifiedChords_3[k].matches}, Seventh - ${identifiedChords_4[k].matches}<br>`;
                             }
 
 
@@ -1449,8 +1515,7 @@ function createHeptatonicScaleTable() {
                         document.body.appendChild(tooltip);
 
                         cell.onmousemove = function(e) {
-                            tooltip.style.left = (e.pageX + 10) + 'px';
-                            tooltip.style.top = (e.pageY + 10) + 'px';
+                            positionTooltipSmart(tooltip, e);
                         };
                         cell.onmouseleave = function() {
                             document.body.removeChild(tooltip);

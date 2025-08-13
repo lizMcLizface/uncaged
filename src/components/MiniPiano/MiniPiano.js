@@ -23,10 +23,14 @@ const MINI_PIANO_CONFIG = {
     rootNoteColor: '#ff4444',
     chordNoteColor: '#4488ff',
     scaleNoteColor: '#44ff44',
+    chordScaleOverlapColor: '#ffaa44', // Orange for chord+scale overlap
+    rootScaleOverlapColor: '#ff6666', // Lighter red for root+scale overlap
     textColor: '#000',
     blackKeyTextColor: '#fff',
     fontSize: 9,
-    cornerRadius: 2
+    cornerRadius: 2,
+    overlapBorderWidth: 2,
+    overlapBorderColor: '#8B4513' // Brown border for overlap indication
 };
 
 // Piano key layout - white keys and their positions
@@ -318,17 +322,33 @@ export function createMixedPiano(chordNotes, scaleNotes, rootNote) {
         const x = index * config.whiteKeyWidth;
         const y = 0;
         
-        // Check note status (priority: root > chord > scale)
+        // Check note status
         const isRoot = normalizedRoot === note;
         const isChordNote = normalizedChordNotes.includes(note);
         const isScaleNote = normalizedScaleNotes.includes(note);
         
-        // Determine fill color based on priority
+        // Determine fill color and border based on overlap conditions
         let fillColor = config.whiteKeyFill;
+        let strokeColor = config.whiteKeyStroke;
+        let strokeWidth = 1;
         let isHighlighted = false;
         
+        // Priority and overlap logic
         if (isRoot) {
-            fillColor = config.rootNoteColor;
+            if (isScaleNote) {
+                // Root note that's also in scale - special highlighting
+                fillColor = config.rootScaleOverlapColor;
+                strokeColor = config.overlapBorderColor;
+                strokeWidth = config.overlapBorderWidth;
+            } else {
+                fillColor = config.rootNoteColor;
+            }
+            isHighlighted = true;
+        } else if (isChordNote && isScaleNote) {
+            // Chord note that's also in scale - special highlighting
+            fillColor = config.chordScaleOverlapColor;
+            strokeColor = config.overlapBorderColor;
+            strokeWidth = config.overlapBorderWidth;
             isHighlighted = true;
         } else if (isChordNote) {
             fillColor = config.chordNoteColor;
@@ -345,8 +365,8 @@ export function createMixedPiano(chordNotes, scaleNotes, rootNote) {
         key.setAttribute('width', config.whiteKeyWidth);
         key.setAttribute('height', config.whiteKeyHeight);
         key.setAttribute('fill', fillColor);
-        key.setAttribute('stroke', config.whiteKeyStroke);
-        key.setAttribute('stroke-width', '1');
+        key.setAttribute('stroke', strokeColor);
+        key.setAttribute('stroke-width', strokeWidth);
         key.setAttribute('rx', config.cornerRadius);
         key.setAttribute('ry', config.cornerRadius);
         
@@ -373,17 +393,33 @@ export function createMixedPiano(chordNotes, scaleNotes, rootNote) {
         const x = (position * config.whiteKeyWidth) - (config.blackKeyWidth / 2);
         const y = 0;
         
-        // Check note status (priority: root > chord > scale)
+        // Check note status
         const isRoot = normalizedRoot === note;
         const isChordNote = normalizedChordNotes.includes(note);
         const isScaleNote = normalizedScaleNotes.includes(note);
         
-        // Determine fill color based on priority
+        // Determine fill color and border based on overlap conditions
         let fillColor = config.blackKeyFill;
+        let strokeColor = config.blackKeyStroke;
+        let strokeWidth = 1;
         let isHighlighted = false;
         
+        // Priority and overlap logic
         if (isRoot) {
-            fillColor = config.rootNoteColor;
+            if (isScaleNote) {
+                // Root note that's also in scale - special highlighting
+                fillColor = config.rootScaleOverlapColor;
+                strokeColor = config.overlapBorderColor;
+                strokeWidth = config.overlapBorderWidth;
+            } else {
+                fillColor = config.rootNoteColor;
+            }
+            isHighlighted = true;
+        } else if (isChordNote && isScaleNote) {
+            // Chord note that's also in scale - special highlighting
+            fillColor = config.chordScaleOverlapColor;
+            strokeColor = config.overlapBorderColor;
+            strokeWidth = config.overlapBorderWidth;
             isHighlighted = true;
         } else if (isChordNote) {
             fillColor = config.chordNoteColor;
@@ -400,8 +436,8 @@ export function createMixedPiano(chordNotes, scaleNotes, rootNote) {
         key.setAttribute('width', config.blackKeyWidth);
         key.setAttribute('height', config.blackKeyHeight);
         key.setAttribute('fill', fillColor);
-        key.setAttribute('stroke', config.blackKeyStroke);
-        key.setAttribute('stroke-width', '1');
+        key.setAttribute('stroke', strokeColor);
+        key.setAttribute('stroke-width', strokeWidth);
         key.setAttribute('rx', config.cornerRadius);
         key.setAttribute('ry', config.cornerRadius);
         

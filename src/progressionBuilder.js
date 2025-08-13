@@ -837,25 +837,55 @@ function setupScaleChangeListener() {
     let currentScale = getPrimaryScale();
     let currentRoot = getPrimaryRootNote();
     
-    // Check for scale changes periodically
-    const checkForScaleChanges = () => {
-        const newScale = getPrimaryScale();
-        const newRoot = getPrimaryRootNote();
+    // Listen for scale change events from the scale generator
+    window.addEventListener('scaleChanged', (event) => {
+        const { primaryScale: newScale, rootNote: newRoot } = event.detail;
         
         if (newScale !== currentScale || newRoot !== currentRoot) {
-            console.log('Scale change detected:', { oldScale: currentScale, newScale, oldRoot: currentRoot, newRoot });
+            console.log('Scale change detected via event:', { oldScale: currentScale, newScale, oldRoot: currentRoot, newRoot });
             
             // Update stored values
             currentScale = newScale;
             currentRoot = newRoot;
             
-            // Update any Roman numeral chords in the current progression
-            updateRomanNumeralChords();
+            // Update progression display to refresh mini pianos with new scale context
+            updateProgressionDisplayForScaleChange();
+        }
+    });
+    
+    // Fallback: Check for scale changes periodically (in case event system fails)
+    const checkForScaleChanges = () => {
+        const newScale = getPrimaryScale();
+        const newRoot = getPrimaryRootNote();
+        
+        if (newScale !== currentScale || newRoot !== currentRoot) {
+            console.log('Scale change detected via polling fallback:', { oldScale: currentScale, newScale, oldRoot: currentRoot, newRoot });
+            
+            // Update stored values
+            currentScale = newScale;
+            currentRoot = newRoot;
+            
+            // Update progression display to refresh mini pianos with new scale context
+            updateProgressionDisplayForScaleChange();
         }
     };
     
-    // Check every 500ms for scale changes
-    setInterval(checkForScaleChanges, 500);
+    // Check every 2000ms for scale changes (reduced frequency since event system is primary)
+    setInterval(checkForScaleChanges, 2000);
+}
+
+/**
+ * Update progression display when scale changes to refresh mini pianos and Roman numerals
+ */
+function updateProgressionDisplayForScaleChange() {
+    // First update any Roman numeral chords
+    updateRomanNumeralChords();
+    
+    // Then refresh the entire progression display to update mini pianos with new scale context
+    // This ensures all mini pianos (not just Roman numeral chords) show the updated scale
+    updateProgressionDisplay();
+    
+    console.log('Progression display updated for scale change');
 }
 
 /**
