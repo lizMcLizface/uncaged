@@ -28,6 +28,7 @@ function getFretboardForProgression() {
 let currentProgression = [];
 let hoveredChordIndex = null;
 let selectedPatternIndexes = new Map(); // Map of chord index to selected pattern index
+let showMiniFretboards = false; // Global toggle for mini fretboard visualization
 
 // Caching system for performance optimization
 let parsedTokensCache = []; // Cache of parsed tokens from input
@@ -45,6 +46,19 @@ const CHORD_LINE_CONFIG = {
     normalOpacity: 0.7,
     highlightedOpacity: 0.9,
     hoverOpacity: 1.0
+};
+
+// Mini fretboard visualization configuration
+const MINI_FRETBOARD_CONFIG = {
+    width: 80,
+    height: 120,
+    fretCount: 5,
+    stringCount: 6,
+    fretHeight: 20,
+    stringSpacing: 12,
+    noteRadius: 4,
+    fretNumberSize: 10,
+    noteNameSize: 9
 };
 
 /**
@@ -884,6 +898,41 @@ function createProgressionControlsSection() {
     scaleToggleContainer.appendChild(scaleToggleCheckbox);
     scaleToggleContainer.appendChild(scaleToggleLabel);
     
+    // Mini fretboard toggle
+    const miniFretboardToggleContainer = document.createElement('div');
+    miniFretboardToggleContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    const miniFretboardToggleCheckbox = document.createElement('input');
+    miniFretboardToggleCheckbox.type = 'checkbox';
+    miniFretboardToggleCheckbox.id = 'chord-progression-mini-fretboard-toggle';
+    miniFretboardToggleCheckbox.checked = showMiniFretboards;
+    miniFretboardToggleCheckbox.style.cssText = `
+        transform: scale(1.2);
+    `;
+    
+    // Add change event listener to refresh display
+    miniFretboardToggleCheckbox.addEventListener('change', (e) => {
+        showMiniFretboards = e.target.checked;
+        updateProgressionDisplay(); // Refresh the entire display to show/hide mini fretboards
+    });
+    
+    const miniFretboardToggleLabel = document.createElement('label');
+    miniFretboardToggleLabel.htmlFor = 'chord-progression-mini-fretboard-toggle';
+    miniFretboardToggleLabel.textContent = 'Show Mini Fretboards';
+    miniFretboardToggleLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+    `;
+    
+    miniFretboardToggleContainer.appendChild(miniFretboardToggleCheckbox);
+    miniFretboardToggleContainer.appendChild(miniFretboardToggleLabel);
+    
     // Clear button
     const clearButton = document.createElement('button');
     clearButton.textContent = 'Clear Progression';
@@ -912,6 +961,7 @@ function createProgressionControlsSection() {
     });
     
     section.appendChild(scaleToggleContainer);
+    section.appendChild(miniFretboardToggleContainer);
     section.appendChild(clearButton);
     
     return section;
@@ -1021,6 +1071,183 @@ function updateProgressionDisplay() {
     });
     
     displaySection.appendChild(chordList);
+}
+
+/**
+ * Create a mini fretboard visualization for a chord pattern
+ * This shows a 5-fret vertical section with chord notes highlighted,
+ * fret numbers above, and note names below.
+ * @param {Object} pattern - Chord pattern with positions
+ * @param {Array} chordNotes - Array of chord note names
+ * @returns {HTMLElement} Mini fretboard SVG element
+ */
+function createMiniFretboardVisualization(pattern, chordNotes) {
+    if (!pattern || !pattern.positions || pattern.positions.length === 0) {
+        return null;
+    }
+    
+    const config = MINI_FRETBOARD_CONFIG;
+    const positions = pattern.positions;
+    
+    // Find the fret range for this pattern
+    const minFret = Math.min(...positions.map(p => p.fret));
+    const maxFret = Math.max(...positions.map(p => p.fret));
+    const startFret = Math.max(0, minFret);
+    const endFret = Math.min(startFret + config.fretCount - 1, maxFret);
+    
+    // Create SVG container
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', config.width);
+    svg.setAttribute('height', config.height + 30); // Extra space for labels
+    svg.style.cssText = `
+        display: block;
+        margin: 0 auto 8px auto;
+        background: rgba(0,0,0,0.1);
+        border-radius: 4px;
+        padding: 5px;
+    `;
+    
+    // Calculate positions
+    const stringSpacing = config.stringSpacing;
+    const fretHeight = config.fretHeight;
+    const startX = 15;
+    const startY = 20;
+    
+    // Draw fret lines (horizontal)
+    for (let fret = 0; fret <= config.fretCount; fret++) {
+        const y = startY + fret * fretHeight;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', startX);
+        line.setAttribute('y1', y);
+        line.setAttribute('x2', startX + (config.stringCount - 1) * stringSpacing);
+        line.setAttribute('y2', y);
+        line.setAttribute('stroke', fret === 0 ? '#fff' : '#666'); // Nut is white, frets are gray
+        line.setAttribute('stroke-width', fret === 0 ? '3' : '1');
+        svg.appendChild(line);
+    }
+    
+    // Draw string lines (vertical)
+    for (let string = 0; string < config.stringCount; string++) {
+        const x = startX + string * stringSpacing;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', x);
+        line.setAttribute('y1', startY);
+        line.setAttribute('x2', x);
+        line.setAttribute('y2', startY + config.fretCount * fretHeight);
+        line.setAttribute('stroke', '#888');
+        line.setAttribute('stroke-width', '1');
+        svg.appendChild(line);
+    }
+    
+    // Standard guitar tuning (from lowest string to highest)
+    const stringTuning = ['E', 'A', 'D', 'G', 'B', 'E'];
+    
+    // Draw fret numbers above the fretboard
+    for (let fret = 1; fret <= config.fretCount; fret++) {
+        const actualFret = startFret + fret;
+        if (actualFret > 0) {
+            const x = startX + (config.stringCount - 1) * stringSpacing / 2;
+            const y = startY + (fret - 0.5) * fretHeight;
+            
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', x + stringSpacing * 3); // Position to the right
+            text.setAttribute('y', y);
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'middle');
+            text.setAttribute('fill', '#ccc');
+            text.setAttribute('font-size', config.fretNumberSize);
+            text.setAttribute('font-family', 'monospace');
+            text.textContent = actualFret;
+            svg.appendChild(text);
+        }
+    }
+    
+    // Create a map to store notes for each string at the displayed frets
+    const stringNotes = new Map();
+    
+    // Draw chord notes on the fretboard
+    positions.forEach(position => {
+        const { string: stringNum, fret } = position;
+        
+        // Convert to 0-based string index (6th string = index 0, 1st string = index 5)
+        const stringIndex = 6 - stringNum;
+        
+        // Check if this fret is within our display range
+        if (fret >= startFret && fret <= endFret) {
+            const displayFret = fret - startFret;
+            const x = startX + stringIndex * stringSpacing;
+            const y = startY + (displayFret + 0.5) * fretHeight;
+            
+            // Calculate the note name for this position
+            const openStringNote = stringTuning[stringIndex];
+            const noteAtFret = getNote(openStringNote, fret);
+            const strippedNote = notationStripOctave(noteAtFret);
+            
+            // Store note for this string
+            stringNotes.set(stringIndex, strippedNote);
+            
+            // Determine if this is a root note
+            const isRootNote = chordNotes.length > 0 && strippedNote === chordNotes[0];
+            
+            // Draw note circle
+            const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            circle.setAttribute('cx', x);
+            circle.setAttribute('cy', y);
+            circle.setAttribute('r', config.noteRadius);
+            circle.setAttribute('fill', isRootNote ? '#ff6b35' : '#4CAF50'); // Orange for root, green for others
+            circle.setAttribute('stroke', '#fff');
+            circle.setAttribute('stroke-width', '1');
+            svg.appendChild(circle);
+        }
+    });
+    
+    // Draw note names below the fretboard
+    for (let stringIndex = 0; stringIndex < config.stringCount; stringIndex++) {
+        const x = startX + stringIndex * stringSpacing;
+        const y = startY + config.fretCount * fretHeight + 15;
+        
+        const note = stringNotes.get(stringIndex);
+        if (note) {
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', x);
+            text.setAttribute('y', y);
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('fill', '#fff');
+            text.setAttribute('font-size', config.noteNameSize);
+            text.setAttribute('font-family', 'Arial, sans-serif');
+            text.setAttribute('font-weight', 'bold');
+            text.textContent = note;
+            svg.appendChild(text);
+        }
+    }
+    
+    return svg;
+}
+
+/**
+ * Helper function to get note name at a specific fret
+ * @param {string} openString - Open string note (e.g., 'E', 'A', 'D', 'G', 'B', 'E')
+ * @param {number} fret - Fret number
+ * @returns {string} Note name at that fret
+ */
+function getNote(openString, fret) {
+    const chromaticScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    
+    // Find the starting note index
+    let startIndex = chromaticScale.indexOf(openString);
+    if (startIndex === -1) {
+        // Handle flat notes
+        const flatToSharp = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#' };
+        startIndex = chromaticScale.indexOf(flatToSharp[openString] || openString);
+    }
+    
+    if (startIndex === -1) {
+        return openString; // Fallback if note not found
+    }
+    
+    // Calculate the note at the given fret
+    const noteIndex = (startIndex + fret) % 12;
+    return chromaticScale[noteIndex];
 }
 
 /**
@@ -1184,6 +1411,18 @@ function createPatternSelector(chord, index) {
         return container;
     }
     
+    // Create mini fretboard visualization container (will be populated later)
+    let miniFretboardContainer = null;
+    if (showMiniFretboards) {
+        miniFretboardContainer = document.createElement('div');
+        miniFretboardContainer.className = 'mini-fretboard-container';
+        miniFretboardContainer.style.cssText = `
+            margin-bottom: 8px;
+            text-align: center;
+        `;
+        container.appendChild(miniFretboardContainer);
+    }
+    
     // Create main container for the pattern selector
     const selectorContainer = document.createElement('div');
     selectorContainer.style.cssText = `
@@ -1285,6 +1524,26 @@ function createPatternSelector(chord, index) {
         }
     };
     
+    // Function to update mini fretboard visualization
+    const updateMiniFretboard = () => {
+        if (!showMiniFretboards || !miniFretboardContainer) return;
+        
+        const patternIndex = parseInt(select.value) || 0;
+        if (patternIndex >= patterns.length) return;
+        
+        const pattern = patterns[patternIndex];
+        const { chordNotes } = patternData;
+        
+        // Clear existing mini fretboard
+        miniFretboardContainer.innerHTML = '';
+        
+        // Create new mini fretboard
+        const miniFretboard = createMiniFretboardVisualization(pattern, chordNotes);
+        if (miniFretboard) {
+            miniFretboardContainer.appendChild(miniFretboard);
+        }
+    };
+    
     // Add pattern options with improved naming
     patterns.forEach((pattern, patternIndex) => {
         const option = document.createElement('option');
@@ -1322,6 +1581,9 @@ function createPatternSelector(chord, index) {
         
         // Update button states
         updateButtonStates();
+        
+        // Update mini fretboard visualization
+        updateMiniFretboard();
         
         // Add subtle visual feedback to the dropdown itself
         select.style.background = '#4CAF50';
@@ -1365,6 +1627,10 @@ function createPatternSelector(chord, index) {
     selectorContainer.appendChild(nextButton);
     
     container.appendChild(selectorContainer);
+    
+    // Initialize mini fretboard visualization
+    updateMiniFretboard();
+    
     return container;
 }
 
