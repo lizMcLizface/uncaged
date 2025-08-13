@@ -1716,7 +1716,47 @@ function initializeNavigationButtons() {
 // Initialize navigation buttons when the module loads
 initializeNavigationButtons();
 
+/**
+ * Set the primary root note by note name
+ * @param {string} rootNote - Root note name (e.g., 'C', 'D♯', 'F#')
+ */
+function setPrimaryRootNote(rootNote) {
+    // Normalize the note name to handle both sharp and flat representations
+    const normalizedNote = rootNote.replace('#', '♯').replace('b', '♭');
+    
+    if (Array.isArray(selectedRootNote)) {
+        const index = selectedRootNote.findIndex(note => note === normalizedNote || note === rootNote);
+        if (index !== -1) {
+            primaryRootNoteIndex = index;
+            updateCurrentScaleDisplay();
+            return true;
+        }
+    } else {
+        selectedRootNote = normalizedNote;
+        updateCurrentScaleDisplay();
+        return true;
+    }
+    return false;
+}
 
+/**
+ * Set the primary scale by scale name
+ * @param {string} scaleName - Scale name (e.g., 'Major-1', 'Minor-1')
+ */
+function setPrimaryScale(scaleName) {
+    const index = selectedScales.findIndex(scale => scale === scaleName);
+    if (index !== -1) {
+        primaryScaleIndex = index;
+        updateCurrentScaleDisplay();
+        return true;
+    } else {
+        // If scale isn't in selected scales, add it and make it primary
+        selectedScales.push(scaleName);
+        primaryScaleIndex = selectedScales.length - 1;
+        updateCurrentScaleDisplay();
+        return true;
+    }
+}
 
 
 export {
@@ -1733,5 +1773,7 @@ export {
     getPrimaryScaleChords,
     getAllSelectedScaleChords,
     refreshChordsForRootNote,
-    initializeNavigationButtons
+    initializeNavigationButtons,
+    setPrimaryRootNote,
+    setPrimaryScale
 }

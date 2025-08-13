@@ -1,6 +1,6 @@
 import { processChord, identifySyntheticChords } from './intervals';
 import { HeptatonicScales, getScaleNotes } from './scales';
-import { getPrimaryScale, getPrimaryRootNote } from './scaleGenerator';
+import { getPrimaryScale, getPrimaryRootNote, setPrimaryRootNote, setPrimaryScale } from './scaleGenerator';
 import { noteToMidi, noteToName } from './midi';
 import {
     stripOctave as notationStripOctave
@@ -20,6 +20,29 @@ function getFretboardForProgression() {
  * 
  * This module handles the parsing, validation, and display of chord progressions
  * using both explicit chord names and Roman numeral notation.
+ * 
+ * Pattern Notation:
+ * Chords can specify a default pattern position using the syntax: chord-position
+ * Examples:
+ *   C-1      → C major chord, first pattern (pattern index 0)
+ *   iv-3     → Fourth degree minor chord, third pattern (pattern index 2)
+ *   Dm7-2    → D minor 7 chord, second pattern (pattern index 1)
+ * 
+ * Sharing System:
+ * The sharing functionality encodes the current state (chord progression with patterns,
+ * UI settings, scale/root note) into a Base64-encoded URL parameter. When the page loads
+ * with a share parameter, it automatically restores all settings and progressions.
+ * 
+ * Example shared URL: https://site.com/?share=eyJwcm9ncmVzc2lvbiI6I...
+ * 
+ * State includes:
+ * - Chord progression with selected patterns (e.g., "C-1 Am-2 F-1 G-3")
+ * - Show scale context toggle
+ * - Mini fretboards toggle  
+ * - Mini pianos toggle
+ * - Use seventh chords toggle
+ * - Current root note (human readable, e.g., "C", "F♯")
+ * - Current scale (human readable, e.g., "Major-1", "Minor-1")
  */
 
 // Global state for chord progression
@@ -123,7 +146,7 @@ function precomputePatternData(chord, index) {
         return {
             patterns: [],
             chordNotes: [],
-            displayName: getChordDisplayName(chord),
+            displayName: getChordDisplayName(chord, index),
             hasPatterns: false,
             chord // Store reference to chord object for staleness detection
         };
@@ -131,7 +154,7 @@ function precomputePatternData(chord, index) {
     
     const patterns = getChordPatternMatches(chord);
     const chordNotes = chord.chordInfo.notes.map(note => notationStripOctave(note));
-    const displayName = getChordDisplayName(chord);
+    const displayName = getChordDisplayName(chord, index);
     
     // Debug logging to track when pattern data is computed
     console.log(`Computing pattern data for chord ${index}: ${displayName} (${patterns.length} patterns found)`);
@@ -208,6 +231,10 @@ function parseProgressionInput(progressionText) {
     }
     
     lastInputString = trimmedText;
+    
+    // Process default pattern selections after parsing
+    processDefaultPatternSelections(progression);
+    
     return progression;
 }
 
@@ -308,6 +335,9 @@ function updateProgressionIncremental(newTokens, changes) {
     parsedTokensCache = [...newTokens];
     lastInputString = newTokens.join(' ');
     
+    // Process default pattern selections for the updated progression
+    processDefaultPatternSelections(updatedProgression);
+    
     return updatedProgression;
 }
 
@@ -317,14 +347,76 @@ function updateProgressionIncremental(newTokens, changes) {
  * @returns {Object|null} Parsed chord data or null if invalid
  */
 function parseChordToken(token) {
-    // Check if it's a Roman numeral - enhanced pattern to properly handle flat/sharp prefixes
-    const romanMatch = token.match(/^([b#]*)(vii|vi|v|iv|iii|ii|i|VII|VI|V|IV|III|II|I)(.*)$/);
+    // Check for pattern notation (e.g., "C-1", "iv-3")
+    const patternMatch = token.match(/^(.+)-(\d+)$/);
+    let chordPart = token;
+    let defaultPatternIndex = null;
     
-    if (romanMatch) {
-        return parseRomanNumeral(token);
-    } else {
-        return parseChordName(token);
+    if (patternMatch) {
+        chordPart = patternMatch[1];
+        defaultPatternIndex = parseInt(patternMatch[2], 10) - 1; // Convert to 0-based index
+        
+        // Validate pattern index is reasonable (0-10 for most chord patterns)
+        if (defaultPatternIndex < 0 || defaultPatternIndex > 10) {
+            console.warn(`Invalid pattern index in token: ${token}. Pattern index should be between 1-11.`);
+            defaultPatternIndex = null;
+        }
     }
+    
+    // Check if it's a Roman numeral - enhanced pattern to properly handle flat/sharp prefixes
+    const romanMatch = chordPart.match(/^([b#]*)(vii|vi|v|iv|iii|ii|i|VII|VI|V|IV|III|II|I)(.*)$/);
+    
+    let chordData;
+    if (romanMatch) {
+        chordData = parseRomanNumeral(chordPart);
+    } else {
+        chordData = parseChordName(chordPart);
+    }
+    
+    // Add default pattern information if present
+    if (chordData && defaultPatternIndex !== null) {
+        chordData.defaultPatternIndex = defaultPatternIndex;
+        chordData.originalToken = token; // Keep the full original token including pattern notation
+    }
+    
+    return chordData;
+}
+
+/**
+ * Process default pattern selections for chords that have specified pattern notation
+ * @param {Array} progression - Array of parsed chord objects
+ */
+function processDefaultPatternSelections(progression) {
+    progression.forEach((chord, index) => {
+        if (chord && chord.defaultPatternIndex !== undefined) {
+            // Resolve the chord if it's a Roman numeral to get the chord info
+            let chordToCheck = chord;
+            if (chord.type === 'roman') {
+                const resolvedChord = resolveRomanChord(chord);
+                if (resolvedChord && resolvedChord.chordInfo) {
+                    chordToCheck = resolvedChord;
+                } else {
+                    console.warn(`Could not resolve Roman numeral chord for pattern selection: ${chord.originalToken}`);
+                    return;
+                }
+            }
+            
+            // Get the available patterns for this chord
+            const patterns = getChordPatternMatches(chordToCheck);
+            
+            if (patterns && patterns.length > 0) {
+                // Validate that the requested pattern index exists
+                if (chord.defaultPatternIndex < patterns.length) {
+                    selectedPatternIndexes.set(index, chord.defaultPatternIndex);
+                    console.log(`Set default pattern ${chord.defaultPatternIndex + 1} for chord ${index}: ${chord.originalToken}`);
+                } else {
+                    console.warn(`Pattern index ${chord.defaultPatternIndex + 1} not available for chord ${chord.originalToken}. Only ${patterns.length} patterns found.`);
+                }
+            } else {
+                console.warn(`No patterns found for chord ${chord.originalToken}`);
+            }
+        }
+    });
 }
 
 /**
@@ -1042,8 +1134,14 @@ function createProgressionControlsSection() {
         transform: scale(1.2);
     `;
     
+    // Initialize window variable to match checkbox state
+    window.showScaleContext = scaleToggleCheckbox.checked;
+    
     // Add change event listener to refresh display
     scaleToggleCheckbox.addEventListener('change', () => {
+        // Update the window variable to stay in sync
+        window.showScaleContext = scaleToggleCheckbox.checked;
+        
         // Refresh the current display
         if (hoveredChordIndex !== null && currentProgression[hoveredChordIndex]) {
             displaySingleChordPattern(currentProgression[hoveredChordIndex], hoveredChordIndex, true);
@@ -1214,9 +1312,16 @@ function createProgressionControlsSection() {
         { name: 'Select a preset...', value: '' },
         { name: 'I-V-vi-IV (Pop progression)', value: 'I V vi IV' },
         { name: 'vi-IV-I-V (Pop progression)', value: 'vi IV I V' },
+        { name: 'I-vi-IV-V (Pop progression)', value: 'I vi IV V' },
+        { name: 'IV-V-I-VI (Pop progression)', value: 'IV V I VI' },
         { name: 'ii-V-I (Jazz standard)', value: 'ii V I' },
+        { name: 'ii-V-I-VI (Jazz standard 2)', value: 'ii V I VI' },
+        { name: 'i-VII-VI-V (Minor progression)', value: 'i VII VI V' },
         { name: 'I-vi-ii-V (Jazz circle)', value: 'I vi ii V' },
+        { name: 'I-IV-V (Classic cadence)', value: 'I IV V' },
         { name: 'I-IV-V-I (Classic cadence)', value: 'I IV V I' },
+        { name: 'i-VII-VI-VII (Minor progression)', value: 'i VII VI VII' },
+        { name: 'I-IV-V-IV (Classic cadence)', value: 'I IV V IV' },
         { name: 'vi-V-IV-V (Minor progression)', value: 'vi V IV V' },
         { name: 'I-bVII-IV-I (Mixolydian)', value: 'I bVII IV I' },
         { name: 'i-bVI-bVII-i (Minor natural)', value: 'i bVI bVII i' },
@@ -1251,6 +1356,62 @@ function createProgressionControlsSection() {
     presetsContainer.appendChild(presetsLabel);
     presetsContainer.appendChild(presetsDropdown);
     
+    // Share button
+    const shareButton = document.createElement('button');
+    shareButton.innerHTML = `
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="margin-right: 4px;">
+            <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+        </svg>
+        Share
+    `;
+    shareButton.title = 'Copy shareable URL to clipboard';
+    shareButton.style.cssText = `
+        padding: 8px 16px;
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    `;
+    
+    shareButton.addEventListener('mouseenter', () => {
+        shareButton.style.background = '#218838';
+        shareButton.style.transform = 'translateY(-1px)';
+    });
+    
+    shareButton.addEventListener('mouseleave', () => {
+        shareButton.style.background = '#28a745';
+        shareButton.style.transform = 'translateY(0)';
+    });
+    
+    shareButton.addEventListener('click', async () => {
+        const success = await copyShareableURL();
+        
+        // Provide visual feedback using textContent to avoid SVG issues
+        const originalHTML = shareButton.innerHTML;
+        const originalBg = shareButton.style.background;
+        
+        if (success) {
+            shareButton.textContent = '✅ Copied!';
+            shareButton.style.background = '#20c997';
+        } else {
+            shareButton.textContent = '❌ Failed';
+            shareButton.style.background = '#dc3545';
+        }
+        
+        // Reset after 2 seconds
+        setTimeout(() => {
+            shareButton.innerHTML = originalHTML;
+            shareButton.style.background = originalBg;
+        }, 2000);
+    });
+    
     // Clear button
     const clearButton = document.createElement('button');
     clearButton.textContent = 'Clear Progression';
@@ -1283,6 +1444,7 @@ function createProgressionControlsSection() {
     section.appendChild(miniPianoToggleContainer);
     section.appendChild(chordsToggleContainer);
     section.appendChild(presetsContainer);
+    section.appendChild(shareButton);
     section.appendChild(clearButton);
     
     return section;
@@ -1671,7 +1833,7 @@ function createChordElement(chord, index) {
     // Create chord name display
     const chordName = document.createElement('div');
     chordName.className = 'chord-name';
-    const displayName = getChordDisplayName(chord);
+    const displayName = getChordDisplayName(chord, index);
     chordName.textContent = displayName;
     chordName.style.cssText = `
         font-size: 18px;
@@ -1788,14 +1950,30 @@ function createChordElement(chord, index) {
  * @param {Object} chord - Chord data
  * @returns {string} Display name
  */
-function getChordDisplayName(chord) {
+function getChordDisplayName(chord, chordIndex = null) {
+    let baseName;
     if (chord.type === 'roman') {
         if (chord.resolvedRoot && chord.resolvedChordType) {
-            return `${chord.originalToken} (${chord.resolvedRoot}${chord.resolvedChordType})`;
+            baseName = `${chord.originalToken} (${chord.resolvedRoot}${chord.resolvedChordType})`;
+        } else {
+            baseName = chord.originalToken;
         }
-        return chord.originalToken;
+    } else {
+        baseName = chord.originalToken;
     }
-    return chord.originalToken;
+    
+    // If a default pattern was specified and it's still the currently selected pattern, 
+    // include it in the display name
+    if (chord.defaultPatternIndex !== undefined && chordIndex !== null) {
+        const currentSelectedPattern = selectedPatternIndexes.get(chordIndex);
+        const isStillDefaultPattern = currentSelectedPattern === chord.defaultPatternIndex;
+        
+        if (isStillDefaultPattern) {
+            return `${baseName.replace(/-\d+$/, '')} [Pattern ${chord.defaultPatternIndex + 1}]`;
+        }
+    }
+    
+    return baseName.replace(/-\d+$/, ''); // Remove pattern notation from display
 }
 
 /**
@@ -1998,11 +2176,17 @@ function createPatternSelector(chord, index) {
         const patternIndex = parseInt(e.target.value);
         selectedPatternIndexes.set(index, patternIndex);
         
+        // Invalidate cached pattern data to force display name update
+        precomputedPatternData.delete(index);
+        
         // Update button states
         updateButtonStates();
         
         // Update mini fretboard visualization
         updateMiniFretboard();
+        
+        // Update the chord name display to reflect pattern change
+        updateProgressionDisplay();
         
         // Add subtle visual feedback to the dropdown itself
         select.style.background = '#4CAF50';
@@ -2291,6 +2475,298 @@ function clearProgression() {
     }
 }
 
+/**
+ * Build a shareable state object containing all relevant progression and UI state
+ * @returns {Object} State object for sharing
+ */
+function buildShareableState() {
+    const state = {
+        // Chord progression with selected patterns
+        progression: currentProgression.map((chord, index) => {
+            const baseToken = chord.originalToken ? chord.originalToken.replace(/-\d+$/, '') : '';
+            const selectedPattern = selectedPatternIndexes.get(index);
+            
+            if (selectedPattern !== undefined && selectedPattern !== null) {
+                return `${baseToken}-${selectedPattern + 1}`;
+            }
+            return baseToken;
+        }).join(' '),
+        
+        // UI state flags - read from actual UI elements
+        showScaleContext: (() => {
+            const scaleToggle = document.getElementById('chord-progression-scale-toggle');
+            return scaleToggle ? scaleToggle.checked : (window.showScaleContext || true); // Default to true if no checkbox found
+        })(),
+        showMiniFretboards: showMiniFretboards,
+        showMiniPianos: showMiniPianos,
+        useSeventhChords: useSeventhChords,
+        
+        // Scale settings (human readable)
+        rootNote: getPrimaryRootNote() || 'C',
+        scale: getPrimaryScale() || 'Major-1'
+    };
+    
+    return state;
+}
+
+/**
+ * Encode state object to human-readable URL parameters
+ * @param {Object} state - State object to encode
+ * @returns {URLSearchParams} URL parameters object
+ */
+function encodeStateToURLParams(state) {
+    const params = new URLSearchParams();
+    
+    // Core progression - this is the most important part
+    if (state.progression) {
+        params.set('p', state.progression);
+    }
+    
+    // Scale settings (compact format)
+    if (state.rootNote && state.rootNote !== 'C') {
+        params.set('r', state.rootNote);
+    }
+    if (state.scale && state.scale !== 'Major-1') {
+        params.set('s', state.scale);
+    }
+    
+    // UI flags - only include if different from defaults
+    const flags = [];
+    if (!state.showScaleContext) flags.push('h'); // hide scale context
+    if (state.showMiniFretboards) flags.push('f'); // show fretboards
+    if (state.showMiniPianos) flags.push('k'); // show keyboards (pianos)
+    if (!state.useSeventhChords) flags.push('n'); // no sevenths
+    
+    if (flags.length > 0) {
+        params.set('ui', flags.join(''));
+    }
+    
+    return params;
+}
+
+/**
+ * Decode URL parameters back to state object
+ * @param {URLSearchParams} params - URL parameters to decode
+ * @returns {Object} Decoded state object
+ */
+function decodeStateFromURLParams(params) {
+    const state = {
+        // Defaults
+        showScaleContext: true,
+        showMiniFretboards: false,
+        showMiniPianos: false,
+        useSeventhChords: true,
+        rootNote: 'C',
+        scale: 'Major-1'
+    };
+    
+    // Decode progression
+    if (params.has('p')) {
+        state.progression = params.get('p');
+    }
+    
+    // Decode scale settings
+    if (params.has('r')) {
+        state.rootNote = params.get('r');
+    }
+    if (params.has('s')) {
+        state.scale = params.get('s');
+    }
+    
+    // Decode UI flags
+    if (params.has('ui')) {
+        const flags = params.get('ui');
+        state.showScaleContext = !flags.includes('h');
+        state.showMiniFretboards = flags.includes('f');
+        state.showMiniPianos = flags.includes('k');
+        state.useSeventhChords = !flags.includes('n');
+    }
+    
+    return state;
+}
+
+/**
+ * Legacy function - Encode state object to URL-safe string (Base64)
+ * @param {Object} state - State object to encode
+ * @returns {string} Base64 encoded state string
+ */
+function encodeStateToURL(state) {
+    const stateString = JSON.stringify(state);
+    return btoa(encodeURIComponent(stateString));
+}
+
+/**
+ * Legacy function - Decode URL-safe string back to state object
+ * @param {string} encodedState - Base64 encoded state string
+ * @returns {Object|null} Decoded state object or null if invalid
+ */
+function decodeStateFromURL(encodedState) {
+    try {
+        const stateString = decodeURIComponent(atob(encodedState));
+        return JSON.parse(stateString);
+    } catch (error) {
+        console.warn('Failed to decode state from URL:', error);
+        return null;
+    }
+}
+
+/**
+ * Generate a shareable URL for the current state
+ * @returns {string} Shareable URL
+ */
+function generateShareableURL() {
+    const state = buildShareableState();
+    console.log('Sharing state:', state);
+    
+    const currentURL = new URL(window.location);
+    
+    // Clear existing parameters
+    currentURL.search = '';
+    
+    // Use the new human-readable parameter encoding
+    const urlParams = encodeStateToURLParams(state);
+    
+    // Add parameters to URL
+    for (const [key, value] of urlParams) {
+        currentURL.searchParams.set(key, value);
+    }
+    
+    return currentURL.toString();
+}
+
+/**
+ * Copy the shareable URL to clipboard
+ * @returns {Promise<boolean>} Success status
+ */
+async function copyShareableURL() {
+    try {
+        const shareableURL = generateShareableURL();
+        await navigator.clipboard.writeText(shareableURL);
+        
+        // Update the current page URL with new format
+        const state = buildShareableState();
+        const newURL = new URL(window.location);
+        newURL.search = '';
+        
+        const urlParams = encodeStateToURLParams(state);
+        for (const [key, value] of urlParams) {
+            newURL.searchParams.set(key, value);
+        }
+        
+        window.history.replaceState({}, '', newURL);
+        
+        return true;
+    } catch (error) {
+        console.error('Failed to copy URL to clipboard:', error);
+        return false;
+    }
+}
+
+/**
+ * Apply state from a decoded state object
+ * @param {Object} state - State object to apply
+ */
+function applySharedState(state) {
+    if (!state) return;
+    
+    // Apply scale settings first (these affect chord resolution)
+    if (state.rootNote && state.scale) {
+        // Set root note and scale using the proper functions
+        try {
+            setPrimaryRootNote(state.rootNote);
+            setPrimaryScale(state.scale);
+        } catch (error) {
+            console.warn('Failed to set scale settings:', error);
+            // Fallback to window functions if they exist
+            if (window.setRootNote) {
+                window.setRootNote(state.rootNote);
+            }
+            if (window.setScale) {
+                window.setScale(state.scale);
+            }
+        }
+    }
+    
+    // Apply UI state flags and sync checkboxes
+    if (state.showScaleContext !== undefined) {
+        window.showScaleContext = state.showScaleContext;
+        const scaleToggle = document.getElementById('chord-progression-scale-toggle');
+        if (scaleToggle) {
+            scaleToggle.checked = state.showScaleContext;
+        }
+        if (window.updateScaleContextDisplay) {
+            window.updateScaleContextDisplay();
+        }
+    }
+    
+    if (state.showMiniFretboards !== undefined) {
+        showMiniFretboards = state.showMiniFretboards;
+        const miniFretboardToggle = document.getElementById('chord-progression-mini-fretboard-toggle');
+        if (miniFretboardToggle) {
+            miniFretboardToggle.checked = state.showMiniFretboards;
+        }
+    }
+    
+    if (state.showMiniPianos !== undefined) {
+        showMiniPianos = state.showMiniPianos;
+        const miniPianoToggle = document.getElementById('chord-progression-mini-piano-toggle');
+        if (miniPianoToggle) {
+            miniPianoToggle.checked = state.showMiniPianos;
+        }
+    }
+    
+    if (state.useSeventhChords !== undefined) {
+        useSeventhChords = state.useSeventhChords;
+        const seventhsToggle = document.getElementById('chord-progression-sevenths-toggle');
+        if (seventhsToggle) {
+            seventhsToggle.checked = state.useSeventhChords;
+        }
+    }
+    
+    // Apply chord progression last (after scale settings are configured)
+    if (state.progression) {
+        // Update the progression input if it exists
+        const progressionInput = document.querySelector('#chord-progression-input');
+        if (progressionInput) {
+            progressionInput.value = state.progression;
+            // Trigger input event to parse the progression
+            progressionInput.dispatchEvent(new Event('input'));
+        } else {
+            // If no input field, directly update the progression
+            updateProgression(state.progression);
+        }
+    }
+}
+
+/**
+ * Load shared state from URL parameters on page load
+ */
+function loadSharedStateFromURL() {
+    const urlParams = new URLSearchParams(window.location.search);
+    let state = null;
+    
+    // Try new parameter format first
+    if (urlParams.has('p')) {
+        // New human-readable format
+        state = decodeStateFromURLParams(urlParams);
+        console.log('Loaded state from URL parameters:', state);
+    } else {
+        // Try legacy Base64 format for backward compatibility
+        const encodedState = urlParams.get('share');
+        if (encodedState) {
+            state = decodeStateFromURL(encodedState);
+            console.log('Loaded state from legacy Base64 format:', state);
+        }
+    }
+    
+    if (state) {
+        // Apply state after a short delay to ensure all components are initialized
+        setTimeout(() => {
+            applySharedState(state);
+        }, 100);
+    }
+}
+
 // Export functions for use in other modules
 export {
     createChordProgressionUI,
@@ -2298,5 +2774,9 @@ export {
     updateProgression,
     clearProgression,
     currentProgression,
-    selectedPatternIndexes
+    selectedPatternIndexes,
+    generateShareableURL,
+    copyShareableURL,
+    loadSharedStateFromURL,
+    applySharedState
 };
