@@ -5,6 +5,7 @@ import { noteToMidi, noteToName } from './midi';
 import {
     stripOctave as notationStripOctave
 } from './notation';
+import { createChordPiano, createMixedPiano } from './components/MiniPiano/MiniPiano';
 
 /**
  * Get the fretboard instance for chord progression operations
@@ -26,6 +27,7 @@ let currentProgression = [];
 let hoveredChordIndex = null;
 let selectedPatternIndexes = new Map(); // Map of chord index to selected pattern index
 let showMiniFretboards = false; // Global toggle for mini fretboard visualization
+let showMiniPianos = false; // Global toggle for mini piano visualization
 let useSeventhChords = false; // Global toggle for triads vs seventh chords
 
 // Caching system for performance optimization
@@ -1018,6 +1020,11 @@ function createProgressionControlsSection() {
         } else {
             displayAllChordPatterns();
         }
+        
+        // Also refresh mini pianos if they are enabled
+        if (showMiniPianos) {
+            updateProgressionDisplay();
+        }
     });
     
     const scaleToggleLabel = document.createElement('label');
@@ -1067,6 +1074,41 @@ function createProgressionControlsSection() {
     
     miniFretboardToggleContainer.appendChild(miniFretboardToggleCheckbox);
     miniFretboardToggleContainer.appendChild(miniFretboardToggleLabel);
+    
+    // Mini piano toggle
+    const miniPianoToggleContainer = document.createElement('div');
+    miniPianoToggleContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    const miniPianoToggleCheckbox = document.createElement('input');
+    miniPianoToggleCheckbox.type = 'checkbox';
+    miniPianoToggleCheckbox.id = 'chord-progression-mini-piano-toggle';
+    miniPianoToggleCheckbox.checked = showMiniPianos;
+    miniPianoToggleCheckbox.style.cssText = `
+        transform: scale(1.2);
+    `;
+    
+    // Add change event listener to refresh display
+    miniPianoToggleCheckbox.addEventListener('change', (e) => {
+        showMiniPianos = e.target.checked;
+        updateProgressionDisplay(); // Refresh the entire display to show/hide mini pianos
+    });
+    
+    const miniPianoToggleLabel = document.createElement('label');
+    miniPianoToggleLabel.htmlFor = 'chord-progression-mini-piano-toggle';
+    miniPianoToggleLabel.textContent = 'Show Mini Pianos';
+    miniPianoToggleLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+    `;
+    
+    miniPianoToggleContainer.appendChild(miniPianoToggleCheckbox);
+    miniPianoToggleContainer.appendChild(miniPianoToggleLabel);
     
     // Triads vs Sevenths toggle
     const chordsToggleContainer = document.createElement('div');
@@ -1208,6 +1250,7 @@ function createProgressionControlsSection() {
     
     section.appendChild(scaleToggleContainer);
     section.appendChild(miniFretboardToggleContainer);
+    section.appendChild(miniPianoToggleContainer);
     section.appendChild(chordsToggleContainer);
     section.appendChild(presetsContainer);
     section.appendChild(clearButton);
@@ -1622,6 +1665,54 @@ function createChordElement(chord, index) {
             margin-bottom: 10px;
         `;
         element.appendChild(notesDisplay);
+        
+        // Add mini piano visualization if enabled
+        if (showMiniPianos) {
+            const scaleToggleCheckbox = document.getElementById('chord-progression-scale-toggle');
+            const showScaleContext = scaleToggleCheckbox && scaleToggleCheckbox.checked;
+            
+            let miniPiano;
+            if (showScaleContext) {
+                // Get current scale notes for context
+                const primaryScaleId = getPrimaryScale();
+                const primaryRoot = getPrimaryRootNote();
+                if (primaryScaleId && primaryRoot) {
+                    try {
+                        // Parse the scale ID to get family and mode
+                        const [family, mode] = primaryScaleId.split('-');
+                        const scales = HeptatonicScales;
+                        if (scales[family] && scales[family][parseInt(mode, 10) - 1]) {
+                            const intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                            const scaleNotes = getScaleNotes(primaryRoot, intervals);
+                            const scaleNotesNoOctave = scaleNotes.map(note => notationStripOctave(note));
+                            
+                            // Create mixed piano showing both chord and scale
+                            miniPiano = createMixedPiano(notes, scaleNotesNoOctave, notes[0]);
+                        } else {
+                            // Fallback to chord-only display if scale data is invalid
+                            miniPiano = createChordPiano(notes, notes[0]);
+                        }
+                    } catch (error) {
+                        console.warn('Error getting scale notes for mini piano:', error);
+                        // Fallback to chord-only display
+                        miniPiano = createChordPiano(notes, notes[0]);
+                    }
+                } else {
+                    // Fallback to chord-only display
+                    miniPiano = createChordPiano(notes, notes[0]);
+                }
+            } else {
+                // Show chord only
+                miniPiano = createChordPiano(notes, notes[0]);
+            }
+            
+            if (miniPiano) {
+                miniPiano.style.cssText = `
+                    margin: 8px auto;
+                `;
+                element.appendChild(miniPiano);
+            }
+        }
     } else {
         // Show error message for invalid chords
         const errorDisplay = document.createElement('div');

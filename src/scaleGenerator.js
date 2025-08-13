@@ -2,6 +2,7 @@ import $ from 'jquery';
 import {HeptatonicScales, scales, highlightKeysForScales, getScaleNotes, precomputeScaleChords, getChordsForScale, translateNotes, stripOctave} from './scales';
 import {identifySyntheticChords} from './intervals';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
+import { createScalePiano } from './components/MiniPiano/MiniPiano';
 
 // Import progression refresh function (use dynamic import to avoid circular dependency)
 let refreshProgressionDisplay = null;
@@ -733,9 +734,11 @@ function createRootNoteTable() {
                 tooltip.style.background = '#000';
                 tooltip.style.color = 'white';
                 tooltip.style.border = '1px solid #ccc';
-                tooltip.style.padding = '4px 8px';
+                tooltip.style.padding = '8px 12px';
                 tooltip.style.zIndex = 1000;
                 tooltip.style.fontSize = '11px';
+                tooltip.style.borderRadius = '4px';
+                tooltip.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                 
                 let tooltipText = `<strong>Root Note:</strong> ${note}<br>`;
                 if (exclusiveMode) {
@@ -743,16 +746,57 @@ function createRootNoteTable() {
                 } else {
                     tooltipText += `<em>Click to ${sharpSelected ? 'deselect' : (isThisChromaticPositionSelected ? 'switch to sharp' : 'select')}</em>`;
                 }
-                tooltip.innerHTML = tooltipText;
+                
+                // Create a container for text and mini piano
+                const tooltipContent = document.createElement('div');
+                tooltipContent.innerHTML = tooltipText;
+                tooltip.appendChild(tooltipContent);
 
-                // Highlight keyboard for preview
+                // Add mini piano visualization if scale is available
                 if (selectedScales.length > 0) {
                     let firstScaleId = selectedScales[0];
                     let [family, mode] = firstScaleId.split('-');
                     let scales = HeptatonicScales;
-                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-                    let scaleNotes = getScaleNotes(note, intervals);
-                    highlightKeysForScales(scaleNotes);
+                    
+                    try {
+                        let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                        let scaleNotes = getScaleNotes(note, intervals);
+                        
+                        // Highlight keyboard for preview
+                        highlightKeysForScales(scaleNotes);
+                        
+                        // Create mini piano
+                        const scaleNotesNoOctave = scaleNotes.map(n => typeof n === 'string' && n.includes('/') ? n.split('/')[0] : n);
+                        const miniPiano = createScalePiano(scaleNotesNoOctave, note);
+                        
+                        if (miniPiano) {
+                            const pianoContainer = document.createElement('div');
+                            pianoContainer.style.cssText = `
+                                margin-top: 8px;
+                                border-top: 1px solid #444;
+                                padding-top: 8px;
+                                text-align: center;
+                            `;
+                            
+                            const pianoLabel = document.createElement('div');
+                            pianoLabel.textContent = `${note} ${family}`;
+                            pianoLabel.style.cssText = `
+                                font-size: 10px;
+                                color: #ccc;
+                                margin-bottom: 4px;
+                            `;
+                            
+                            pianoContainer.appendChild(pianoLabel);
+                            pianoContainer.appendChild(miniPiano);
+                            tooltip.appendChild(pianoContainer);
+                        }
+                    } catch (error) {
+                        console.warn('Error creating mini piano for scale tooltip:', error);
+                        // Fallback to just keyboard highlighting
+                        let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                        let scaleNotes = getScaleNotes(note, intervals);
+                        highlightKeysForScales(scaleNotes);
+                    }
                 }
                 
                 document.body.appendChild(tooltip);
@@ -800,9 +844,11 @@ function createRootNoteTable() {
                 tooltip.style.background = '#000';
                 tooltip.style.color = 'white';
                 tooltip.style.border = '1px solid #ccc';
-                tooltip.style.padding = '4px 8px';
+                tooltip.style.padding = '8px 12px';
                 tooltip.style.zIndex = 1000;
                 tooltip.style.fontSize = '11px';
+                tooltip.style.borderRadius = '4px';
+                tooltip.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                 
                 let tooltipText = `<strong>Root Note:</strong> ${flatNote}<br>`;
                 if (exclusiveMode) {
@@ -810,16 +856,57 @@ function createRootNoteTable() {
                 } else {
                     tooltipText += `<em>Click to ${flatSelected ? 'deselect' : (isThisChromaticPositionSelected ? 'switch to flat' : 'select')}</em>`;
                 }
-                tooltip.innerHTML = tooltipText;
+                
+                // Create a container for text and mini piano
+                const tooltipContent = document.createElement('div');
+                tooltipContent.innerHTML = tooltipText;
+                tooltip.appendChild(tooltipContent);
 
-                // Highlight keyboard for preview
+                // Add mini piano visualization if scale is available
                 if (selectedScales.length > 0) {
                     let firstScaleId = selectedScales[0];
                     let [family, mode] = firstScaleId.split('-');
                     let scales = HeptatonicScales;
-                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-                    let scaleNotes = getScaleNotes(flatNote, intervals);
-                    highlightKeysForScales(scaleNotes);
+                    
+                    try {
+                        let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                        let scaleNotes = getScaleNotes(flatNote, intervals);
+                        
+                        // Highlight keyboard for preview
+                        highlightKeysForScales(scaleNotes);
+                        
+                        // Create mini piano
+                        const scaleNotesNoOctave = scaleNotes.map(n => typeof n === 'string' && n.includes('/') ? n.split('/')[0] : n);
+                        const miniPiano = createScalePiano(scaleNotesNoOctave, flatNote);
+                        
+                        if (miniPiano) {
+                            const pianoContainer = document.createElement('div');
+                            pianoContainer.style.cssText = `
+                                margin-top: 8px;
+                                border-top: 1px solid #444;
+                                padding-top: 8px;
+                                text-align: center;
+                            `;
+                            
+                            const pianoLabel = document.createElement('div');
+                            pianoLabel.textContent = `${flatNote} ${family}`;
+                            pianoLabel.style.cssText = `
+                                font-size: 10px;
+                                color: #ccc;
+                                margin-bottom: 4px;
+                            `;
+                            
+                            pianoContainer.appendChild(pianoLabel);
+                            pianoContainer.appendChild(miniPiano);
+                            tooltip.appendChild(pianoContainer);
+                        }
+                    } catch (error) {
+                        console.warn('Error creating mini piano for scale tooltip:', error);
+                        // Fallback to just keyboard highlighting
+                        let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                        let scaleNotes = getScaleNotes(flatNote, intervals);
+                        highlightKeysForScales(scaleNotes);
+                    }
                 }
                 
                 document.body.appendChild(tooltip);
@@ -890,9 +977,11 @@ function createRootNoteTable() {
                 tooltip.style.background = '#000';
                 tooltip.style.color = 'white';
                 tooltip.style.border = '1px solid #ccc';
-                tooltip.style.padding = '4px 8px';
+                tooltip.style.padding = '8px 12px';
                 tooltip.style.zIndex = 1000;
                 tooltip.style.fontSize = '11px';
+                tooltip.style.borderRadius = '4px';
+                tooltip.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                 
                 let tooltipText = `<strong>Root Note:</strong> ${note}<br>`;
                 if (exclusiveMode) {
@@ -900,15 +989,57 @@ function createRootNoteTable() {
                 } else {
                     tooltipText += `<em>Click to ${isSelected ? 'deselect' : 'select'}</em>`;
                 }
-                tooltip.innerHTML = tooltipText;
+                
+                // Create a container for text and mini piano
+                const tooltipContent = document.createElement('div');
+                tooltipContent.innerHTML = tooltipText;
+                tooltip.appendChild(tooltipContent);
 
+                // Add mini piano visualization if scale is available
                 if (selectedScales.length > 0) {
                     let firstScaleId = selectedScales[0];
                     let [family, mode] = firstScaleId.split('-');
                     let scales = HeptatonicScales;
-                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-                    let scaleNotes = getScaleNotes(note, intervals);
-                    highlightKeysForScales(scaleNotes);
+                    
+                    try {
+                        let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                        let scaleNotes = getScaleNotes(note, intervals);
+                        
+                        // Highlight keyboard for preview
+                        highlightKeysForScales(scaleNotes);
+                        
+                        // Create mini piano
+                        const scaleNotesNoOctave = scaleNotes.map(n => typeof n === 'string' && n.includes('/') ? n.split('/')[0] : n);
+                        const miniPiano = createScalePiano(scaleNotesNoOctave, note);
+                        
+                        if (miniPiano) {
+                            const pianoContainer = document.createElement('div');
+                            pianoContainer.style.cssText = `
+                                margin-top: 8px;
+                                border-top: 1px solid #444;
+                                padding-top: 8px;
+                                text-align: center;
+                            `;
+                            
+                            const pianoLabel = document.createElement('div');
+                            pianoLabel.textContent = `${note} ${family}`;
+                            pianoLabel.style.cssText = `
+                                font-size: 10px;
+                                color: #ccc;
+                                margin-bottom: 4px;
+                            `;
+                            
+                            pianoContainer.appendChild(pianoLabel);
+                            pianoContainer.appendChild(miniPiano);
+                            tooltip.appendChild(pianoContainer);
+                        }
+                    } catch (error) {
+                        console.warn('Error creating mini piano for scale tooltip:', error);
+                        // Fallback to just keyboard highlighting
+                        let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                        let scaleNotes = getScaleNotes(note, intervals);
+                        highlightKeysForScales(scaleNotes);
+                    }
                 }
                 
                 document.body.appendChild(tooltip);
