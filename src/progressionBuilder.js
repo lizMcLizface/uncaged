@@ -50,12 +50,12 @@ const CHORD_LINE_CONFIG = {
 
 // Mini fretboard visualization configuration
 const MINI_FRETBOARD_CONFIG = {
-    width: 80,
+    width: 100,
     height: 120,
     fretCount: 5,
     stringCount: 6,
     fretHeight: 20,
-    stringSpacing: 12,
+    stringSpacing: 14,
     noteRadius: 4,
     fretNumberSize: 10,
     noteNameSize: 9
@@ -68,6 +68,7 @@ function clearCache() {
     parsedTokensCache = [];
     lastInputString = '';
     precomputedPatternData.clear();
+    selectedPatternIndexes.clear(); // Clear pattern selections
     
     // Clear debounce timer if it exists
     if (inputDebounceTimer) {
@@ -123,7 +124,8 @@ function precomputePatternData(chord, index) {
             patterns: [],
             chordNotes: [],
             displayName: getChordDisplayName(chord),
-            hasPatterns: false
+            hasPatterns: false,
+            chord // Store reference to chord object for staleness detection
         };
     }
     
@@ -131,12 +133,15 @@ function precomputePatternData(chord, index) {
     const chordNotes = chord.chordInfo.notes.map(note => notationStripOctave(note));
     const displayName = getChordDisplayName(chord);
     
+    // Debug logging to track when pattern data is computed
+    console.log(`Computing pattern data for chord ${index}: ${displayName} (${patterns.length} patterns found)`);
+    
     return {
         patterns,
         chordNotes,
         displayName,
         hasPatterns: patterns.length > 0,
-        chord // Store reference to chord object
+        chord // Store reference to chord object for staleness detection
     };
 }
 
@@ -164,12 +169,30 @@ function parseProgressionInput(progressionText) {
     // Compare tokens to find what changed
     const changes = compareTokenArrays(oldTokens, newTokens);
     
+    // Determine if we should do incremental updates
+    const totalChanges = changes.added.length + changes.changed.length + changes.removed.length;
+    const hasSignificantChanges = totalChanges > 0;
+    const majorityUnchanged = changes.unchanged.length > totalChanges;
+    const shouldUseIncremental = hasSignificantChanges && majorityUnchanged && changes.unchanged.length > 0;
+    
+    // Additional checks for when to force full reparse:
+    // 1. If the number of tokens changed significantly
+    const tokenCountChanged = Math.abs(oldTokens.length - newTokens.length) > 0;
+    // 2. If more than half the tokens are different
+    const majorityChanged = totalChanges >= Math.ceil(newTokens.length / 2);
+    
+    // Force full reparse if there are major structural changes
+    const forceFullReparse = tokenCountChanged || majorityChanged;
+    
     // If we can reuse most of the existing progression, do incremental updates
-    if (changes.unchanged.length > 0 && changes.added.length + changes.changed.length + changes.removed.length < newTokens.length) {
+    if (shouldUseIncremental && !forceFullReparse) {
         return updateProgressionIncremental(newTokens, changes);
     }
     
-    // Otherwise, do a full reparse but cache the tokens
+    // Otherwise, do a full reparse and clear all caches
+    clearCache();
+    selectedPatternIndexes.clear(); // Clear pattern selections on full reparse
+    
     const progression = [];
     parsedTokensCache = [];
     
@@ -204,8 +227,13 @@ function updateProgressionIncremental(newTokens, changes) {
             updatedProgression.splice(removeIndex, 1);
             // Remove cached pattern data
             precomputedPatternData.delete(removeIndex);
+            // Remove pattern selection for this index
+            selectedPatternIndexes.delete(removeIndex);
+            
             // Shift pattern data indices down for higher indices
             const newPatternData = new Map();
+            const newPatternSelections = new Map();
+            
             for (let [index, data] of precomputedPatternData.entries()) {
                 if (index > removeIndex) {
                     newPatternData.set(index - 1, data);
@@ -213,7 +241,17 @@ function updateProgressionIncremental(newTokens, changes) {
                     newPatternData.set(index, data);
                 }
             }
+            
+            for (let [index, selection] of selectedPatternIndexes.entries()) {
+                if (index > removeIndex) {
+                    newPatternSelections.set(index - 1, selection);
+                } else {
+                    newPatternSelections.set(index, selection);
+                }
+            }
+            
             precomputedPatternData = newPatternData;
+            selectedPatternIndexes = newPatternSelections;
         }
     }
     
@@ -226,6 +264,8 @@ function updateProgressionIncremental(newTokens, changes) {
                 updatedProgression[changeIndex] = chordData;
                 // Clear cached pattern data for this index
                 precomputedPatternData.delete(changeIndex);
+                // Clear pattern selection for this index since chord changed
+                selectedPatternIndexes.delete(changeIndex);
             }
         }
     }
@@ -240,6 +280,8 @@ function updateProgressionIncremental(newTokens, changes) {
                 updatedProgression.splice(addIndex, 0, chordData);
                 // Shift pattern data indices up for higher indices
                 const newPatternData = new Map();
+                const newPatternSelections = new Map();
+                
                 for (let [index, data] of precomputedPatternData.entries()) {
                     if (index >= addIndex) {
                         newPatternData.set(index + 1, data);
@@ -247,7 +289,17 @@ function updateProgressionIncremental(newTokens, changes) {
                         newPatternData.set(index, data);
                     }
                 }
+                
+                for (let [index, selection] of selectedPatternIndexes.entries()) {
+                    if (index >= addIndex) {
+                        newPatternSelections.set(index + 1, selection);
+                    } else {
+                        newPatternSelections.set(index, selection);
+                    }
+                }
+                
                 precomputedPatternData = newPatternData;
+                selectedPatternIndexes = newPatternSelections;
             }
         }
     }
@@ -1008,6 +1060,9 @@ function updateProgression(progressionText) {
         return chord;
     });
     
+    // Reset hover state when progression changes
+    hoveredChordIndex = null;
+    
     currentProgression = resolvedProgression;
     
     // Precompute pattern data for all chords to optimize hover performance
@@ -1016,21 +1071,31 @@ function updateProgression(progressionText) {
     // Update display
     updateProgressionDisplay();
     
-    // Update fretboard if no chord is being hovered
-    if (hoveredChordIndex === null) {
-        displayAllChordPatterns();
-    }
+    // Update fretboard display
+    displayAllChordPatterns();
 }
 
 /**
  * Precompute pattern data for all chords in the current progression
  */
 function precomputeAllPatternData() {
-    currentProgression.forEach((chord, index) => {
-        if (!precomputedPatternData.has(index)) {
-            const patternData = precomputePatternData(chord, index);
-            precomputedPatternData.set(index, patternData);
+    // Clear any pattern data for indices that exceed the current progression length
+    const indicesToRemove = [];
+    for (let index of precomputedPatternData.keys()) {
+        if (index >= currentProgression.length) {
+            indicesToRemove.push(index);
         }
+    }
+    indicesToRemove.forEach(index => {
+        precomputedPatternData.delete(index);
+        selectedPatternIndexes.delete(index);
+    });
+    
+    // Compute pattern data for all current chords
+    currentProgression.forEach((chord, index) => {
+        // Always recompute to ensure fresh data
+        const patternData = precomputePatternData(chord, index);
+        precomputedPatternData.set(index, patternData);
     });
 }
 
@@ -1092,12 +1157,12 @@ function createMiniFretboardVisualization(pattern, chordNotes) {
     // Find the fret range for this pattern
     const minFret = Math.min(...positions.map(p => p.fret));
     const maxFret = Math.max(...positions.map(p => p.fret));
-    const startFret = Math.max(0, minFret);
-    const endFret = Math.min(startFret + config.fretCount - 1, maxFret);
+    const startFret = minFret; // Start from the actual minimum fret (could be 0)
+    const endFret = Math.max(startFret + config.fretCount - 1, maxFret); // Ensure we show all pattern notes
     
     // Create SVG container
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    svg.setAttribute('width', config.width);
+    svg.setAttribute('width', config.width + 10); // Add extra width padding
     svg.setAttribute('height', config.height + 30); // Extra space for labels
     svg.style.cssText = `
         display: block;
@@ -1110,7 +1175,7 @@ function createMiniFretboardVisualization(pattern, chordNotes) {
     // Calculate positions
     const stringSpacing = config.stringSpacing;
     const fretHeight = config.fretHeight;
-    const startX = 15;
+    const startX = 20; // Increased left margin
     const startY = 20;
     
     // Draw fret lines (horizontal)
@@ -1139,18 +1204,26 @@ function createMiniFretboardVisualization(pattern, chordNotes) {
         svg.appendChild(line);
     }
     
-    // Standard guitar tuning (from lowest string to highest)
+    // Standard guitar tuning (from left to right: low E to high E, matching tab convention)
     const stringTuning = ['E', 'A', 'D', 'G', 'B', 'E'];
     
-    // Draw fret numbers above the fretboard
+    // Draw fret numbers to the left of the fretboard
     for (let fret = 1; fret <= config.fretCount; fret++) {
-        const actualFret = startFret + fret;
-        if (actualFret > 0) {
-            const x = startX + (config.stringCount - 1) * stringSpacing / 2;
+        // Calculate the actual fret number this position represents
+        let actualFret;
+        if (startFret === 0) {
+            // For open chords, fret positions 1,2,3,4,5 represent actual frets 1,2,3,4,5
+            actualFret = fret;
+        } else {
+            // For higher frets, adjust calculation
+            actualFret = startFret + fret - 1;
+        }
+        
+        if (actualFret >= 1) { // Only show fret numbers for actual frets (not open strings)
             const y = startY + (fret - 0.5) * fretHeight;
             
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            text.setAttribute('x', x + stringSpacing * 3); // Position to the right
+            text.setAttribute('x', startX - 10); // Position to the left of the fretboard
             text.setAttribute('y', y);
             text.setAttribute('text-anchor', 'middle');
             text.setAttribute('dominant-baseline', 'middle');
@@ -1169,14 +1242,43 @@ function createMiniFretboardVisualization(pattern, chordNotes) {
     positions.forEach(position => {
         const { string: stringNum, fret } = position;
         
-        // Convert to 0-based string index (6th string = index 0, 1st string = index 5)
-        const stringIndex = 6 - stringNum;
+        // Convert to display index: 1st string (high E) on the right, 6th string (low E) on the left
+        // stringNum is 1-based (1=high E, 6=low E), so reverse the display order and make 0-based
+        const stringIndex = config.stringCount - stringNum - 1;
         
         // Check if this fret is within our display range
         if (fret >= startFret && fret <= endFret) {
-            const displayFret = fret - startFret;
             const x = startX + stringIndex * stringSpacing;
-            const y = startY + (displayFret + 0.5) * fretHeight;
+            let y;
+            
+            if (fret === 0) {
+                // Open string - place marker on the nut (fret 0 line)
+                y = startY;
+                
+                // Add "0" label to the left for open strings
+                const openLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                openLabel.setAttribute('x', startX - 10);
+                openLabel.setAttribute('y', y);
+                openLabel.setAttribute('text-anchor', 'middle');
+                openLabel.setAttribute('dominant-baseline', 'middle');
+                openLabel.setAttribute('fill', '#ccc');
+                openLabel.setAttribute('font-size', config.fretNumberSize);
+                openLabel.setAttribute('font-family', 'monospace');
+                openLabel.textContent = '0';
+                svg.appendChild(openLabel);
+            } else {
+                // Fretted note - place marker between frets
+                // Calculate the display position based on the startFret context
+                let displayFret;
+                if (startFret === 0) {
+                    // For open chords, fret N goes to display position N
+                    displayFret = fret;
+                } else {
+                    // For higher frets, adjust calculation
+                    displayFret = fret - startFret + 1;
+                }
+                y = startY + (displayFret - 0.5) * fretHeight;
+            }
             
             // Calculate the note name for this position
             const openStringNote = stringTuning[stringIndex];
@@ -1391,8 +1493,8 @@ function createPatternSelector(chord, index) {
     
     // Use precomputed pattern data if available
     let patternData = precomputedPatternData.get(index);
-    if (!patternData) {
-        // Fallback to computing on demand
+    if (!patternData || !patternData.chord || patternData.chord !== chord) {
+        // Fallback to computing on demand, or recompute if chord has changed
         patternData = precomputePatternData(chord, index);
         precomputedPatternData.set(index, patternData);
     }
@@ -1646,8 +1748,8 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
     
     // Use precomputed pattern data if available
     let patternData = precomputedPatternData.get(index);
-    if (!patternData) {
-        // Fallback to computing on demand
+    if (!patternData || !patternData.chord || patternData.chord !== chord) {
+        // Fallback to computing on demand, or recompute if chord has changed
         patternData = precomputePatternData(chord, index);
         precomputedPatternData.set(index, patternData);
     }
@@ -1792,8 +1894,8 @@ function displayAllChordPatterns() {
     currentProgression.forEach((chord, index) => {
         // Use precomputed pattern data if available
         let patternData = precomputedPatternData.get(index);
-        if (!patternData) {
-            // Fallback to computing on demand
+        if (!patternData || !patternData.chord || patternData.chord !== chord) {
+            // Fallback to computing on demand, or recompute if chord has changed
             patternData = precomputePatternData(chord, index);
             precomputedPatternData.set(index, patternData);
         }
