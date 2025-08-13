@@ -8,6 +8,55 @@ import {
 import { createChordPiano, createMixedPiano } from './components/MiniPiano/MiniPiano';
 
 /**
+ * Convert note name to format expected by PolySynth
+ * @param {string} noteName - Note name like "C", "F#", "Bb"
+ * @param {number} octave - Octave number (default 4)
+ * @returns {string} Formatted note like "C4", "F#4", "Bb4"
+ */
+function convertNoteForPolySynth(noteName, octave = 4) {
+    return noteName.replace('/', '') + octave;
+}
+
+/**
+ * Trigger a chord on the PolySynth
+ * @param {Object} chord - Chord data containing chordInfo with notes
+ * @param {number} index - Index of chord in progression
+ */
+function triggerChordProgression(chord, index) {
+    if (!window.polySynthRef || !chord.chordInfo || !chord.chordInfo.notes) {
+        console.warn('PolySynth not available or chord has no notes');
+        return;
+    }
+
+    try {
+        // Convert chord notes to PolySynth format
+        const chordNotes = chord.chordInfo.notes.map(note => {
+            const cleanNote = notationStripOctave(note);
+            return convertNoteForPolySynth(cleanNote, 4); // Use octave 4 as default
+        });
+
+        console.log(`Triggering chord ${index}: ${getChordDisplayName(chord, index)}`, chordNotes);
+
+        // Stop any currently playing notes
+        if (window.polySynthRef.stopAllNotes) {
+            window.polySynthRef.stopAllNotes();
+        }
+
+        // Trigger the chord notes with 250ms duration
+        if (window.polySynthRef.playNotes) {
+            window.polySynthRef.playNotes(chordNotes, 70, 250); // 70% velocity, 250ms duration
+        } else if (window.polySynthRef.triggerChord) {
+            window.polySynthRef.triggerChord(chordNotes);
+        } else {
+            console.warn('PolySynth playNotes/triggerChord method not available');
+        }
+
+    } catch (error) {
+        console.error('Error triggering chord progression:', error);
+    }
+}
+
+/**
  * Get the fretboard instance for chord progression operations
  * @returns {Object|null} Fretboard instance or null if not available
  */
@@ -1940,6 +1989,19 @@ function createChordElement(chord, index) {
         element.style.background = '#444';
         hoveredChordIndex = null;
         displayAllChordPatterns();
+    });
+
+    // Add click handler for chord triggering
+    element.addEventListener('click', () => {
+        if (!chord.isInvalid && window.polySynthEnabled && window.polySynthRef) {
+            triggerChordProgression(chord, index);
+            
+            // Visual feedback for click
+            element.style.background = '#4CAF50';
+            setTimeout(() => {
+                element.style.background = hoveredChordIndex === index ? '#555' : '#444';
+            }, 200);
+        }
     });
     
     return element;

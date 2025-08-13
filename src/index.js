@@ -9,10 +9,11 @@ import $ from 'jquery';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
 import {createHeptatonicScaleTable, selectedRootNote, selectedScales, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote} from './scaleGenerator';
 // import {chords, processedChords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes, createChordButtonGrid} from './chords';
-// import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
+import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
 // import {createScaleChordCrossReference, updateCrossReferenceDisplay} from './cross';
-// import {modifiers, keyToNote} from './keyboard';
+import {modifiers, keyToNote} from './keyboard';
 import {initializeFretboard, getFretboard, showChordOnFretboard, showScaleOnFretboard, currentDisplayedChord} from './frets';
+import { ThemeProvider } from './contexts/ThemeContext';
 // import './staves'; // Import stave functions - functions will be available on window object
 // import { context,
 //     masterVolume,
@@ -2214,48 +2215,36 @@ var currentSynthNotes = {};
 
 let baseOctave = 4;
 
-function onKeyPress(event, up) {
-    // console.log(event.key, event.code, event.type);
-    // if(event.type == 'keydown'){
-    //     if(event.location == KeyboardEvent.DOM_KEY_LOCATION_LEFT && event.code.includes('Shift')){
-    //         modifiers['LeftShift'] = true;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_RIGHT && event.code.includes('Shift')){
-    //         modifiers['RightShift'] = true;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_LEFT && event.code.includes('Control')){
-    //         modifiers['LeftControl'] = true;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_RIGHT && event.code.includes('Control')){
-    //         modifiers['RightControl'] = true;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_LEFT && event.code.includes('Alt')){
-    //         modifiers['LeftAlt'] = true;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_RIGHT && event.code.includes('Alt')){
-    //         modifiers['RightAlt'] = true;
-    //     }
-    // }else if(event.type == 'keyup'){
-    //     if(event.location == KeyboardEvent.DOM_KEY_LOCATION_LEFT && event.code.includes('Shift')){
-    //         modifiers['LeftShift'] = false;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_RIGHT && event.code.includes('Shift')){
-    //         modifiers['RightShift'] = false;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_LEFT && event.code.includes('Control')){
-    //         modifiers['LeftControl'] = false;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_RIGHT && event.code.includes('Control')){  
-    //         modifiers['RightControl'] = false;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_LEFT && event.code.includes('Alt')){
-    //         modifiers['LeftAlt'] = false;
-    //     }
-    //     else if(event.location == KeyboardEvent.DOM_KEY_LOCATION_RIGHT && event.code.includes('Alt')){
-    //         modifiers['RightAlt'] = false;
-    //     }
-    // }
+// Function to check if a text input element is currently focused
+function isTextInputFocused() {
+    const activeElement = document.activeElement;
+    if (!activeElement) return false;
+    
+    const tagName = activeElement.tagName.toLowerCase();
+    const inputType = activeElement.type ? activeElement.type.toLowerCase() : '';
+    
+    // Check for various text input elements
+    return (
+        tagName === 'input' && (
+            inputType === 'text' || 
+            inputType === 'password' || 
+            inputType === 'email' || 
+            inputType === 'search' || 
+            inputType === 'url' || 
+            inputType === 'tel' || 
+            inputType === '' // Default input type
+        )
+    ) || 
+    tagName === 'textarea' || 
+    activeElement.contentEditable === 'true';
+}
 
+function onKeyPress(event, up) {
+    // Skip keyboard input processing if a text input is focused
+    if (isTextInputFocused()) {
+        return;
+    }
+    // Handle octave and navigation keys
     if (event.type == 'keydown' && event.code == 'KeyZ'){
         console.log('Reducing Base Octave: ', baseOctave);
         baseOctave -= 1;
@@ -2295,9 +2284,67 @@ function onKeyPress(event, up) {
         return; // Don't process as a musical note
     }
 
-    // console.log('Base Octave: ', baseOctave);
+    // Only process musical notes if PolySynth is enabled
+    if (!window.polySynthEnabled || !window.polySynthRef) {
+        return;
+    }
 
-    // var note = keyToNote(event, baseOctave);
+    var note = keyToNote(event, baseOctave);
+    
+    if (!note) {
+        return; // Key not mapped to a musical note
+    }
+
+    // Convert note format for PolySynth
+    const noteWithOctave = note.replace('/', '');
+    
+    if (event.type == 'keydown' && !currentPressed.includes(note)) {
+        console.log('Key Down: ', note, '-> PolySynth format:', noteWithOctave);
+        currentPressed.push(note);
+        
+        // Trigger note on PolySynth using the exposed methods
+        if (window.polySynthRef && window.polySynthRef.playNotes) {
+            console.log('PolySynth active status BEFORE activation:', window.polySynthRef.isActive());
+            
+            // Explicitly activate the synth if not active
+            if (!window.polySynthRef.isActive() && window.polySynthRef.activate) {
+                console.log('Synth not active, calling activate method...');
+                window.polySynthRef.activate();
+                // Check status after a brief delay to allow React state update
+                setTimeout(() => {
+                    console.log('PolySynth active status AFTER activation:', window.polySynthRef.isActive());
+                }, 10);
+            }
+            
+            console.log('Calling PolySynth playNotes with:', [noteWithOctave], 70);
+            window.polySynthRef.playNotes([noteWithOctave], 70);
+            console.log('PolySynth active status AFTER playNotes call:', window.polySynthRef.isActive());
+        } else {
+            console.log('PolySynth ref not available:', window.polySynthRef);
+        }
+        
+        // Add visual feedback to piano keys if available
+        var midi = noteToMidi(note) + 12;
+        if (keys[midi] && keys[midi].element) {
+            keys[midi].element.classList.add('pressedKey');
+        }
+    }
+    else if (event.type == 'keyup' && currentPressed.includes(note)) {
+        console.log('Key Up: ', note, '-> PolySynth format:', noteWithOctave);
+        currentPressed = currentPressed.filter(item => item !== note);
+        
+        // Stop note on PolySynth using the exposed methods
+        if (window.polySynthRef && window.polySynthRef.stopNotes) {
+            window.polySynthRef.stopNotes([noteWithOctave]);
+        }
+        
+        // Remove visual feedback from piano keys if available
+        var midi = noteToMidi(note) + 12;
+        if (keys[midi] && keys[midi].element) {
+            keys[midi].element.classList.remove('pressedKey');
+        }
+    }
+}
     // if (note == undefined){
     //     // console.log('Key not mapped: ', event.code);
     //     return;
@@ -2527,11 +2574,6 @@ function onKeyPress(event, up) {
     //     advanceSelectedPosition();
     //     highlightBothPositions();
     // }
-}
-
-
-
-
 
 document.addEventListener('keydown', onKeyPress);
 document.addEventListener('keyup', onKeyPress);
@@ -5640,6 +5682,110 @@ document.addEventListener('keyup', onKeyPress);
 // }
 
 
+
+// Initialize mouse input for piano keys when PolySynth is available
+function initializePolySynthMouse() {
+    // Define callbacks for playing and stopping notes
+    const playNote2Callback = (notes, volume = 70) => {
+        if (window.polySynthRef && window.polySynthRef.playNotes) {
+            window.polySynthRef.playNotes(notes, volume);
+        }
+    };
+
+    const stopNotes2Callback = (notes) => {
+        if (window.polySynthRef && window.polySynthRef.stopNotes) {
+            window.polySynthRef.stopNotes(notes);
+        }
+    };
+
+    // Initialize mouse input with these callbacks
+    initializeMouseInput(playNote2Callback, stopNotes2Callback);
+}
+
+// Initialize guitar interface functionality
+document.addEventListener('DOMContentLoaded', () => {
+    // Initialize the existing guitar interface functionality
+    initializeGuitarInterface();
+    
+    // Set up a periodic check to initialize mouse input when PolySynth becomes available
+    const checkPolySynth = setInterval(() => {
+        if (window.polySynthRef) {
+            initializePolySynthMouse();
+            clearInterval(checkPolySynth);
+        }
+    }, 100);
+    
+    // Clear the interval after 30 seconds to avoid infinite checking
+    setTimeout(() => clearInterval(checkPolySynth), 30000);
+});
+
+// Initialize the existing guitar interface
+function initializeGuitarInterface() {
+    console.log('Initializing guitar interface...');
+    
+    // Initialize the fretboard
+    if (typeof initializeFretboard === 'function') {
+        try {
+            initializeFretboard();
+            console.log('Fretboard initialized successfully');
+        } catch (error) {
+            console.error('Error initializing fretboard:', error);
+        }
+    }
+    
+    // Setup fretboard and get reference
+    const fretboard = getFretboard();
+    if (fretboard) {
+        console.log('Fretboard reference obtained');
+        
+        // Initialize chord progression builder
+        try {
+            // Import and initialize the progression builder
+            import('./progressionBuilder.js').then((progressionModule) => {
+                if (progressionModule.createChordProgressionUI) {
+                    const progressionContainer = progressionModule.createChordProgressionUI(fretboard);
+                    
+                    // Find the placeholder element and replace it with the progression builder
+                    const placeholder = document.getElementById('fretNotPlaceholder');
+                    if (placeholder) {
+                        placeholder.innerHTML = '';
+                        placeholder.appendChild(progressionContainer);
+                        console.log('Chord progression builder initialized');
+                    }
+                }
+            }).catch(error => {
+                console.error('Error loading progression builder:', error);
+            });
+        } catch (error) {
+            console.error('Error initializing chord progression builder:', error);
+        }
+    }
+    
+    // Initialize scale generator table
+    if (typeof createHeptatonicScaleTable === 'function') {
+        try {
+            createHeptatonicScaleTable();
+            console.log('Scale table initialized');
+        } catch (error) {
+            console.error('Error initializing scale table:', error);
+        }
+    }
+}
+
+// Create React root and render the App
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(
+    <React.StrictMode>
+        <ThemeProvider>
+            <App />
+        </ThemeProvider>
+    </React.StrictMode>
+);
+
+// If you want to start measuring performance in your app, pass a function
+// to log results (for example: reportWebVitals(console.log))
+// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
+reportWebVitals();
 
 // export {drawNotes, outputNoteArray, outputDiv, updateOutputText, highlightBothPositions}
 

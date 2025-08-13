@@ -131,11 +131,18 @@ let pitchEnv = {
 const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) => {
     // Synth State
     const [synthActive, setSynthActive] = useState(false);
+    const synthActiveRef = useRef(false); // Immediate reference for synthActive state
     const [octaveMod, setOctaveMod] = useState(4);
     const [currentPreset, setCurrentPreset] = useState('- INIT -');
     
     // Track if synth has been initialized to prevent multiple starts
     const synthInitialized = useRef(false);
+    
+    // Sync synthActive state with ref for immediate access
+    useEffect(() => {
+        synthActiveRef.current = synthActive;
+        console.log('synthActive state changed to:', synthActive);
+    }, [synthActive]);
     
     // Track active notes for programmatic control
     const activeNotes = useRef(new Map());
@@ -838,7 +845,7 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
     const startArpeggiator = (chord = null) => {
         console.log('▶️ Starting arpeggiator with chord:', chord || transposedChord.current || capturedChordRef.current);
         
-        if (!synthActive) activateSynth();
+        if (!synthActiveRef.current) activateSynth();
         
         // Use provided chord, stored transposed chord, or captured chord
         const chordToUse = chord || transposedChord.current.length > 0 ? transposedChord.current : capturedChordRef.current;
@@ -1081,8 +1088,70 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
 
     // Throttled parameter update to prevent audio interruption
     const activateSynth = () => {
-        setSynthActive(true);
-        AC.resume();
+        console.log('activateSynth called - current synthActive state:', synthActive);
+        console.log('AudioContext state:', AC.state);
+        console.log('AudioContext currentTime:', AC.currentTime);
+        
+        try {
+            // Initialize the synth if not already done
+            if (!synthInitialized.current) {
+                console.log('Synth not initialized, calling initSynth...');
+                initSynth();
+            }
+            
+            setSynthActive(true);
+            synthActiveRef.current = true; // Update ref immediately for synchronous access
+            console.log('setSynthActive(true) called and ref updated');
+            
+            AC.resume().then(() => {
+                console.log('AudioContext resumed successfully, new state:', AC.state);
+                
+                // Check the final connection more thoroughly
+                console.log('Checking audio chain connections:');
+                console.log('- masterGain node:', masterGain.getNode());
+                console.log('- masterGain numberOfOutputs:', masterGain.getNode().numberOfOutputs);
+                console.log('- AC.destination:', AC.destination);
+                console.log('- masterGain connected to destination:', masterGain.getNode().destination === AC.destination);
+                
+                // Test the master gain directly with a test signal
+                
+                masterGain.getNode().connect(AC.destination);
+                
+                console.log('Testing master gain with direct connection...');
+                try {
+                    const testOsc2 = AC.createOscillator();
+                    testOsc2.connect(masterGain.getNode());
+                    testOsc2.frequency.setValueAtTime(880, AC.currentTime);
+                    testOsc2.start(AC.currentTime + 0.2);
+                    testOsc2.stop(AC.currentTime + 0.3);
+                    console.log('Test oscillator connected to master gain (880Hz for 100ms starting at +200ms)');
+                } catch (testError2) {
+                    console.error('Master gain test failed:', testError2);
+                }
+                
+                // Test with a simple oscillator to verify basic audio chain
+                console.log('Testing audio chain with simple oscillator...');
+                try {
+                    const testOsc = AC.createOscillator();
+                    const testGain = AC.createGain();
+                    testOsc.connect(testGain);
+                    testGain.connect(AC.destination);
+                    testGain.gain.setValueAtTime(0.1, AC.currentTime);
+                    testOsc.frequency.setValueAtTime(440, AC.currentTime);
+                    testOsc.start(AC.currentTime);
+                    testOsc.stop(AC.currentTime + 0.1);
+                    console.log('Test oscillator created and should play 440Hz for 100ms');
+                } catch (testError) {
+                    console.error('Test oscillator failed:', testError);
+                }
+            }).catch((error) => {
+                console.error('AudioContext resume failed:', error);
+            });
+            
+            console.log('activateSynth completed');
+        } catch (error) {
+            console.error('Error in activateSynth:', error);
+        }
     };
 
     const initSynth = () => {
@@ -1125,11 +1194,26 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
 
         // Ensure master gain is always connected to destination
         try {
-            masterGain.connect(AC.destination);
-        } catch (e) {
-            // If already connected, disconnect and reconnect
+            // Force disconnect first to ensure clean connection
             masterGain.getNode().disconnect();
+            console.log('Master gain disconnected');
+            
             masterGain.connect(AC.destination);
+            // Force master gain to audible level for testing
+            masterGain.getNode().gain.setValueAtTime(0.5, AC.currentTime);
+            console.log('Master gain connected to destination and set to 0.5');
+            console.log('Master gain destination check:', masterGain.getNode().destination === AC.destination);
+            console.log('Master gain numberOfOutputs:', masterGain.getNode().numberOfOutputs);
+        } catch (e) {
+            console.error('Error connecting master gain:', e);
+            // Try alternative connection method
+            try {
+                masterGain.getNode().connect(AC.destination);
+                masterGain.getNode().gain.setValueAtTime(0.5, AC.currentTime);
+                console.log('Master gain reconnected using direct node connection');
+            } catch (e2) {
+                console.error('Direct node connection also failed:', e2);
+            }
         }
         
         // Mark as initialized
@@ -1216,8 +1300,12 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
 
     // Functions to pass envelope data to the synth
     const synthNoteOn = (synth, note, volume, scheduleTime = null) => {
+        console.log('synthNoteOn called with:', { note, volume, scheduleTime });
+        console.log('AudioContext state during synthNoteOn:', AC.state);
+        console.log('Master volume:', masterVolume);
+        
         const gainEnv = getGainEnv(volume);
-        // console.log('Gain envelope:', gainEnv);
+        console.log('Gain envelope:', gainEnv);
         const filterEnv = getFilterEnv();
         const voiceId = synth.noteOn(
             note,
@@ -1228,6 +1316,7 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
                 scheduleTime: scheduleTime // Pass schedule time for phase alignment
             },
         );
+        console.log('synthNoteOn completed, voiceId:', voiceId);
         return voiceId; // Return voice ID for tracking
     }
     const synthNoteOff = (synth, note = null, voiceId = null) => {
@@ -1239,8 +1328,15 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
 
     // Programmatic note control functions
     const playNotesProgrammatic = (notes, volume = 50, duration = null) => {
-        if (!synthActive) activateSynth();
-        // console.log('Playing programmatic notes:', notes, 'Volume:', volume, 'Duration:', duration);
+        console.log('playNotesProgrammatic called with notes:', notes, 'synthActive state:', synthActive, 'synthActiveRef:', synthActiveRef.current);
+        
+        if (!synthActiveRef.current) {
+            console.log('Synth not active (checking ref), calling activateSynth from playNotesProgrammatic...');
+            activateSynth();
+            console.log('activateSynth called from playNotesProgrammatic, synthActiveRef now:', synthActiveRef.current);
+        }
+        
+        console.log('Proceeding with note playback, synthActiveRef state:', synthActiveRef.current);
         
         const gainValue = volume / 100; // Convert percentage to gain value
         
@@ -1481,7 +1577,8 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
         playNotes: playNotesProgrammatic,
         stopNotes: stopNotesProgrammatic,
         stopAllNotes: stopAllNotesProgrammatic,
-        isActive: () => synthActive,
+        isActive: () => synthActiveRef.current, // Use ref for immediate access
+        activate: activateSynth,
         // Expose pitch controls for IntervalPractice synchronization
         getPitchValues: () => {
             // console.log('Getting pitch values:', pitchEnv);
