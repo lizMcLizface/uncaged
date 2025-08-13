@@ -29,6 +29,15 @@ let currentProgression = [];
 let hoveredChordIndex = null;
 let selectedPatternIndexes = new Map(); // Map of chord index to selected pattern index
 
+// Caching system for performance optimization
+let parsedTokensCache = []; // Cache of parsed tokens from input
+let lastInputString = ''; // Last processed input string
+let precomputedPatternData = new Map(); // Map of chord index to precomputed pattern data
+
+// Debouncing for input changes
+let inputDebounceTimer = null;
+const INPUT_DEBOUNCE_DELAY = 150; // milliseconds
+
 // Configuration constants
 const CHORD_LINE_CONFIG = {
     normalWidth: 60,
@@ -39,29 +48,201 @@ const CHORD_LINE_CONFIG = {
 };
 
 /**
+ * Clear all caches and reset state
+ */
+function clearCache() {
+    parsedTokensCache = [];
+    lastInputString = '';
+    precomputedPatternData.clear();
+    
+    // Clear debounce timer if it exists
+    if (inputDebounceTimer) {
+        clearTimeout(inputDebounceTimer);
+        inputDebounceTimer = null;
+    }
+}
+
+/**
+ * Compare two token arrays to find differences
+ * @param {Array} oldTokens - Previous parsed tokens
+ * @param {Array} newTokens - New parsed tokens
+ * @returns {Object} Object with added, removed, and changed indices
+ */
+function compareTokenArrays(oldTokens, newTokens) {
+    const changes = {
+        added: [],
+        removed: [],
+        changed: [],
+        unchanged: []
+    };
+    
+    const maxLength = Math.max(oldTokens.length, newTokens.length);
+    
+    for (let i = 0; i < maxLength; i++) {
+        if (i >= oldTokens.length) {
+            // New token added
+            changes.added.push(i);
+        } else if (i >= newTokens.length) {
+            // Token removed
+            changes.removed.push(i);
+        } else if (oldTokens[i] !== newTokens[i]) {
+            // Token changed
+            changes.changed.push(i);
+        } else {
+            // Token unchanged
+            changes.unchanged.push(i);
+        }
+    }
+    
+    return changes;
+}
+
+/**
+ * Precompute pattern data for a chord to avoid recalculation on hover
+ * @param {Object} chord - Chord object
+ * @param {number} index - Chord index
+ * @returns {Object} Precomputed pattern data
+ */
+function precomputePatternData(chord, index) {
+    if (!chord.chordInfo || !chord.chordInfo.notes) {
+        return {
+            patterns: [],
+            chordNotes: [],
+            displayName: getChordDisplayName(chord),
+            hasPatterns: false
+        };
+    }
+    
+    const patterns = getChordPatternMatches(chord);
+    const chordNotes = chord.chordInfo.notes.map(note => notationStripOctave(note));
+    const displayName = getChordDisplayName(chord);
+    
+    return {
+        patterns,
+        chordNotes,
+        displayName,
+        hasPatterns: patterns.length > 0,
+        chord // Store reference to chord object
+    };
+}
+
+/**
  * Parse a chord progression input string
  * @param {string} progressionText - Input text with chord names and/or roman numerals
  * @returns {Array} Array of parsed chord objects
  */
 function parseProgressionInput(progressionText) {
     if (!progressionText || !progressionText.trim()) {
+        clearCache();
         return [];
     }
 
-    const tokens = progressionText.trim().split(/\s+/);
-    const progression = [];
+    const trimmedText = progressionText.trim();
     
-    for (let token of tokens) {
+    // Check if input hasn't changed
+    if (trimmedText === lastInputString) {
+        return currentProgression;
+    }
+    
+    const newTokens = trimmedText.split(/\s+/).filter(token => token.trim());
+    const oldTokens = lastInputString ? lastInputString.split(/\s+/).filter(token => token.trim()) : [];
+    
+    // Compare tokens to find what changed
+    const changes = compareTokenArrays(oldTokens, newTokens);
+    
+    // If we can reuse most of the existing progression, do incremental updates
+    if (changes.unchanged.length > 0 && changes.added.length + changes.changed.length + changes.removed.length < newTokens.length) {
+        return updateProgressionIncremental(newTokens, changes);
+    }
+    
+    // Otherwise, do a full reparse but cache the tokens
+    const progression = [];
+    parsedTokensCache = [];
+    
+    for (let token of newTokens) {
         token = token.trim();
         if (!token) continue;
         
         const chordData = parseChordToken(token);
         if (chordData) {
             progression.push(chordData);
+            parsedTokensCache.push(token);
         }
     }
     
+    lastInputString = trimmedText;
     return progression;
+}
+
+/**
+ * Update progression incrementally based on token changes
+ * @param {Array} newTokens - New token array
+ * @param {Object} changes - Changes detected between old and new tokens
+ * @returns {Array} Updated progression
+ */
+function updateProgressionIncremental(newTokens, changes) {
+    let updatedProgression = [...currentProgression];
+    
+    // Handle removed tokens (work backwards to maintain indices)
+    for (let i = changes.removed.length - 1; i >= 0; i--) {
+        const removeIndex = changes.removed[i];
+        if (removeIndex < updatedProgression.length) {
+            updatedProgression.splice(removeIndex, 1);
+            // Remove cached pattern data
+            precomputedPatternData.delete(removeIndex);
+            // Shift pattern data indices down for higher indices
+            const newPatternData = new Map();
+            for (let [index, data] of precomputedPatternData.entries()) {
+                if (index > removeIndex) {
+                    newPatternData.set(index - 1, data);
+                } else {
+                    newPatternData.set(index, data);
+                }
+            }
+            precomputedPatternData = newPatternData;
+        }
+    }
+    
+    // Handle changed tokens
+    for (let changeIndex of changes.changed) {
+        if (changeIndex < newTokens.length && changeIndex < updatedProgression.length) {
+            const newToken = newTokens[changeIndex];
+            const chordData = parseChordToken(newToken);
+            if (chordData) {
+                updatedProgression[changeIndex] = chordData;
+                // Clear cached pattern data for this index
+                precomputedPatternData.delete(changeIndex);
+            }
+        }
+    }
+    
+    // Handle added tokens
+    for (let addIndex of changes.added) {
+        if (addIndex < newTokens.length) {
+            const newToken = newTokens[addIndex];
+            const chordData = parseChordToken(newToken);
+            if (chordData) {
+                // Insert at the correct position
+                updatedProgression.splice(addIndex, 0, chordData);
+                // Shift pattern data indices up for higher indices
+                const newPatternData = new Map();
+                for (let [index, data] of precomputedPatternData.entries()) {
+                    if (index >= addIndex) {
+                        newPatternData.set(index + 1, data);
+                    } else {
+                        newPatternData.set(index, data);
+                    }
+                }
+                precomputedPatternData = newPatternData;
+            }
+        }
+    }
+    
+    // Update cache
+    parsedTokensCache = [...newTokens];
+    lastInputString = newTokens.join(' ');
+    
+    return updatedProgression;
 }
 
 /**
@@ -534,6 +715,7 @@ function updateRomanNumeralChords() {
     if (currentProgression.length === 0) return;
     
     let progressionChanged = false;
+    const indicesToInvalidate = [];
     
     // Update each Roman numeral chord in the progression
     currentProgression.forEach((chord, index) => {
@@ -543,19 +725,29 @@ function updateRomanNumeralChords() {
                 // Update the chord with new scale context
                 currentProgression[index] = updatedChord;
                 progressionChanged = true;
+                indicesToInvalidate.push(index);
                 
                 console.log(`Updated Roman numeral ${chord.originalToken} to:`, updatedChord.chordInfo.name);
             } else {
                 console.warn(`Could not resolve Roman numeral ${chord.originalToken} in new scale context`);
                 // Keep the original chord but mark it as potentially invalid
                 currentProgression[index].isInvalid = true;
+                indicesToInvalidate.push(index);
             }
         }
     });
     
     if (progressionChanged) {
+        // Invalidate cached pattern data for changed chords
+        indicesToInvalidate.forEach(index => {
+            precomputedPatternData.delete(index);
+        });
+        
         // Reset pattern selections for updated chords
         selectedPatternIndexes.clear();
+        
+        // Precompute pattern data for updated chords
+        precomputeAllPatternData();
         
         // Update the display
         updateProgressionDisplay();
@@ -618,10 +810,19 @@ function createInputSection() {
         box-sizing: border-box;
     `;
     
-    // Add input event listener
+    // Add input event listener with debouncing
     input.addEventListener('input', (e) => {
         const progressionText = e.target.value;
-        updateProgression(progressionText);
+        
+        // Clear any existing timer
+        if (inputDebounceTimer) {
+            clearTimeout(inputDebounceTimer);
+        }
+        
+        // Set a new timer to delay processing
+        inputDebounceTimer = setTimeout(() => {
+            updateProgression(progressionText);
+        }, INPUT_DEBOUNCE_DELAY);
     });
     
     section.appendChild(input);
@@ -759,6 +960,9 @@ function updateProgression(progressionText) {
     
     currentProgression = resolvedProgression;
     
+    // Precompute pattern data for all chords to optimize hover performance
+    precomputeAllPatternData();
+    
     // Update display
     updateProgressionDisplay();
     
@@ -766,6 +970,18 @@ function updateProgression(progressionText) {
     if (hoveredChordIndex === null) {
         displayAllChordPatterns();
     }
+}
+
+/**
+ * Precompute pattern data for all chords in the current progression
+ */
+function precomputeAllPatternData() {
+    currentProgression.forEach((chord, index) => {
+        if (!precomputedPatternData.has(index)) {
+            const patternData = precomputePatternData(chord, index);
+            precomputedPatternData.set(index, patternData);
+        }
+    });
 }
 
 /**
@@ -946,8 +1162,15 @@ function createPatternSelector(chord, index) {
     const container = document.createElement('div');
     container.className = 'pattern-selector-container';
     
-    // Get available patterns (already sorted by getChordPatternMatches)
-    const patterns = getChordPatternMatches(chord);
+    // Use precomputed pattern data if available
+    let patternData = precomputedPatternData.get(index);
+    if (!patternData) {
+        // Fallback to computing on demand
+        patternData = precomputePatternData(chord, index);
+        precomputedPatternData.set(index, patternData);
+    }
+    
+    const { patterns } = patternData;
     
     if (patterns.length === 0) {
         const noPatterns = document.createElement('div');
@@ -1153,9 +1376,15 @@ function createPatternSelector(chord, index) {
  */
 function displaySingleChordPattern(chord, index, isHighlighted = false) {
     const fretboard = getFretboardForProgression();
-    if (!fretboard || !chord.chordInfo || !chord.chordInfo.notes) return;
+    if (!fretboard) return;
     
-    const patterns = getChordPatternMatches(chord);
+    // Use precomputed pattern data if available
+    let patternData = precomputedPatternData.get(index);
+    if (!patternData) {
+        // Fallback to computing on demand
+        patternData = precomputePatternData(chord, index);
+        precomputedPatternData.set(index, patternData);
+    }
     
     // Clear only chord lines, keep scale context if enabled
     fretboard.clearChordLines();
@@ -1173,12 +1402,12 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
     }
     
     // Display chord notes regardless of whether patterns exist
-    const chordNotes = chord.chordInfo.notes.map(note => notationStripOctave(note));
+    const { chordNotes, patterns, displayName, hasPatterns } = patternData;
     
     // If no patterns are available, show chord notes with enhanced visibility when hovered
-    if (patterns.length === 0) {
+    if (!hasPatterns) {
         // Display the chord normally
-        fretboard.displayChord(chordNotes, getChordDisplayName(chord), {
+        fretboard.displayChord(chordNotes, displayName, {
             clearFirst: false,
             showLines: false,
             showScaleContext: showScaleContext
@@ -1187,7 +1416,7 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
         // If highlighted (hovered), add a visual indicator by displaying again with different name
         if (isHighlighted) {
             // Add a special indicator to the chord name to show it's being highlighted
-            const highlightedName = `🎯 ${getChordDisplayName(chord)} (Notes Only)`;
+            const highlightedName = `🎯 ${displayName} (Notes Only)`;
             fretboard.displayChord(chordNotes, highlightedName, {
                 clearFirst: false,
                 showLines: false,
@@ -1199,7 +1428,7 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
     }
     
     // Regular chord display for chords with patterns
-    fretboard.displayChord(chordNotes, getChordDisplayName(chord), {
+    fretboard.displayChord(chordNotes, displayName, {
         clearFirst: false,
         showLines: false,
         showScaleContext: showScaleContext
@@ -1295,10 +1524,16 @@ function displayAllChordPatterns() {
     ];
     
     currentProgression.forEach((chord, index) => {
-        if (!chord.chordInfo || !chord.chordInfo.notes) return;
+        // Use precomputed pattern data if available
+        let patternData = precomputedPatternData.get(index);
+        if (!patternData) {
+            // Fallback to computing on demand
+            patternData = precomputePatternData(chord, index);
+            precomputedPatternData.set(index, patternData);
+        }
         
-        const patterns = getChordPatternMatches(chord);
-        if (patterns.length === 0) return;
+        const { patterns } = patternData;
+        if (!patterns.length) return;
         
         const selectedPatternIndex = selectedPatternIndexes.get(index) || 0;
         if (selectedPatternIndex >= patterns.length) return;
@@ -1332,6 +1567,9 @@ function clearProgression() {
     currentProgression = [];
     hoveredChordIndex = null;
     selectedPatternIndexes.clear();
+    
+    // Clear caches
+    clearCache();
     
     const input = document.getElementById('chord-progression-input');
     if (input) {
