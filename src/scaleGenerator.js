@@ -1713,6 +1713,133 @@ function initializeNavigationButtons() {
     });
 }
 
+/**
+ * Initialize navigation buttons directly (for dynamically created elements)
+ */
+function initializeNavigationButtonsDirect() {
+    // Scale navigation buttons
+    const prevScaleBtn = document.getElementById('prevScaleBtn');
+    const nextScaleBtn = document.getElementById('nextScaleBtn');
+    
+    // Root note navigation buttons
+    const prevRootBtn = document.getElementById('prevRootBtn');
+    const nextRootBtn = document.getElementById('nextRootBtn');
+    
+    if (prevScaleBtn) {
+        // Remove existing listeners to avoid duplicates
+        prevScaleBtn.replaceWith(prevScaleBtn.cloneNode(true));
+        const newPrevScaleBtn = document.getElementById('prevScaleBtn');
+        
+        newPrevScaleBtn.addEventListener('click', function() {
+            if (navigateToPreviousScale()) {
+                // Scale changed, trigger any necessary updates
+                if (typeof window.updateFretboardsForScaleChange === 'function') {
+                    const primaryScale = getPrimaryScale();
+                    const rootNote = getPrimaryRootNote();
+                    window.updateFretboardsForScaleChange({
+                        primaryScale: primaryScale,
+                        rootNote: rootNote
+                    });
+                }
+            }
+        });
+        
+        // Add hover effects
+        newPrevScaleBtn.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = '#666';
+        });
+        newPrevScaleBtn.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '#444';
+        });
+    }
+    
+    if (nextScaleBtn) {
+        // Remove existing listeners to avoid duplicates
+        nextScaleBtn.replaceWith(nextScaleBtn.cloneNode(true));
+        const newNextScaleBtn = document.getElementById('nextScaleBtn');
+        
+        newNextScaleBtn.addEventListener('click', function() {
+            if (navigateToNextScale()) {
+                // Scale changed, trigger any necessary updates
+                if (typeof window.updateFretboardsForScaleChange === 'function') {
+                    const primaryScale = getPrimaryScale();
+                    const rootNote = getPrimaryRootNote();
+                    window.updateFretboardsForScaleChange({
+                        primaryScale: primaryScale,
+                        rootNote: rootNote
+                    });
+                }
+            }
+        });
+        
+        // Add hover effects
+        newNextScaleBtn.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = '#666';
+        });
+        newNextScaleBtn.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '#444';
+        });
+    }
+    
+    if (prevRootBtn) {
+        // Remove existing listeners to avoid duplicates
+        prevRootBtn.replaceWith(prevRootBtn.cloneNode(true));
+        const newPrevRootBtn = document.getElementById('prevRootBtn');
+        
+        newPrevRootBtn.addEventListener('click', function() {
+            if (navigateToPreviousRootNote()) {
+                // Root note changed, trigger any necessary updates
+                refreshChordsForRootNote();
+                if (typeof window.updateFretboardsForScaleChange === 'function') {
+                    const primaryScale = getPrimaryScale();
+                    const rootNote = getPrimaryRootNote();
+                    window.updateFretboardsForScaleChange({
+                        primaryScale: primaryScale,
+                        rootNote: rootNote
+                    });
+                }
+            }
+        });
+        
+        // Add hover effects
+        newPrevRootBtn.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = '#666';
+        });
+        newPrevRootBtn.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '#444';
+        });
+    }
+    
+    if (nextRootBtn) {
+        // Remove existing listeners to avoid duplicates
+        nextRootBtn.replaceWith(nextRootBtn.cloneNode(true));
+        const newNextRootBtn = document.getElementById('nextRootBtn');
+        
+        newNextRootBtn.addEventListener('click', function() {
+            if (navigateToNextRootNote()) {
+                // Root note changed, trigger any necessary updates
+                refreshChordsForRootNote();
+                if (typeof window.updateFretboardsForScaleChange === 'function') {
+                    const primaryScale = getPrimaryScale();
+                    const rootNote = getPrimaryRootNote();
+                    window.updateFretboardsForScaleChange({
+                        primaryScale: primaryScale,
+                        rootNote: rootNote
+                    });
+                }
+            }
+        });
+        
+        // Add hover effects
+        newNextRootBtn.addEventListener('mouseenter', function() {
+            this.style.backgroundColor = '#666';
+        });
+        newNextRootBtn.addEventListener('mouseleave', function() {
+            this.style.backgroundColor = '#444';
+        });
+    }
+}
+
 // Initialize navigation buttons when the module loads
 initializeNavigationButtons();
 
@@ -1774,6 +1901,7 @@ export {
     getAllSelectedScaleChords,
     refreshChordsForRootNote,
     initializeNavigationButtons,
+    initializeNavigationButtonsDirect,
     setPrimaryRootNote,
     setPrimaryScale
 }

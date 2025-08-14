@@ -44,7 +44,7 @@ const Select = styled.select`
 const ThemeSelector = ({ showLabel = true, className = '' }) => {
     const { theme, setTheme, themes } = useTheme();
 
-    return (
+    return null; (
         <ThemeSelectorContainer className={className}>
             {showLabel && <Label>Theme:</Label>}
             <Select 

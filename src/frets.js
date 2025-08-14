@@ -3032,7 +3032,7 @@ function createFretboardControls(fretboard) {
     // controlsContainer.appendChild(demoLineButton);
     
     // Insert controls before the fretboard
-    fretboard.container.insertBefore(controlsContainer, fretboard.fretboardElement);
+    // fretboard.container.insertBefore(controlsContainer, fretboard.fretboardElement);
     
     // Add chord progression builder
     const progressionContainer = createChordProgressionUI(fretboard);

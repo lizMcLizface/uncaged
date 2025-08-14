@@ -1746,7 +1746,7 @@ h3 {
   }
 
   /* Compact header for mobile */
-  .selectionContainer {
+  /* .selectionContainer {
     flex-direction: row !important;
     max-height: 50px !important;
     padding: 2px !important;
@@ -1769,7 +1769,7 @@ h3 {
     font-size: 14px !important;
     margin: 0 !important;
     white-space: nowrap !important;
-  }
+  } */
 
   /* Cross reference mobile */
   .cross-reference-container {

@@ -35,6 +35,36 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Expose App functions globally for progression builder
+  React.useEffect(() => {
+    window.App = {
+      getShowPolySynth: () => showPolySynth,
+      toggleShowPolySynth: () => setShowPolySynth(!showPolySynth),
+      getPolySynthEnabled: () => polySynthEnabled,
+      setPolySynthEnabled: (enabled) => setPolySynthEnabled(enabled)
+    };
+  }, [showPolySynth, polySynthEnabled]);
+
+  // Add escape key listener to close synth
+  React.useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && showPolySynth) {
+        setShowPolySynth(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showPolySynth]);
+
+  // Handle clicking outside synth to close it
+  const handleSynthOverlayClick = (event) => {
+    // Only close if clicking the overlay background, not the synth content
+    if (event.target === event.currentTarget) {
+      setShowPolySynth(false);
+    }
+  };
+
   return (
     <ThemeProvider theme={themes[theme]}>
       <GlobalStyles />
@@ -43,51 +73,58 @@ function App() {
       <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 1000 }}>
         <ThemeSelector />
       </div>
-      <div style={{ position: 'absolute', top: '20px', left: '20px', zIndex: 1000 }}>
-        <button
-          onClick={() => setShowPolySynth(!showPolySynth)}
-          style={{
-            padding: '10px 15px',
-            backgroundColor: showPolySynth ? '#4CAF50' : '#333',
+      {/* Always render PolySynth overlay but control visibility */}
+      <div 
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: showPolySynth ? 'rgba(0, 0, 0, 0.5)' : 'transparent',
+          zIndex: showPolySynth ? 998 : -1,
+          display: showPolySynth ? 'flex' : 'none',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          pointerEvents: showPolySynth ? 'auto' : 'none'
+        }}
+        onClick={handleSynthOverlayClick}
+      >
+        <div style={{
+          width: '90%',
+          height: '90%',
+          backgroundColor: '#1e1e1e',
+          border: '1px solid #666',
+          borderRadius: '10px',
+          overflow: 'auto',
+          position: 'relative'
+        }}>
+          <div style={{ 
+            position: 'absolute', 
+            top: '10px', 
+            right: '10px', 
+            zIndex: 999,
             color: 'white',
-            border: '1px solid #666',
-            borderRadius: '5px',
+            fontSize: '24px',
             cursor: 'pointer',
-            fontSize: '14px',
-            transition: 'background-color 0.3s'
+            background: 'rgba(0,0,0,0.5)',
+            borderRadius: '50%',
+            width: '30px',
+            height: '30px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
           }}
-        >
-          {showPolySynth ? 'Hide' : 'Show'} Synth
-        </button>
-        {showPolySynth && (
-          <div style={{ marginTop: '10px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', color: 'white', fontSize: '14px' }}>
-              <input
-                type="checkbox"
-                checked={polySynthEnabled}
-                onChange={(e) => setPolySynthEnabled(e.target.checked)}
-                style={{ marginRight: '8px' }}
-              />
-              Enable Chord Triggering
-            </label>
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowPolySynth(false);
+          }}
+          >
+            ×
           </div>
-        )}
-      </div>
-      {/* Always render PolySynth, but control visibility */}
-      <div style={{
-        position: 'fixed',
-        top: '80px',
-        left: '20px',
-        right: '20px',
-        bottom: '20px',
-        backgroundColor: '#1e1e1e',
-        border: '1px solid #666',
-        borderRadius: '10px',
-        zIndex: 999,
-        overflow: 'auto',
-        display: showPolySynth ? 'block' : 'none'
-      }}>
-        <PolySynthWrapper ref={polySynthRef} />
+          <PolySynthWrapper ref={polySynthRef} />
+        </div>
       </div>
     </ThemeProvider>
   );

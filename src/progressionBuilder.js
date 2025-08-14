@@ -1,11 +1,97 @@
 import { processChord, identifySyntheticChords } from './intervals';
 import { HeptatonicScales, getScaleNotes } from './scales';
-import { getPrimaryScale, getPrimaryRootNote, setPrimaryRootNote, setPrimaryScale } from './scaleGenerator';
+import { getPrimaryScale, getPrimaryRootNote, setPrimaryRootNote, setPrimaryScale, initializeNavigationButtonsDirect } from './scaleGenerator';
 import { noteToMidi, noteToName } from './midi';
 import {
     stripOctave as notationStripOctave
 } from './notation';
 import { createChordPiano, createMixedPiano } from './components/MiniPiano/MiniPiano';
+
+/**
+ * Process a chord to get the actual notes based on selected pattern
+ * @param {Object} chord - Chord data containing chordInfo with notes
+ * @param {number} index - Index of chord in progression
+ * @returns {Array} Array of processed note strings with octaves
+ */
+function getProcessedChordNotes(chord, index) {
+    if (!chord.chordInfo || !chord.chordInfo.notes) {
+        return [];
+    }
+
+    let chordNotes = [];
+    
+    // Get the available patterns for this chord
+    const patterns = getChordPatternMatches(chord);
+    
+    // Try to get fret-specific notes from selected pattern first
+    // Default to pattern index 0 if no pattern is explicitly selected
+    const selectedPatternIndex = selectedPatternIndexes.get(index) ?? 0;
+    
+    if (patterns && patterns[selectedPatternIndex]) {
+        const selectedPattern = patterns[selectedPatternIndex];
+        
+        if (selectedPattern.positions && selectedPattern.positions.length > 0) {
+            // Use guitar string tuning (standard tuning from low to high)
+            const stringTuning = ['E', 'A', 'D', 'G', 'B', 'E']; // Low to High
+            
+            // Calculate specific notes from fret positions
+            chordNotes = selectedPattern.positions.map(pos => {
+                // Use direct indexing since pattern data is 0-based (0=low E, 5=high E)
+                const tuningIndex = 5 - pos.string;
+
+                if (tuningIndex < 0 || tuningIndex >= stringTuning.length) {
+                    console.warn(`⚠️ Invalid string number ${pos.string} - expected 0-${stringTuning.length - 1}`);
+                    return null;
+                }
+                
+                const stringNote = stringTuning[tuningIndex];
+                
+                if (!stringNote) {
+                    console.warn(`⚠️ Could not find tuning for string ${pos.string} at index ${tuningIndex}`);
+                    return null;
+                }
+                
+                const noteAtFret = getNote(stringNote, pos.fret);
+                
+                // Check if getNote returned a valid result
+                if (!noteAtFret) {
+                    console.warn(`⚠️ getNote returned undefined for string ${pos.string} (${stringNote}) fret ${pos.fret}`);
+                    return null;
+                }
+                
+                // Add octave information based on string and fret  
+                const octave = getOctaveForStringAndFret(5 - pos.string, pos.fret);
+                const convertedNote = convertNoteForPolySynth(noteAtFret, octave);
+                return convertedNote;
+            }).filter(note => note !== null); // Remove any failed conversions
+        }
+    }
+    
+    // Fallback to chord theory notes if no pattern-specific notes
+    if (chordNotes.length === 0 && chord.chordInfo && chord.chordInfo.notes) {
+        chordNotes = chord.chordInfo.notes.map(note => {
+            const cleanNote = notationStripOctave(note);
+            return convertNoteForPolySynth(cleanNote, 4); // Use octave 4 as default
+        });
+    }
+    
+    return chordNotes;
+}
+
+/**
+ * Get processed progression data with actual chord notes for sequencer
+ * @returns {Array} Array of processed chord data with actual notes
+ */
+function getProcessedProgression() {
+    return currentProgression.map((chord, index) => {
+        const processedNotes = getProcessedChordNotes(chord, index);
+        return {
+            ...chord,
+            processedNotes: processedNotes,
+            displayName: getChordDisplayName(chord, index)
+        };
+    });
+}
 
 /**
  * Convert note name to format expected by PolySynth
@@ -14,6 +100,10 @@ import { createChordPiano, createMixedPiano } from './components/MiniPiano/MiniP
  * @returns {string} Formatted note like "C4", "F#4", "Bb4"
  */
 function convertNoteForPolySynth(noteName, octave = 4) {
+    if (!noteName || typeof noteName !== 'string') {
+        console.warn('⚠️ convertNoteForPolySynth received invalid noteName:', noteName);
+        return 'C4'; // Fallback to C4
+    }
     return noteName.replace('/', '') + octave;
 }
 
@@ -23,28 +113,47 @@ function convertNoteForPolySynth(noteName, octave = 4) {
  * @param {number} index - Index of chord in progression
  */
 function triggerChordProgression(chord, index) {
-    if (!window.polySynthRef || !chord.chordInfo || !chord.chordInfo.notes) {
-        console.warn('PolySynth not available or chord has no notes');
+    if (!window.polySynthRef) {
+        console.warn('PolySynth not available');
         return;
     }
 
     try {
-        // Convert chord notes to PolySynth format
-        const chordNotes = chord.chordInfo.notes.map(note => {
-            const cleanNote = notationStripOctave(note);
-            return convertNoteForPolySynth(cleanNote, 4); // Use octave 4 as default
-        });
+        // Use the centralized function to get processed chord notes
+        const chordNotes = getProcessedChordNotes(chord, index);
+        
+        if (chordNotes.length === 0) {
+            console.warn('No notes available for chord');
+            return;
+        }
 
         console.log(`Triggering chord ${index}: ${getChordDisplayName(chord, index)}`, chordNotes);
+
+        // Check if progression sequencer is running
+        let sequencerState = null;
+        if (window.polySynthRef.getProgressionSequencerState) {
+            sequencerState = window.polySynthRef.getProgressionSequencerState();
+        }
+
+        // If sequencer is running, this is a timed/sequenced playback
+        const isSequencedPlayback = sequencerState && sequencerState.playing;
 
         // Stop any currently playing notes
         if (window.polySynthRef.stopAllNotes) {
             window.polySynthRef.stopAllNotes();
         }
 
-        // Trigger the chord notes with 250ms duration
+        // Trigger the chord notes with appropriate duration
         if (window.polySynthRef.playNotes) {
-            window.polySynthRef.playNotes(chordNotes, 70, 250); // 70% velocity, 250ms duration
+            if (isSequencedPlayback) {
+                // Use the sequencer's duration setting (already converted to ms in the sequencer)
+                const duration = getDurationInMs(sequencerState.duration);
+                window.polySynthRef.playNotes(chordNotes, 70, duration);
+            } else {
+                // Direct click - play for one beat (quarter note duration)
+                const oneBeatDuration = getOneBeatDuration();
+                window.polySynthRef.playNotes(chordNotes, 70, oneBeatDuration);
+            }
         } else if (window.polySynthRef.triggerChord) {
             window.polySynthRef.triggerChord(chordNotes);
         } else {
@@ -53,6 +162,39 @@ function triggerChordProgression(chord, index) {
 
     } catch (error) {
         console.error('Error triggering chord progression:', error);
+    }
+}
+
+// Helper function to calculate one beat duration in milliseconds
+function getOneBeatDuration() {
+    try {
+        // Get BPM from the metronome or default to 120
+        const bpmSlider = document.querySelector('#bpmSlider');
+        const bpm = bpmSlider ? Number(bpmSlider.value) : 120;
+        return (60 / bpm) * 1000; // Quarter note duration in ms
+    } catch (error) {
+        console.warn('Could not get BPM, using default duration');
+        return 500; // Default 500ms (120 BPM quarter note)
+    }
+}
+
+// Helper function to convert duration string to milliseconds (matching PolySynth pattern)
+function getDurationInMs(durationString) {
+    try {
+        const bpmSlider = document.querySelector('#bpmSlider');
+        const bpm = bpmSlider ? Number(bpmSlider.value) : 120;
+        const msPerBeat = (60 / bpm) * 1000; // Quarter note duration in ms
+        
+        switch (durationString) {
+            case 'whole': return msPerBeat * 4;
+            case 'half': return msPerBeat * 2;
+            case 'quarter': return msPerBeat;
+            case 'eighth': return msPerBeat / 2;
+            case 'sixteenth': return msPerBeat / 4;
+            default: return msPerBeat; // Default to quarter note
+        }
+    } catch (error) {
+        return 500; // Fallback duration
     }
 }
 
@@ -96,6 +238,9 @@ function getFretboardForProgression() {
 
 // Global state for chord progression
 let currentProgression = [];
+
+// Expose current progression globally for PolySynth access
+window.currentProgression = currentProgression;
 let hoveredChordIndex = null;
 let selectedPatternIndexes = new Map(); // Map of chord index to selected pattern index
 let showMiniFretboards = false; // Global toggle for mini fretboard visualization
@@ -967,6 +1112,12 @@ function createChordProgressionUI(fretboard) {
     const displaySection = createProgressionDisplaySection();
     progressionContainer.appendChild(displaySection);
     
+    // Reinitialize navigation buttons since we've created new root and scale buttons
+    // Use setTimeout to ensure DOM is ready
+    setTimeout(() => {
+        initializeNavigationButtonsDirect();
+    }, 100);
+    
     return progressionContainer;
 }
 
@@ -1093,17 +1244,195 @@ function createInputSection() {
         margin-bottom: 20px;
     `;
     
+    // Create input label container with flex layout
+    const labelContainer = document.createElement('div');
+    labelContainer.style.cssText = `
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+        flex-wrap: wrap;
+        gap: 12px;
+    `;
+    
     // Create input label
     const label = document.createElement('label');
     label.textContent = 'Enter Chord Progression:';
     label.style.cssText = `
-        display: block;
-        margin-bottom: 8px;
+        color: #fff;
+        font-weight: bold;
+        font-size: 14px;
+        margin: 0;
+    `;
+    labelContainer.appendChild(label);
+    
+    // Create controls container for both root and scale
+    const controlsContainer = document.createElement('div');
+    controlsContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+    `;
+    
+    // Create root controls container
+    const rootControlsContainer = document.createElement('div');
+    rootControlsContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    // Create root label
+    const rootLabel = document.createElement('span');
+    rootLabel.textContent = 'Root:';
+    rootLabel.style.cssText = `
         color: #fff;
         font-weight: bold;
         font-size: 14px;
     `;
-    section.appendChild(label);
+    rootControlsContainer.appendChild(rootLabel);
+    
+    // Create previous root button
+    const prevRootBtn = document.createElement('button');
+    prevRootBtn.id = 'prevRootBtn';
+    prevRootBtn.textContent = '‹';
+    prevRootBtn.title = 'Previous Root (, key)';
+    prevRootBtn.style.cssText = `
+        background: linear-gradient(145deg, #555, #333);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        font-size: 18px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        transition: all 0.2s ease;
+    `;
+    rootControlsContainer.appendChild(prevRootBtn);
+    
+    // Create current root display
+    const currentRootNode = document.createElement('div');
+    currentRootNode.id = 'currentRootNode';
+    currentRootNode.textContent = 'C';
+    currentRootNode.style.cssText = `
+        display: inline-block;
+        font-weight: bold;
+        min-width: 40px;
+        text-align: center;
+        color: #fff;
+        background: rgba(0,0,0,0.3);
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid #666;
+    `;
+    rootControlsContainer.appendChild(currentRootNode);
+    
+    // Create next root button
+    const nextRootBtn = document.createElement('button');
+    nextRootBtn.id = 'nextRootBtn';
+    nextRootBtn.textContent = '›';
+    nextRootBtn.title = 'Next Root (. key)';
+    nextRootBtn.style.cssText = `
+        background: linear-gradient(145deg, #555, #333);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        font-size: 18px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        transition: all 0.2s ease;
+    `;
+    rootControlsContainer.appendChild(nextRootBtn);
+    
+    controlsContainer.appendChild(rootControlsContainer);
+    
+    // Create scale controls container
+    const scaleControlsContainer = document.createElement('div');
+    scaleControlsContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        background: rgba(255,255,255,0.05);
+        border-radius: 8px;
+    `;
+    
+    // Create scale label
+    const scaleLabel = document.createElement('span');
+    scaleLabel.textContent = 'Scale:';
+    scaleLabel.style.cssText = `
+        color: #fff;
+        font-weight: bold;
+        font-size: 14px;
+    `;
+    scaleControlsContainer.appendChild(scaleLabel);
+    
+    // Create previous scale button
+    const prevScaleBtn = document.createElement('button');
+    prevScaleBtn.id = 'prevScaleBtn';
+    prevScaleBtn.textContent = '‹';
+    prevScaleBtn.title = 'Previous Scale (N key)';
+    prevScaleBtn.style.cssText = `
+        background: linear-gradient(145deg, #555, #333);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        font-size: 18px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        transition: all 0.2s ease;
+    `;
+    scaleControlsContainer.appendChild(prevScaleBtn);
+    
+    // Create current scale display
+    const currentScaleNode = document.createElement('div');
+    currentScaleNode.id = 'currentScaleNode';
+    currentScaleNode.textContent = 'C Major';
+    currentScaleNode.style.cssText = `
+        display: inline-block;
+        font-weight: bold;
+        min-width: 100px;
+        text-align: center;
+        color: #fff;
+        background: rgba(0,0,0,0.3);
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: 1px solid #666;
+    `;
+    scaleControlsContainer.appendChild(currentScaleNode);
+    
+    // Create next scale button
+    const nextScaleBtn = document.createElement('button');
+    nextScaleBtn.id = 'nextScaleBtn';
+    nextScaleBtn.textContent = '›';
+    nextScaleBtn.title = 'Next Scale (M key)';
+    nextScaleBtn.style.cssText = `
+        background: linear-gradient(145deg, #555, #333);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        cursor: pointer;
+        font-size: 18px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        transition: all 0.2s ease;
+    `;
+    scaleControlsContainer.appendChild(nextScaleBtn);
+    
+    controlsContainer.appendChild(scaleControlsContainer);
+    labelContainer.appendChild(controlsContainer);
+    section.appendChild(labelContainer);
     
     // Create help text
     const helpText = document.createElement('div');
@@ -1132,9 +1461,32 @@ function createInputSection() {
         margin-bottom: 10px;
     `;
     
-    // Add input event listener with debouncing
+    // Add input event listener with debouncing and playback blocking
     input.addEventListener('input', (e) => {
+        // Check if progression is currently playing
+        if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+            const state = window.polySynthRef.getProgressionSequencerState();
+            if (state && state.playing) {
+                // Block text changes during playback to prevent confusion
+                console.log('🚫 Blocking text changes during progression playback');
+                e.preventDefault();
+                e.stopPropagation();
+                e.target.value = lastProgressionText || '';
+                
+                // Add visual feedback
+                e.target.style.borderColor = '#ff6b6b';
+                e.target.style.boxShadow = '0 0 5px rgba(255, 107, 107, 0.5)';
+                setTimeout(() => {
+                    e.target.style.borderColor = '';
+                    e.target.style.boxShadow = '';
+                }, 1000);
+                
+                return false;
+            }
+        }
+        
         const progressionText = e.target.value;
+        lastProgressionText = progressionText; // Update the stored value
         
         // Clear any existing timer
         if (inputDebounceTimer) {
@@ -1145,6 +1497,58 @@ function createInputSection() {
         inputDebounceTimer = setTimeout(() => {
             updateProgression(progressionText);
         }, INPUT_DEBOUNCE_DELAY);
+    });
+    
+    // Store the initial value for blocking changes during playback
+    let lastProgressionText = input.value;
+    
+    // Add keyboard shortcuts for better UX
+    input.addEventListener('keydown', (e) => {
+        // Check if progression is currently playing first
+        if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+            const state = window.polySynthRef.getProgressionSequencerState();
+            if (state && state.playing) {
+                // Allow Ctrl+A (select all) and navigation keys during playback
+                const allowedKeys = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', 'Tab'];
+                const isCtrlA = e.ctrlKey && e.key === 'a';
+                
+                if (!allowedKeys.includes(e.key) && !isCtrlA) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Visual feedback for blocked keypress
+                    input.style.borderColor = '#ff6b6b';
+                    input.style.boxShadow = '0 0 5px rgba(255, 107, 107, 0.5)';
+                    setTimeout(() => {
+                        input.style.borderColor = '';
+                        input.style.boxShadow = '';
+                    }, 300);
+                    
+                    return false;
+                }
+            }
+        }
+    });
+    
+    // Also block paste during playback
+    input.addEventListener('paste', (e) => {
+        if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+            const state = window.polySynthRef.getProgressionSequencerState();
+            if (state && state.playing) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Visual feedback
+                input.style.borderColor = '#ff6b6b';
+                input.style.boxShadow = '0 0 5px rgba(255, 107, 107, 0.5)';
+                setTimeout(() => {
+                    input.style.borderColor = '';
+                    input.style.boxShadow = '';
+                }, 300);
+                
+                return false;
+            }
+        }
     });
     
     section.appendChild(input);
@@ -1488,6 +1892,376 @@ function createProgressionControlsSection() {
         clearProgression();
     });
     
+    // Progression Sequencer Toggle Button
+    const progressionToggleButton = document.createElement('button');
+    progressionToggleButton.textContent = 'Loop Progression';
+    progressionToggleButton.id = 'progression-sequencer-toggle';
+    progressionToggleButton.style.cssText = `
+        padding: 8px 16px;
+        background: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: bold;
+        transition: background 0.2s;
+        margin-left: 8px;
+    `;
+    
+    let isProgressionLooping = false;
+    
+    const updateProgressionToggleButton = () => {
+        if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+            const state = window.polySynthRef.getProgressionSequencerState();
+            isProgressionLooping = state.playing;
+            progressionToggleButton.textContent = isProgressionLooping ? 'Stop Loop' : 'Loop Progression';
+            progressionToggleButton.style.background = isProgressionLooping ? '#dc3545' : '#6c757d';
+        }
+    };
+    
+    progressionToggleButton.addEventListener('mouseenter', () => {
+        if (!isProgressionLooping) {
+            progressionToggleButton.style.background = '#5a6268';
+        } else {
+            progressionToggleButton.style.background = '#c82333';
+        }
+    });
+    
+    progressionToggleButton.addEventListener('mouseleave', () => {
+        progressionToggleButton.style.background = isProgressionLooping ? '#dc3545' : '#6c757d';
+    });
+    
+    progressionToggleButton.addEventListener('click', () => {
+        if (!window.polySynthRef) {
+            console.warn('PolySynth not available');
+            return;
+        }
+        
+        if (!window.polySynthRef.toggleProgressionSequencer) {
+            console.warn('Progression sequencer not available');
+            return;
+        }
+        
+        if (currentProgression.length === 0) {
+            alert('Please create a progression first');
+            return;
+        }
+        
+        // Update the processed progression before toggling
+        window.processedProgression = getProcessedProgression();
+        console.log('Processed progression data:', window.processedProgression);
+        
+        // If the sequencer has a method to set the progression before starting, use it
+        if (window.polySynthRef.setProgressionData) {
+            window.polySynthRef.setProgressionData(window.processedProgression);
+        }
+        
+        window.polySynthRef.toggleProgressionSequencer();
+        
+        // Update button state after a brief delay
+        setTimeout(updateProgressionToggleButton, 100);
+    });
+    
+    // Update button state periodically
+    setInterval(updateProgressionToggleButton, 500);
+    
+    // Create synth controls container
+    const synthControlsContainer = document.createElement('div');
+    synthControlsContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-left: 8px;
+        flex-wrap: wrap;
+    `;
+
+    // Show Synth Button
+    const showSynthButton = document.createElement('button');
+    showSynthButton.textContent = 'Show Synth';
+    showSynthButton.style.cssText = `
+        padding: 8px 15px;
+        background: #333;
+        color: white;
+        border: 1px solid #666;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+        transition: background-color 0.3s;
+    `;
+
+    let showSynthState = false;
+    const updateSynthButtonState = () => {
+        if (window.App && window.App.getShowPolySynth) {
+            showSynthState = window.App.getShowPolySynth();
+            showSynthButton.textContent = showSynthState ? 'Hide Synth' : 'Show Synth';
+            showSynthButton.style.background = showSynthState ? '#4CAF50' : '#333';
+        }
+    };
+
+    showSynthButton.addEventListener('click', () => {
+        if (window.App && window.App.toggleShowPolySynth) {
+            window.App.toggleShowPolySynth();
+            setTimeout(updateSynthButtonState, 50);
+        }
+    });
+
+    // Rate Control
+    const rateLabel = document.createElement('label');
+    rateLabel.textContent = 'Rate: ';
+    rateLabel.style.cssText = `
+        color: var(--text-color);
+        font-size: 14px;
+        font-weight: bold;
+    `;
+
+    const rateSelect = document.createElement('select');
+    rateSelect.style.cssText = `
+        padding: 4px 8px;
+        background: var(--bg-color);
+        color: var(--text-color);
+        border: 1px solid #666;
+        border-radius: 4px;
+        font-size: 14px;
+    `;
+
+    const rateOptions = [
+        { value: -2, label: 'Sixteenth' },
+        { value: -1, label: 'Eighth' },
+        { value: 0, label: 'Quarter' },
+        { value: 1, label: 'Half' },
+        { value: 2, label: 'Whole' }
+    ];
+
+    rateOptions.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option.value;
+        optionElement.textContent = option.label;
+        if (option.value === 0) optionElement.selected = true; // Default to quarter note
+        rateSelect.appendChild(optionElement);
+    });
+
+    rateSelect.addEventListener('change', () => {
+        userChangingRate = true;
+        const rate = parseInt(rateSelect.value);
+        
+        // Add visual feedback for the change
+        rateSelect.style.borderColor = '#4CAF50';
+        rateSelect.style.boxShadow = '0 0 5px rgba(76, 175, 80, 0.5)';
+        
+        console.log('Rate changed to:', rate);
+        console.log('PolySynth ref available:', !!window.polySynthRef);
+        console.log('setProgressionRate method available:', !!(window.polySynthRef && window.polySynthRef.setProgressionRate));
+        
+        if (window.polySynthRef && window.polySynthRef.setProgressionRate) {
+            window.polySynthRef.setProgressionRate(rate);
+            console.log('Setting progression rate to:', rate);
+            
+            // Verify the change took effect
+            setTimeout(() => {
+                if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+                    const state = window.polySynthRef.getProgressionSequencerState();
+                    console.log('Current progression state after rate change:', state);
+                }
+                userChangingRate = false; // Reset flag after change is complete
+                
+                // Reset visual feedback
+                rateSelect.style.borderColor = '';
+                rateSelect.style.boxShadow = '';
+            }, 100);
+        } else {
+            console.warn('PolySynth ref or setProgressionRate method not available');
+            userChangingRate = false;
+            
+            // Reset visual feedback
+            rateSelect.style.borderColor = '';
+            rateSelect.style.boxShadow = '';
+        }
+    });
+
+    // Function to update rate control from PolySynth state
+    let lastKnownRate = 0;
+    let userChangingRate = false;
+    const updateRateControl = () => {
+        // Don't override if user is currently interacting with the control
+        if (userChangingRate || document.activeElement === rateSelect) {
+            return;
+        }
+        
+        if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+            const state = window.polySynthRef.getProgressionSequencerState();
+            // Convert duration string back to integer
+            const rateValue = state.rate === 'sixteenth' ? -2 :
+                             state.rate === 'eighth' ? -1 :
+                             state.rate === 'quarter' ? 0 :
+                             state.rate === 'half' ? 1 :
+                             state.rate === 'whole' ? 2 : 0;
+            
+            // Only update if the value actually changed and user isn't currently selecting
+            if (rateValue !== lastKnownRate && parseInt(rateSelect.value) !== rateValue) {
+                lastKnownRate = rateValue;
+                rateSelect.value = rateValue;
+            }
+        }
+    };
+
+    // Duration Control
+    const durationLabel = document.createElement('label');
+    durationLabel.textContent = 'Duration: ';
+    durationLabel.style.cssText = `
+        color: var(--text-color);
+        font-size: 14px;
+        font-weight: bold;
+        margin-left: 8px;
+    `;
+
+    const durationSelect = document.createElement('select');
+    durationSelect.style.cssText = `
+        padding: 4px 8px;
+        background: var(--bg-color);
+        color: var(--text-color);
+        border: 1px solid #666;
+        border-radius: 4px;
+        font-size: 14px;
+    `;
+
+    const durationOptions = [
+        { value: -2, label: 'Sixteenth' },
+        { value: -1, label: 'Eighth' },
+        { value: 0, label: 'Quarter' },
+        { value: 1, label: 'Half' },
+        { value: 2, label: 'Whole' }
+    ];
+
+    durationOptions.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option.value;
+        optionElement.textContent = option.label;
+        if (option.value === 0) optionElement.selected = true; // Default to quarter note
+        durationSelect.appendChild(optionElement);
+    });
+
+    // Function to update duration control from PolySynth state
+    let lastKnownDuration = 0;
+    let userChangingDuration = false;
+    
+    durationSelect.addEventListener('change', () => {
+        userChangingDuration = true;
+        const duration = parseInt(durationSelect.value);
+        
+        // Add visual feedback for the change
+        durationSelect.style.borderColor = '#4CAF50';
+        durationSelect.style.boxShadow = '0 0 5px rgba(76, 175, 80, 0.5)';
+        
+        console.log('Duration changed to:', duration);
+        console.log('PolySynth ref available:', !!window.polySynthRef);
+        console.log('setProgressionDuration method available:', !!(window.polySynthRef && window.polySynthRef.setProgressionDuration));
+        
+        if (window.polySynthRef && window.polySynthRef.setProgressionDuration) {
+            window.polySynthRef.setProgressionDuration(duration);
+            console.log('Setting progression duration to:', duration);
+            
+            // Verify the change took effect
+            setTimeout(() => {
+                if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+                    const state = window.polySynthRef.getProgressionSequencerState();
+                    console.log('Current progression state after duration change:', state);
+                }
+                userChangingDuration = false; // Reset flag after change is complete
+                
+                // Reset visual feedback
+                durationSelect.style.borderColor = '';
+                durationSelect.style.boxShadow = '';
+            }, 100);
+        } else {
+            console.warn('PolySynth ref or setProgressionDuration method not available');
+            userChangingDuration = false;
+            
+            // Reset visual feedback
+            durationSelect.style.borderColor = '';
+            durationSelect.style.boxShadow = '';
+        }
+    });
+    
+    const updateDurationControl = () => {
+        // Don't override if user is currently interacting with the control
+        if (userChangingDuration || document.activeElement === durationSelect) {
+            return;
+        }
+        
+        if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+            const state = window.polySynthRef.getProgressionSequencerState();
+            // Convert duration string back to integer
+            const durationValue = state.duration === 'sixteenth' ? -2 :
+                                 state.duration === 'eighth' ? -1 :
+                                 state.duration === 'quarter' ? 0 :
+                                 state.duration === 'half' ? 1 :
+                                 state.duration === 'whole' ? 2 : 0;
+            
+            // Only update if the value actually changed and user isn't currently selecting
+            if (durationValue !== lastKnownDuration && parseInt(durationSelect.value) !== durationValue) {
+                lastKnownDuration = durationValue;
+                durationSelect.value = durationValue;
+            }
+        }
+    };
+
+    // Enable Chord Triggering Checkbox
+    const chordTriggeringLabel = document.createElement('label');
+    chordTriggeringLabel.style.cssText = `
+        display: flex;
+        align-items: center;
+        color: var(--text-color);
+        font-size: 14px;
+        font-weight: bold;
+        margin-left: 12px;
+        cursor: pointer;
+    `;
+
+    const chordTriggeringCheckbox = document.createElement('input');
+    chordTriggeringCheckbox.type = 'checkbox';
+    chordTriggeringCheckbox.checked = true; // Default to enabled
+    chordTriggeringCheckbox.style.cssText = `
+        margin-right: 6px;
+        cursor: pointer;
+    `;
+
+    const chordTriggeringText = document.createElement('span');
+    chordTriggeringText.textContent = 'Enable Chord Triggering';
+
+    const updateChordTriggeringState = () => {
+        if (window.App && window.App.getPolySynthEnabled) {
+            chordTriggeringCheckbox.checked = window.App.getPolySynthEnabled();
+        }
+    };
+
+    chordTriggeringCheckbox.addEventListener('change', () => {
+        if (window.App && window.App.setPolySynthEnabled) {
+            window.App.setPolySynthEnabled(chordTriggeringCheckbox.checked);
+        }
+    });
+
+    chordTriggeringLabel.appendChild(chordTriggeringCheckbox);
+    chordTriggeringLabel.appendChild(chordTriggeringText);
+
+    // Add elements to synth controls container
+    synthControlsContainer.appendChild(showSynthButton);
+    synthControlsContainer.appendChild(rateLabel);
+    synthControlsContainer.appendChild(rateSelect);
+    synthControlsContainer.appendChild(durationLabel);
+    synthControlsContainer.appendChild(durationSelect);
+    synthControlsContainer.appendChild(chordTriggeringLabel);
+
+    // Update states periodically (less frequent for rate/duration to avoid overriding user input)
+    setInterval(updateSynthButtonState, 500);
+    setInterval(updateChordTriggeringState, 500);
+    
+    // Initial sync for rate/duration controls, then only when progression state changes
+    setTimeout(() => {
+        updateRateControl();
+        updateDurationControl();
+    }, 1000);
+
     section.appendChild(scaleToggleContainer);
     section.appendChild(miniFretboardToggleContainer);
     section.appendChild(miniPianoToggleContainer);
@@ -1495,6 +2269,8 @@ function createProgressionControlsSection() {
     section.appendChild(presetsContainer);
     section.appendChild(shareButton);
     section.appendChild(clearButton);
+    section.appendChild(progressionToggleButton);
+    section.appendChild(synthControlsContainer);
     
     return section;
 }
@@ -1544,6 +2320,20 @@ function updateProgression(progressionText) {
     hoveredChordIndex = null;
     
     currentProgression = resolvedProgression;
+    window.currentProgression = currentProgression; // Update global reference
+    
+    // Also provide processed progression for sequencer
+    window.processedProgression = getProcessedProgression();
+    
+    // If progression sequencer is currently playing, update it with new progression
+    if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+        const state = window.polySynthRef.getProgressionSequencerState();
+        if (state.playing && window.polySynthRef.updateProgressionSettings) {
+            const processedProgression = getProcessedProgression();
+            window.polySynthRef.updateProgressionSettings(processedProgression);
+            console.log('🔄 Updated playing progression with', processedProgression.length, 'chords (with processed notes)');
+        }
+    }
     
     // Precompute pattern data for all chords to optimize hover performance
     precomputeAllPatternData();
@@ -1581,8 +2371,9 @@ function precomputeAllPatternData() {
 
 /**
  * Update the visual display of the progression
+ * @param {number} currentChordIndex - Index of currently playing chord (optional)
  */
-function updateProgressionDisplay() {
+function updateProgressionDisplay(currentChordIndex = -1) {
     const displaySection = document.getElementById('progression-display-section');
     if (!displaySection) return;
     
@@ -1612,11 +2403,62 @@ function updateProgressionDisplay() {
     
     currentProgression.forEach((chord, index) => {
         const chordElement = createChordElement(chord, index);
+        
+        // Highlight current chord if specified (without scaling to avoid UI shifts)
+        if (index === currentChordIndex) {
+            chordElement.style.boxShadow = '0 0 15px #4CAF50';
+            chordElement.style.background = 'linear-gradient(135deg, rgba(76, 175, 80, 0.3), rgba(76, 175, 80, 0.1))';
+            chordElement.style.border = '2px solid #4CAF50';
+            chordElement.style.transition = 'all 0.3s ease';
+        }
+        // Note: Default border is already set in createChordElement, no need to override it here
+        
         chordList.appendChild(chordElement);
     });
     
     displaySection.appendChild(chordList);
 }
+
+/**
+ * Highlight the currently playing chord in the progression display
+ * @param {number} chordIndex - Index of the chord to highlight
+ */
+function highlightCurrentChord(chordIndex) {
+    // Remove previous highlighting but preserve original borders
+    const chordElements = document.querySelectorAll('.chord-element');
+    chordElements.forEach((element, idx) => {
+        element.style.boxShadow = '';
+        element.style.background = '';
+        element.style.transform = '';
+        
+        // Restore original border based on chord status
+        const chord = currentProgression[idx];
+        if (chord) {
+            let borderColor = '#666'; // Default
+            if (chord.isInvalid) {
+                borderColor = '#ff4444'; // Red for invalid chords
+            } else if (chord.isFallback) {
+                borderColor = '#ffaa00'; // Orange for fallback resolution
+            }
+            element.style.border = `2px solid ${borderColor}`;
+        } else {
+            // Fallback to default border
+            element.style.border = '2px solid #666';
+        }
+    });
+    
+    // Add highlighting to current chord (without scaling to avoid UI shifts)
+    if (chordIndex >= 0 && chordIndex < chordElements.length) {
+        const currentElement = chordElements[chordIndex];
+        currentElement.style.boxShadow = '0 0 15px #4CAF50';
+        currentElement.style.background = 'linear-gradient(135deg, rgba(76, 175, 80, 0.3), rgba(76, 175, 80, 0.1))';
+        currentElement.style.border = '2px solid #4CAF50';
+        currentElement.style.transition = 'all 0.3s ease';
+    }
+}
+
+// Make highlightCurrentChord globally accessible
+window.highlightCurrentChord = highlightCurrentChord;
 
 /**
  * Create a mini fretboard visualization for a chord pattern
@@ -1830,6 +2672,46 @@ function getNote(openString, fret) {
     // Calculate the note at the given fret
     const noteIndex = (startIndex + fret) % 12;
     return chromaticScale[noteIndex];
+}
+
+/**
+ * Helper function to calculate octave based on guitar string and fret position
+ * @param {number} stringNumber - Guitar string (0=low E, 5=high E)
+ * @param {number} fret - Fret number
+ * @returns {number} Octave number for synthesis
+ */
+function getOctaveForStringAndFret(stringNumber, fret) {
+    // Standard guitar tuning with base octaves and chromatic positions:
+    // String 0 (low E): E2,  String 1 (A): A2,  String 2 (D): D3
+    // String 3 (G): G3,      String 4 (B): B3,  String 5 (high E): E4
+    let baseOctave;
+    let openStringChromaticPosition;
+    
+    if (stringNumber >= 0 && stringNumber <= 5) {
+        // 0-based: 0=low E, 5=high E
+        const baseOctaves = [2, 2, 3, 3, 3, 4]; // Index matches string number directly
+        // Chromatic positions (0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B)
+        const openStringPositions = [4, 9, 2, 7, 11, 4]; // E, A, D, G, B, E
+        
+        baseOctave = baseOctaves[stringNumber];
+        openStringChromaticPosition = openStringPositions[stringNumber];
+    } else {
+        console.warn(`⚠️ Invalid string number ${stringNumber} in getOctaveForStringAndFret - expected 0-5`);
+        baseOctave = 3; // Default fallback
+        openStringChromaticPosition = 0; // Default to C
+    }
+    
+    // Calculate the total semitones from the open string
+    const totalSemitones = fret;
+    
+    // Calculate the final chromatic position
+    const finalChromaticPosition = (openStringChromaticPosition + totalSemitones) % 12;
+    
+    // Calculate how many complete octaves we've moved up
+    // We need to account for wrapping around the chromatic scale
+    const additionalOctaves = Math.floor((openStringChromaticPosition + totalSemitones) / 12);
+    
+    return baseOctave + additionalOctaves;
 }
 
 /**
@@ -2230,13 +3112,21 @@ function createPatternSelector(chord, index) {
     });
     
     // Set initial selection
-    const initialSelection = selectedPatternIndexes.get(index) || 0;
+    const initialSelection = selectedPatternIndexes.get(index) ?? 0;
     select.value = initialSelection;
+    
+    // Ensure the initial selection is stored in the map if not already present
+    if (!selectedPatternIndexes.has(index)) {
+        selectedPatternIndexes.set(index, initialSelection);
+    }
 
     // Add change event listener with improved highlighting
     select.addEventListener('change', (e) => {
         const patternIndex = parseInt(e.target.value);
         selectedPatternIndexes.set(index, patternIndex);
+        
+        console.log(`🎯 Pattern selected for chord ${index}: pattern ${patternIndex} (${patterns[patternIndex]?.name || 'Unknown'})`);
+        console.log('Updated selectedPatternIndexes Map:', selectedPatternIndexes);
         
         // Invalidate cached pattern data to force display name update
         precomputedPatternData.delete(index);
@@ -2249,6 +3139,18 @@ function createPatternSelector(chord, index) {
         
         // Update the chord name display to reflect pattern change
         updateProgressionDisplay();
+        
+        // Update processed progression for sequencer
+        window.processedProgression = getProcessedProgression();
+        
+        // If sequencer is running, update it with the new processed progression
+        if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+            const state = window.polySynthRef.getProgressionSequencerState();
+            if (state.playing && window.polySynthRef.updateProgressionSettings) {
+                window.polySynthRef.updateProgressionSettings(window.processedProgression);
+                console.log('🔄 Updated running sequencer with new pattern selection');
+            }
+        }
         
         // Add subtle visual feedback to the dropdown itself
         select.style.background = '#4CAF50';
@@ -2496,6 +3398,7 @@ function displayAllChordPatterns() {
  */
 function clearProgression() {
     currentProgression = [];
+    window.currentProgression = currentProgression; // Update global reference
     hoveredChordIndex = null;
     selectedPatternIndexes.clear();
     

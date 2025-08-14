@@ -701,7 +701,7 @@
       }
     </style> -->
     <div class="main-content">
-     
+<!--      
       <div class="selectionContainer" width="100%" style="max-height:120px;">
         <span style="width:30%;text-align: left;" class="tableCell">
           <h1>unCAGED</h1>
@@ -756,24 +756,8 @@
             </div>
           </div>
         </span>
-        <span style="width:30%;text-align: left;" class="tableCell">
-            <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px;">
-              <div style="display: flex; align-items: center; gap: 8px; min-width: 180px;">
-                <p style="margin: 0; font-weight: bold; color: #fff;">Root:</p>
-                <button id="prevRootBtn" style="background: linear-gradient(145deg, #555, #333); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: all 0.2s ease;" title="Previous Root (, key)">‹</button>
-                <div id="currentRootNode" style="display: inline-block; font-weight: bold; min-width: 40px; text-align: center; color: #fff; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: 6px; border: 1px solid #666;">C</div>
-                <button id="nextRootBtn" style="background: linear-gradient(145deg, #555, #333); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: all 0.2s ease;" title="Next Root (. key)">›</button>
-              </div>
-              <div style="width: 1px; height: 30px; background: #666; min-width: 1px;"></div>
-              <div style="display: flex; align-items: center; gap: 8px; min-width: 240px; padding: 10px; background: rgba(255,255,255,0.05); border-radius: 8px;">
-                <p style="margin: 0; font-weight: bold; color: #fff;">Scale:</p>
-                <button id="prevScaleBtn" style="background: linear-gradient(145deg, #555, #333); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: all 0.2s ease;" title="Previous Scale (N key)">‹</button>
-                <div id="currentScaleNode" style="display: inline-block; font-weight: bold; min-width: 100px; text-align: center; color: #fff; background: rgba(0,0,0,0.3); padding: 6px 12px; border-radius: 6px; border: 1px solid #666;">C Major</div>
-                <button id="nextScaleBtn" style="background: linear-gradient(145deg, #555, #333); color: white; border: none; border-radius: 50%; width: 32px; height: 32px; cursor: pointer; font-size: 18px; font-weight: bold; box-shadow: 0 2px 4px rgba(0,0,0,0.3); transition: all 0.2s ease;" title="Next Scale (M key)">›</button>
-              </div>
-            </div>
         </span>
-        </span> </div>
+        </span> </div> -->
 
       
       <!-- <div id="fretNotTab" class="tabcontent" style="display:block; max-height:1280px; overflow-y:auto;"> -->
@@ -783,8 +767,8 @@
         </div>
       <!-- </div> -->
   
-
-  <div class="selectionContainer" style="position:fixed; left:80px; bottom:0; width:100%; z-index:999; background:--theme-background;">
+<!-- 
+  <div class="selectionContainer" style="display:none; position:fixed; left:80px; bottom:0; width:100%; z-index:999; background:--theme-background;">
     <span style="width:5%;text-align: center;" class="tableCell">
       <div style="display: flex; align-items: center; height: 100%;">
         <h4 style="margin: 0;">Metronome</h4>
@@ -794,7 +778,7 @@
       <div style="display: flex; align-items: center; gap: 8px; height: 100%;">
         <span>Enable</span>
         <label class="switch" style="margin-bottom:0;">
-          <input type="checkbox" id='metronomeCheckBox' checked>
+          <input type="checkbox" id='metronomeCheckBox'>
           <span class="slider round"></span>
         </label>
       </div>
@@ -851,7 +835,7 @@
 </span>
 </span>
 
-    </div>
+    </div></div> -->
 
     <noscript>You need to enable JavaScript to run this app.</noscript>
     
@@ -953,7 +937,13 @@ function reorganizeForMobile() {
     // Optimize header layout for mobile
     const selectionContainer = document.querySelector('.selectionContainer');
     if (selectionContainer) {
-      selectionContainer.style.display = 'flex';
+      // Check if metronome is enabled before showing the container
+      const metronomeCheckbox = document.getElementById('metronomeCheckBox');
+      if (metronomeCheckbox && !metronomeCheckbox.checked) {
+        selectionContainer.style.display = 'none';
+      } else {
+        selectionContainer.style.display = 'none';
+      }
       selectionContainer.style.flexDirection = 'row';
       selectionContainer.style.flexWrap = 'nowrap';
       selectionContainer.style.alignItems = 'center';

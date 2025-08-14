@@ -133,8 +133,8 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
     const [synthActive, setSynthActive] = useState(false);
     const synthActiveRef = useRef(false); // Immediate reference for synthActive state
     const [octaveMod, setOctaveMod] = useState(4);
-    const [currentPreset, setCurrentPreset] = useState('- INIT -');
-    
+    const [currentPreset, setCurrentPreset] = useState('Distorted Strings');
+
     // Track if synth has been initialized to prevent multiple starts
     const synthInitialized = useRef(false);
     
@@ -287,6 +287,15 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
     const arpeggiatorDirection = useRef(1); // 1 for up, -1 for down (used for upDown/downUp modes)
     const arpeggiatorCurrentChord = useRef([]); // Current chord being arpeggiated
     const transposedChord = useRef([]); // Stores the current transposed chord to persist across mode changes
+
+    // Progression Sequencer State
+    const [progressionPlaying, setProgressionPlaying] = useState(false);
+    const progressionPlayingRef = useRef(false); // Immediate access to playing state
+    const [progressionDuration, setProgressionDuration] = useState(0); // Integer: -2=sixteenth, -1=eighth, 0=quarter, 1=half, 2=whole
+    const [progressionRate, setProgressionRate] = useState(0); // Integer: -2=sixteenth, -1=eighth, 0=quarter, 1=half, 2=whole
+    const progressionTimeoutId = useRef(null);
+    const progressionCurrentIndex = useRef(0);
+    const progressionCurrentProgression = useRef([]); // Current progression being played
 
     const octaveUp = () => {
         if (octaveMod < 7) {
@@ -581,6 +590,8 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
         }
     };
     
+    
+    
     // Function to delete a custom preset
     const deleteCustomPreset = (presetName) => {
         if (window.confirm(`Are you sure you want to delete the preset "${presetName}"?`)) {
@@ -591,7 +602,7 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
             
             // If the deleted preset was currently selected, reset to INIT
             if (currentPreset === presetName) {
-                setCurrentPreset('- INIT -');
+                setCurrentPreset('Distored Strings');
             }
         }
     };
@@ -982,6 +993,24 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
         return Math.max(50, noteDuration); // Minimum 50ms duration
     };
 
+    // Helper function to get duration as ratio of rate interval
+    const getDurationRatio = (durationInteger) => {
+        // Convert duration integer to ratio of rate interval
+        // -2 (sixteenth): 25% of rate interval (staccato)
+        // -1 (eighth): 50% of rate interval (medium staccato)
+        //  0 (quarter): 75% of rate interval (normal)
+        //  1 (half): 100% of rate interval (legato)
+        //  2 (whole): 125% of rate interval (overlapping)
+        const ratioMap = {
+            '-2': 0.25,  // Very short/staccato
+            '-1': 0.50,  // Short/staccato
+            '0': 0.75,   // Normal
+            '1': 1.0,    // Legato (full duration)
+            '2': 1.25    // Overlapping
+        };
+        return ratioMap[durationInteger.toString()] || 0.75;
+    };
+
     // Helper function to schedule next arpeggiator note on beat
     const scheduleNextArpeggiatorNoteOnBeat = () => {
         try {
@@ -1086,6 +1115,230 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
         }
     };
 
+    // Progression Sequencer Functions
+    const stopProgressionSequencer = () => {
+        console.log('🛑 Stopping progression sequencer');
+        setProgressionPlaying(false);
+        progressionPlayingRef.current = false;
+        
+        if (progressionTimeoutId.current) {
+            clearTimeout(progressionTimeoutId.current);
+            progressionTimeoutId.current = null;
+        }
+        
+        // Stop all programmatic notes
+        stopAllNotesProgrammatic();
+        
+        // Reset progression state
+        progressionCurrentIndex.current = 0;
+        
+        // Clear progression highlighting
+        if (window.highlightCurrentChord) {
+            window.highlightCurrentChord(-1); // -1 clears all highlighting
+        }
+    };
+
+    const startProgressionSequencer = (progression = null) => {
+        console.log('▶️ Starting progression sequencer with progression:', progression);
+        
+        if (!synthActiveRef.current) activateSynth();
+        
+        // Get progression from parameter, window.processedProgression, or window.currentProgression
+        let progressionToUse = progression;
+        if (!progressionToUse) {
+            // Prefer processed progression if available, fallback to raw progression
+            progressionToUse = window.processedProgression || window.currentProgression;
+        }
+        
+        if (!progressionToUse || progressionToUse.length === 0) {
+            console.warn('⚠️ No progression to sequence');
+            return;
+        }
+        
+        console.log('🎵 Using progression for sequencer:', progressionToUse.length, 'chords', 
+                   progressionToUse[0]?.processedNotes ? '(with processed notes)' : '(theory notes only)');
+        
+        // Store the current progression being sequenced
+        progressionCurrentProgression.current = [...progressionToUse];
+        
+        // Stop any existing sequencer
+        stopProgressionSequencer();
+        
+        // Start the sequencer
+        setProgressionPlaying(true);
+        progressionPlayingRef.current = true;
+        
+        // Initialize sequencer state
+        progressionCurrentIndex.current = 0;
+        
+        // Schedule the first chord on beat
+        scheduleNextProgressionChordOnBeat();
+    };
+
+    const scheduleNextProgressionChord = () => {
+        scheduleNextProgressionChordWithRate(progressionRate);
+    };
+
+    const scheduleNextProgressionChordWithRate = (rateToUse, durationToUse = null) => {
+        // Use current duration state if not provided
+        const effectiveDuration = durationToUse !== null ? durationToUse : progressionDuration;
+        
+        if (!progressionPlayingRef.current) {
+            console.log('🔄 Progression sequencer stopped, exiting loop');
+            return;
+        }
+        
+        const progression = progressionCurrentProgression.current;
+        if (!progression || progression.length === 0) {
+            console.warn('⚠️ No progression in sequencer, stopping');
+            stopProgressionSequencer();
+            return;
+        }
+        
+        // Get the current chord
+        const currentChord = progression[progressionCurrentIndex.current];
+        if (!currentChord) {
+            console.warn('⚠️ Invalid chord in progression, skipping');
+            progressionCurrentIndex.current = (progressionCurrentIndex.current + 1) % progression.length;
+            scheduleNextProgressionChordWithRate(rateToUse, durationToUse);
+            return;
+        }
+        
+        // Use processed notes if available, fallback to chordInfo.notes
+        let chordNotes = [];
+        if (currentChord.processedNotes && currentChord.processedNotes.length > 0) {
+            chordNotes = currentChord.processedNotes;
+            console.log('🎸 Using processed notes (fret positions) for progression chord');
+        } else if (currentChord.chordInfo && currentChord.chordInfo.notes) {
+            // Fallback to theory notes
+            chordNotes = currentChord.chordInfo.notes.map(note => {
+                const cleanNote = window.notationStripOctave ? window.notationStripOctave(note) : note.replace(/\d+$/, '');
+                return cleanNote + '4'; // Add octave 4
+            });
+            console.log('🎵 Using theory notes for progression chord (fallback)');
+        } else {
+            console.warn('⚠️ No notes available for chord, skipping');
+            progressionCurrentIndex.current = (progressionCurrentIndex.current + 1) % progression.length;
+            scheduleNextProgressionChordWithRate(rateToUse, durationToUse);
+            return;
+        }
+        
+        console.log('🎹 Playing progression chord:', chordNotes, 'index:', progressionCurrentIndex.current, 'rate:', integerToDurationString(rateToUse), 'duration:', integerToDurationString(effectiveDuration), '(' + (getDurationRatio(effectiveDuration) * 100).toFixed(0) + '% of rate)');
+        
+        // Highlight current chord in progression display
+        if (window.highlightCurrentChord) {
+            window.highlightCurrentChord(progressionCurrentIndex.current);
+        }
+        
+        // Calculate duration as a fraction of the rate interval
+        const rateIntervalMs = getDurationInMs(integerToDurationString(rateToUse));
+        const durationRatio = getDurationRatio(effectiveDuration);
+        const actualNoteDuration = Math.max(50, rateIntervalMs * durationRatio);
+        
+        console.log('🎵 Duration calculation - Rate interval:', rateIntervalMs, 'ms, Duration ratio:', durationRatio, 'Actual note duration:', actualNoteDuration, 'ms');
+        
+        // Play the chord with the calculated duration
+        playNotesProgrammatic(chordNotes, 70, actualNoteDuration);
+        
+        // Move to next chord (loop back to start)
+        progressionCurrentIndex.current = (progressionCurrentIndex.current + 1) % progression.length;
+        
+        // Schedule the next chord based on the provided rate
+        try {
+            metronome.initializeAudioContext();
+            metronome.updateAudioContextOffset();
+            const nextNoteTime = metronome.getNextNoteTime(integerToDurationString(rateToUse));
+            const currentTime = metronome.getCurrentTime();
+            const delay = Math.max(0, (nextNoteTime - currentTime) * 1000);
+            
+            const minDelay = 10;
+            if (delay < minDelay) {
+                console.log('⏰ Progression delay too small (' + delay.toFixed(2) + 'ms), waiting and getting next beat...');
+                setTimeout(() => {
+                    try {
+                        metronome.updateAudioContextOffset();
+                        const nextNoteTime = metronome.getNextNoteTime(integerToDurationString(rateToUse));
+                        const currentTime = metronome.getCurrentTime();
+                        const newDelay = Math.max(10, (nextNoteTime - currentTime) * 1000);
+                        progressionTimeoutId.current = setTimeout(() => {
+                            scheduleNextProgressionChordWithRate(rateToUse, null); // Don't pass duration for subsequent calls
+                        }, newDelay);
+                    } catch (error) {
+                        console.error('❌ Error in progression timing retry:', error);
+                        const fallbackDelay = getRawDurationInMs(integerToDurationString(rateToUse));
+                        progressionTimeoutId.current = setTimeout(() => {
+                            scheduleNextProgressionChordWithRate(rateToUse, null);
+                        }, fallbackDelay);
+                    }
+                }, delay);
+            } else {
+                console.log('⏰ Next progression chord in', delay.toFixed(2), 'ms with rate', integerToDurationString(rateToUse));
+                progressionTimeoutId.current = setTimeout(() => {
+                    scheduleNextProgressionChordWithRate(rateToUse, null); // Don't pass duration for subsequent calls
+                }, delay);
+            }
+        } catch (error) {
+            console.error('❌ Error scheduling next progression chord:', error);
+            const fallbackDelay = getRawDurationInMs(integerToDurationString(rateToUse));
+            console.log('⏰ Using fallback timing:', fallbackDelay, 'ms');
+            progressionTimeoutId.current = setTimeout(() => {
+                scheduleNextProgressionChordWithRate(rateToUse, null);
+            }, fallbackDelay);
+        }
+    };
+
+    const scheduleNextProgressionChordOnBeat = () => {
+        try {
+            metronome.initializeAudioContext();
+            metronome.updateAudioContextOffset();
+            const nextNoteTime = metronome.getNextNoteTime(integerToDurationString(progressionRate));
+            const currentTime = metronome.getCurrentTime();
+            const delay = Math.max(0, (nextNoteTime - currentTime) * 1000);
+            
+            const minDelay = 10;
+            if (delay < minDelay) {
+                console.log('⏰ Initial progression delay too small (' + delay.toFixed(2) + 'ms), waiting and getting next beat...');
+                setTimeout(() => {
+                    try {
+                        metronome.updateAudioContextOffset();
+                        const nextNoteTime = metronome.getNextNoteTime(integerToDurationString(progressionRate));
+                        const currentTime = metronome.getCurrentTime();
+                        const newDelay = Math.max(10, (nextNoteTime - currentTime) * 1000);
+                        progressionTimeoutId.current = setTimeout(() => {
+                            scheduleNextProgressionChord();
+                        }, newDelay);
+                    } catch (error) {
+                        console.error('❌ Error in initial progression timing:', error);
+                        const fallbackDelay = getRawDurationInMs(integerToDurationString(progressionRate));
+                        progressionTimeoutId.current = setTimeout(() => {
+                            scheduleNextProgressionChord();
+                        }, fallbackDelay);
+                    }
+                }, delay);
+            } else {
+                console.log('⏰ Next progression chord scheduled in', delay.toFixed(2), 'ms');
+                progressionTimeoutId.current = setTimeout(() => {
+                    scheduleNextProgressionChord();
+                }, delay);
+            }
+        } catch (error) {
+            console.error('❌ Error scheduling progression chord on beat:', error);
+            const fallbackDelay = getRawDurationInMs(integerToDurationString(progressionRate));
+            console.log('⏰ Using fallback timing:', fallbackDelay, 'ms');
+            progressionTimeoutId.current = setTimeout(() => {
+                scheduleNextProgressionChord();
+            }, fallbackDelay);
+        }
+    };
+
+    const toggleProgressionSequencer = () => {
+        if (progressionPlayingRef.current) {
+            stopProgressionSequencer();
+        } else {
+            startProgressionSequencer();
+        }
+    };
+
     // Throttled parameter update to prevent audio interruption
     const activateSynth = () => {
         console.log('activateSynth called - current synthActive state:', synthActive);
@@ -1116,34 +1369,34 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
                 // Test the master gain directly with a test signal
                 
                 masterGain.getNode().connect(AC.destination);
-                
+
                 console.log('Testing master gain with direct connection...');
-                try {
-                    const testOsc2 = AC.createOscillator();
-                    testOsc2.connect(masterGain.getNode());
-                    testOsc2.frequency.setValueAtTime(880, AC.currentTime);
-                    testOsc2.start(AC.currentTime + 0.2);
-                    testOsc2.stop(AC.currentTime + 0.3);
-                    console.log('Test oscillator connected to master gain (880Hz for 100ms starting at +200ms)');
-                } catch (testError2) {
-                    console.error('Master gain test failed:', testError2);
-                }
+                // try {
+                //     const testOsc2 = AC.createOscillator();
+                //     testOsc2.connect(masterGain.getNode());
+                //     testOsc2.frequency.setValueAtTime(880, AC.currentTime);
+                //     testOsc2.start(AC.currentTime + 0.2);
+                //     testOsc2.stop(AC.currentTime + 0.3);
+                //     console.log('Test oscillator connected to master gain (880Hz for 100ms starting at +200ms)');
+                // } catch (testError2) {
+                //     console.error('Master gain test failed:', testError2);
+                // }
                 
                 // Test with a simple oscillator to verify basic audio chain
-                console.log('Testing audio chain with simple oscillator...');
-                try {
-                    const testOsc = AC.createOscillator();
-                    const testGain = AC.createGain();
-                    testOsc.connect(testGain);
-                    testGain.connect(AC.destination);
-                    testGain.gain.setValueAtTime(0.1, AC.currentTime);
-                    testOsc.frequency.setValueAtTime(440, AC.currentTime);
-                    testOsc.start(AC.currentTime);
-                    testOsc.stop(AC.currentTime + 0.1);
-                    console.log('Test oscillator created and should play 440Hz for 100ms');
-                } catch (testError) {
-                    console.error('Test oscillator failed:', testError);
-                }
+                // console.log('Testing audio chain with simple oscillator...');
+                // try {
+                //     const testOsc = AC.createOscillator();
+                //     const testGain = AC.createGain();
+                //     testOsc.connect(testGain);
+                //     testGain.connect(AC.destination);
+                //     testGain.gain.setValueAtTime(0.1, AC.currentTime);
+                //     testOsc.frequency.setValueAtTime(440, AC.currentTime);
+                //     testOsc.start(AC.currentTime);
+                //     testOsc.stop(AC.currentTime + 0.1);
+                //     console.log('Test oscillator created and should play 440Hz for 100ms');
+                // } catch (testError) {
+                //     console.error('Test oscillator failed:', testError);
+                // }
             }).catch((error) => {
                 console.error('AudioContext resume failed:', error);
             });
@@ -1673,11 +1926,58 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
             duration: integerToDurationString(arpeggiatorDuration),
             rate: integerToDurationString(arpeggiatorRate),
             currentChord: arpeggiatorCurrentChord.current
-        })
+        }),
+        // Progression sequencer functions
+        startProgressionSequencer,
+        stopProgressionSequencer,
+        toggleProgressionSequencer,
+        setProgressionRate: (rate) => {
+            const newRate = typeof rate === 'string' ? durationStringToInteger(rate) : rate;
+            setProgressionRate(newRate);
+            console.log('⏱️ Progression rate updated to:', newRate, '(', integerToDurationString(newRate), ')');
+            
+            // If progression is currently playing, reschedule next chord with new rate
+            if (progressionPlayingRef.current && progressionTimeoutId.current) {
+                clearTimeout(progressionTimeoutId.current);
+                progressionTimeoutId.current = null;
+                // Schedule next chord immediately with new rate using the actual new value
+                setTimeout(() => {
+                    scheduleNextProgressionChordWithRate(newRate);
+                }, 10); // Shorter delay since we're passing the rate directly
+            }
+        },
+        setProgressionDuration: (duration) => {
+            const newDuration = typeof duration === 'string' ? durationStringToInteger(duration) : duration;
+            setProgressionDuration(newDuration);
+            console.log('🎵 Progression duration updated to:', newDuration, '(', integerToDurationString(newDuration), ')');
+            
+            // If progression is currently playing, no need to reschedule - duration affects note length, not timing
+            // The next scheduled chord will automatically use the new duration
+        },
+        getProgressionSequencerState: () => ({
+            playing: progressionPlayingRef.current,
+            duration: integerToDurationString(progressionDuration),
+            rate: integerToDurationString(progressionRate),
+            currentIndex: progressionCurrentIndex.current,
+            currentProgression: progressionCurrentProgression.current
+        }),
+        // Method to update progression settings during playback
+        updateProgressionSettings: (newProgression) => {
+            if (newProgression && Array.isArray(newProgression)) {
+                progressionCurrentProgression.current = [...newProgression];
+                // Update global reference too
+                if (window.currentProgression) {
+                    window.currentProgression.length = 0;
+                    window.currentProgression.push(...newProgression);
+                }
+                console.log('🔄 Updated progression during playback:', newProgression.length, 'chords');
+            }
+        }
     }), [synthActive, pitchC, pitchCSharp, pitchD, pitchDSharp, pitchE, pitchF,
         pitchFSharp, pitchG, pitchGSharp, pitchA, pitchASharp, pitchB,
         octaveRatio, allThemPitches, chordModeCapture, chordModeTranspose, capturedChord,
-        arpeggiatorMode, arpeggiatorPlaying, arpeggiatorDuration, arpeggiatorRate]);
+        arpeggiatorMode, arpeggiatorPlaying, arpeggiatorDuration, arpeggiatorRate,
+        progressionPlaying, progressionDuration, progressionRate]);
 
     pitchEnv = {
         C: pitchC,

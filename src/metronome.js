@@ -624,35 +624,35 @@ void(e.offsetHeight); /* trigger reflow */
 // Export the reset function for external use
 export { reset };
 
-bpmSlider.addEventListener('input', function() {
-    var bpm = Number(this.value)
-    document.getElementById("bpmText").innerHTML = bpm;
+// bpmSlider.addEventListener('input', function() {
+//     var bpm = Number(this.value)
+//     document.getElementById("bpmText").innerHTML = bpm;
 
-    var el = document.getElementsByClassName('metronome');
-    Array.from(el).forEach((e) =>{
-        e.style.animationDuration = 60/bpm*2 + 's';
-    //   e.style.animationName = 'none';
-      void(e.offsetHeight); /* trigger reflow */
-    //   e.style.animationName = null; 
-    })
+//     var el = document.getElementsByClassName('metronome');
+//     Array.from(el).forEach((e) =>{
+//         e.style.animationDuration = 60/bpm*2 + 's';
+//     //   e.style.animationName = 'none';
+//       void(e.offsetHeight); /* trigger reflow */
+//     //   e.style.animationName = null; 
+//     })
 
-    var isRunning = metronome.isRunning;
-    metronome.forceResetReferenceTime();
+//     var isRunning = metronome.isRunning;
+//     metronome.forceResetReferenceTime();
     
-    // Update tempo without stopping/restarting to maintain synchronization
-    metronome.setTempo(bpm);
+//     // Update tempo without stopping/restarting to maintain synchronization
+//     metronome.setTempo(bpm);
     
-    // Only reset visual animations, not the metronome timing
-    reset();
+//     // Only reset visual animations, not the metronome timing
+//     reset();
 
-    // animations.forEach(animation => {
-    //     const running = getComputedStyle(animation).getPropertyValue("--animps") || 'running';
-    //     animation.style.setProperty('--animdur', 1 / bpm);
-    //   })
+//     // animations.forEach(animation => {
+//     //     const running = getComputedStyle(animation).getPropertyValue("--animps") || 'running';
+//     //     animation.style.setProperty('--animdur', 1 / bpm);
+//     //   })
 
-    // console.log(bpm)
-    // attackTime = Number(this.value);
-});
+//     // console.log(bpm)
+//     // attackTime = Number(this.value);
+// });
 
 // $('#metronomeModeSelect').on('change', function (e) {
 //     var currentValue = $(this).val();
