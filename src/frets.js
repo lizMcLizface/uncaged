@@ -1867,13 +1867,18 @@ class Fretboard {
                     const allChordNotesPresent = chordNotesArray.every(chordNote => 
                         noteArrayContains(patternNotes, chordNote)
                     );
-                    
+
+
                     if (allChordNotesPresent) {
-                        matches.push({
-                            patternName: name,
-                            pattern: pattern,
-                            rootPosition: rootPos,
-                            positions: positions,
+                    console.log(`Pattern ${name} for root ${rootNoteName} at fret ${rootPos.fret} - ${allChordNotesPresent ? 'VALID MATCH' : 'REJECTED'}`);
+                    console.log(`  Pattern details: ${JSON.stringify(pattern)}`);
+                    console.log(`  Pattern notes: ${patternNotes.join(', ')}`);
+                    console.log(`  Chord notes: ${Array.from(chordNoteSet).join(', ')}`);
+                    matches.push({
+                        patternName: name,
+                        pattern: pattern,
+                        rootPosition: rootPos,
+                        positions: positions,
                             patternNotes: patternNotes
                         });
                         // console.log(`Pattern ${name} for root ${rootNoteName} at fret ${rootPos.fret} - VALID MATCH (all chord notes present)`);

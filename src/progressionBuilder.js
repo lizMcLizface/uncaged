@@ -1,4 +1,4 @@
-import { processChord, identifySyntheticChords } from './intervals';
+import { processChord, identifySyntheticChords, intervalToSemitones } from './intervals';
 import { HeptatonicScales, getScaleNotes } from './scales';
 import { getPrimaryScale, getPrimaryRootNote, setPrimaryRootNote, setPrimaryScale, initializeNavigationButtonsDirect } from './scaleGenerator';
 import { noteToMidi, noteToName } from './midi';
@@ -251,6 +251,7 @@ let showMiniStaves = false; // Global toggle for mini stave visualization
 let staveKey = 'C'; // Global key signature for mini staves
 let staveTheoryMode = false; // Global toggle for theory mode (4th octave notes)
 let useSeventhChords = false; // Global toggle for triads vs seventh chords
+let showFretboardIntervals = false; // Global toggle for showing intervals instead of note names on mini fretboards
 
 // Caching system for performance optimization
 let parsedTokensCache = []; // Cache of parsed tokens from input
@@ -357,7 +358,12 @@ function precomputePatternData(chord, index) {
     
     // Debug logging to track when pattern data is computed
     console.log(`Computing pattern data for chord ${index}: ${displayName} (${patterns.length} patterns found)`);
-    
+    // for (let i = 0; i < patterns.length; i++) {
+    //     const pattern = patterns[i];
+    //     console.log(`  Pattern ${i}: ${JSON.stringify(pattern)}`);
+    // }
+
+
     return {
         patterns,
         chordNotes,
@@ -1076,11 +1082,50 @@ function getChordPatternMatches(chord) {
         return [];
     }
     
+    console.log('Chord: ', chord);
+    console.log('Chord notes: ', chord.chordInfo.notes);
     const chordNotes = chord.chordInfo.notes.map(note => notationStripOctave(note));
     const rootNote = chordNotes[0];
     
     const patterns = fretboard.findChordPatternMatches(chordNotes, rootNote);
     
+    // Add interval information to each pattern
+    if (chord.chordInfo.intervals && patterns.length > 0) {
+        patterns.forEach(pattern => {
+            console.log(`Pattern: ${JSON.stringify(pattern)}`);
+            if (pattern.patternNotes) {
+                for(var p = 0; p < pattern.patternNotes.length; p++) {
+                    const strippedNote = pattern.patternNotes[p];
+                    var position = pattern.positions[p];
+                    // Get the note at this position
+                    // const stringTuning = ['E', 'B', 'D', 'G', 'B', 'E']; // Standard tuning
+                    // const stringIndex = position.string - 1; // Convert to 0-based
+                    // const openStringNote = stringTuning[stringIndex];
+                    // const noteAtFret = getNote(openStringNote, position.fret);
+                    // const strippedNote = notationStripOctave(noteAtFret);
+                    console.log(`String Note: ${strippedNote}`);
+
+                    // Find this note in the chord notes array to get the corresponding interval
+                    const chordNoteIndex = chordNotes.findIndex(note => 
+                        notationStripOctave(note) === strippedNote
+                    );
+                    console.log(`Chord note index for ${strippedNote}: ${chordNoteIndex}`);
+                    // console.log(`Position data for ${strippedNote}:`, position);
+                    if (chordNoteIndex !== -1 && chord.chordInfo.intervals[chordNoteIndex]) {
+                        var intervalName = chord.chordInfo.intervals[chordNoteIndex];
+                        if(intervalName == "P1")
+                            position.interval = "R";
+                        else
+                            position.interval = intervalName;
+                    } else {
+                        // Fallback: if note not found in chord notes, mark as unknown
+                        position.interval = '?';
+                    }
+                }
+            }
+        });
+    }
+
     // Sort patterns by their lowest fret number for consistency
     patterns.sort((a, b) => {
         const aMinFret = Math.min(...a.positions.map(p => p.fret));
@@ -1855,6 +1900,7 @@ function createProgressionControlsSection() {
     // Add change event listener to refresh display
     miniFretboardToggleCheckbox.addEventListener('change', (e) => {
         showMiniFretboards = e.target.checked;
+        fretboardIntervalsToggleContainer.style.display = e.target.checked ? 'flex' : 'none';
         updateProgressionDisplay(); // Refresh the entire display to show/hide mini fretboards
     });
     
@@ -1870,6 +1916,42 @@ function createProgressionControlsSection() {
     
     miniFretboardToggleContainer.appendChild(miniFretboardToggleCheckbox);
     miniFretboardToggleContainer.appendChild(miniFretboardToggleLabel);
+    
+    // Mini fretboard intervals toggle (only show when mini fretboards are enabled)
+    const fretboardIntervalsToggleContainer = document.createElement('div');
+    fretboardIntervalsToggleContainer.style.cssText = `
+        display: ${showMiniFretboards ? 'flex' : 'none'};
+        align-items: center;
+        gap: 8px;
+        margin-left: 16px;
+    `;
+    
+    const fretboardIntervalsToggleCheckbox = document.createElement('input');
+    fretboardIntervalsToggleCheckbox.type = 'checkbox';
+    fretboardIntervalsToggleCheckbox.id = 'chord-progression-fretboard-intervals-toggle';
+    fretboardIntervalsToggleCheckbox.checked = showFretboardIntervals;
+    fretboardIntervalsToggleCheckbox.style.cssText = `
+        transform: scale(1.2);
+    `;
+    
+    // Add change event listener to refresh display
+    fretboardIntervalsToggleCheckbox.addEventListener('change', (e) => {
+        showFretboardIntervals = e.target.checked;
+        updateProgressionDisplay(); // Refresh to show intervals or note names
+    });
+    
+    const fretboardIntervalsToggleLabel = document.createElement('label');
+    fretboardIntervalsToggleLabel.htmlFor = 'chord-progression-fretboard-intervals-toggle';
+    fretboardIntervalsToggleLabel.textContent = 'Show Intervals';
+    fretboardIntervalsToggleLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+    `;
+    
+    fretboardIntervalsToggleContainer.appendChild(fretboardIntervalsToggleCheckbox);
+    fretboardIntervalsToggleContainer.appendChild(fretboardIntervalsToggleLabel);
     
     // Mini piano toggle
     const miniPianoToggleContainer = document.createElement('div');
@@ -2625,6 +2707,7 @@ function createProgressionControlsSection() {
 
     section.appendChild(scaleToggleContainer);
     section.appendChild(miniFretboardToggleContainer);
+    section.appendChild(fretboardIntervalsToggleContainer);
     section.appendChild(miniPianoToggleContainer);
     section.appendChild(miniStavesToggleContainer);
     section.appendChild(staveKeyContainer);
@@ -2825,17 +2908,178 @@ function highlightCurrentChord(chordIndex) {
 window.highlightCurrentChord = highlightCurrentChord;
 
 /**
+ * Convert SVG element to PNG and copy to clipboard
+ * @param {SVGElement} svgElement - The SVG element to convert
+ * @param {string} chordName - Name of the chord for notification
+ */
+async function copySvgAsPng(svgElement, chordName = 'chord') {
+    try {
+        // Clone the SVG to avoid modifying the original
+        const svgClone = svgElement.cloneNode(true);
+        
+        // Get SVG dimensions
+        const svgRect = svgElement.getBoundingClientRect();
+        const width = parseInt(svgElement.getAttribute('width')) || svgRect.width;
+        const height = parseInt(svgElement.getAttribute('height')) || svgRect.height;
+        
+        // Create a canvas with higher resolution for better quality
+        const scale = 2; // 2x resolution for crisp images
+        const canvas = document.createElement('canvas');
+        canvas.width = width * scale;
+        canvas.height = height * scale;
+        const ctx = canvas.getContext('2d');
+        
+        // Scale the context for higher resolution
+        ctx.scale(scale, scale);
+        
+        // Set white background (SVGs are transparent by default)
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, width, height);
+        
+        // Convert SVG to data URL
+        const svgData = new XMLSerializer().serializeToString(svgClone);
+        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
+        const svgUrl = URL.createObjectURL(svgBlob);
+        
+        // Create image and draw to canvas
+        const img = new Image();
+        img.onload = async function() {
+            ctx.drawImage(img, 0, 0, width, height);
+            URL.revokeObjectURL(svgUrl);
+            
+            // Convert canvas to blob
+            canvas.toBlob(async function(blob) {
+                try {
+                    // Copy to clipboard using the Clipboard API
+                    if (navigator.clipboard && navigator.clipboard.write) {
+                        const clipboardItem = new ClipboardItem({ 'image/png': blob });
+                        await navigator.clipboard.write([clipboardItem]);
+                        
+                        // Show success notification
+                        showNotification(`${chordName} fretboard copied to clipboard as PNG!`, 'success');
+                    } else {
+                        // Fallback: create download link
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${chordName.replace(/[^a-z0-9]/gi, '_')}_fretboard.png`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        
+                        showNotification(`${chordName} fretboard downloaded as PNG (clipboard not supported)`, 'info');
+                    }
+                } catch (clipboardError) {
+                    console.warn('Clipboard copy failed, falling back to download:', clipboardError);
+                    // Fallback: create download link
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${chordName.replace(/[^a-z0-9]/gi, '_')}_fretboard.png`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    
+                    showNotification(`${chordName} fretboard downloaded as PNG`, 'info');
+                }
+            }, 'image/png');
+        };
+        
+        img.onerror = function() {
+            URL.revokeObjectURL(svgUrl);
+            showNotification('Failed to convert fretboard to PNG', 'error');
+        };
+        
+        img.src = svgUrl;
+        
+    } catch (error) {
+        console.error('Error copying SVG as PNG:', error);
+        showNotification('Failed to copy fretboard to clipboard', 'error');
+    }
+}
+
+/**
+ * Show a temporary notification to the user
+ * @param {string} message - The message to display
+ * @param {string} type - The type of notification ('success', 'error', 'info')
+ */
+function showNotification(message, type = 'info') {
+    // Remove any existing notifications
+    const existingNotification = document.querySelector('.copy-notification');
+    if (existingNotification) {
+        existingNotification.remove();
+    }
+    
+    const notification = document.createElement('div');
+    notification.className = 'copy-notification';
+    notification.textContent = message;
+    
+    const backgroundColor = {
+        'success': '#4CAF50',
+        'error': '#f44336',
+        'info': '#2196F3'
+    }[type] || '#2196F3';
+    
+    notification.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        background: ${backgroundColor};
+        color: white;
+        padding: 12px 20px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: 500;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        z-index: 10000;
+        animation: slideInRight 0.3s ease, slideOutRight 0.3s ease 2.7s;
+        opacity: 1;
+        pointer-events: none;
+    `;
+    
+    // Add CSS animation keyframes if they don't exist
+    if (!document.querySelector('#copy-notification-styles')) {
+        const styles = document.createElement('style');
+        styles.id = 'copy-notification-styles';
+        styles.textContent = `
+            @keyframes slideInRight {
+                from { transform: translateX(100%); opacity: 0; }
+                to { transform: translateX(0); opacity: 1; }
+            }
+            @keyframes slideOutRight {
+                from { transform: translateX(0); opacity: 1; }
+                to { transform: translateX(100%); opacity: 0; }
+            }
+        `;
+        document.head.appendChild(styles);
+    }
+    
+    document.body.appendChild(notification);
+    
+    // Remove notification after animation
+    setTimeout(() => {
+        if (notification.parentNode) {
+            notification.remove();
+        }
+    }, 3000);
+}
+
+/**
  * Create a mini fretboard visualization for a chord pattern
  * This shows a 5-fret vertical section with chord notes highlighted,
- * fret numbers above, and note names below.
- * @param {Object} pattern - Chord pattern with positions
+ * fret numbers above, and note names or intervals below.
+ * @param {Object} pattern - Chord pattern with positions (may include interval data)
  * @param {Array} chordNotes - Array of chord note names
- * @returns {HTMLElement} Mini fretboard SVG element
+ * @param {string} chordName - Name of the chord for display and copying
+ * @returns {HTMLElement} Mini fretboard wrapper element containing SVG
  */
-function createMiniFretboardVisualization(pattern, chordNotes) {
+function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chord') {
     if (!pattern || !pattern.positions || pattern.positions.length === 0) {
         return null;
     }
+    
+    // Tab20 color palette
+    const tab20Colors = [
+        '#fb8072', '#80b1d3', '#fdb462', '#8dd3c7', '#bc80bd', '#b3de69', '#ffed6f', '#bebada', '#d9d9d9', '#ffffb3', '#fccde5', '#ccebc5' 
+    ];
     
     const config = MINI_FRETBOARD_CONFIG;
     const positions = pattern.positions;
@@ -2921,8 +3165,9 @@ function createMiniFretboardVisualization(pattern, chordNotes) {
         }
     }
     
-    // Create a map to store notes for each string at the displayed frets
+    // Create maps to store notes and intervals for each string at the displayed frets
     const stringNotes = new Map();
+    const stringIntervals = new Map();
     
     // Draw chord notes on the fretboard
     positions.forEach(position => {
@@ -2970,32 +3215,89 @@ function createMiniFretboardVisualization(pattern, chordNotes) {
             const openStringNote = stringTuning[stringIndex];
             const noteAtFret = getNote(openStringNote, fret);
             const strippedNote = notationStripOctave(noteAtFret);
+
             
             // Store note for this string
             stringNotes.set(stringIndex, strippedNote);
             
+            // Store interval for this string (if available from the pattern)
+            if (position.interval) {
+                stringIntervals.set(stringIndex, position.interval);
+            }
+            
             // Determine if this is a root note
             const isRootNote = chordNotes.length > 0 && strippedNote === chordNotes[0];
+            
+            // Calculate color based on semitone distance from root
+            let circleColor = '#4CAF50'; // Default color
+            
+            if (isRootNote) {
+                // Root note maps to index 7 with the offset system
+                // (0 semitones + 7 offset) % 20 = 7
+                circleColor = tab20Colors[0];
+            } else if (position.interval) {
+                // Use interval to calculate semitone distance
+                try {
+                    const semitones = intervalToSemitones(position.interval);
+                    // Apply offset of 7 and modulo to map to tab20 colors
+                    const colorIndex = (semitones) % tab20Colors.length;
+                    circleColor = tab20Colors[colorIndex];
+                } catch (error) {
+                    console.warn('Could not calculate semitones for interval:', position.interval, error);
+                    // Fallback: if we can't calculate interval, try to calculate from note names
+                    if (chordNotes.length > 0) {
+                        const rootNote = chordNotes[0];
+                        // Simple semitone calculation (basic chromatic distance)
+                        const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                        const rootIndex = chromaticNotes.indexOf(rootNote);
+                        const noteIndex = chromaticNotes.indexOf(strippedNote);
+                        if (rootIndex !== -1 && noteIndex !== -1) {
+                            const semitones = (noteIndex - rootIndex + 12) % 12;
+                            const colorIndex = (semitones) % tab20Colors.length;
+                            circleColor = tab20Colors[colorIndex];
+                        }
+                    }
+                }
+            } else if (chordNotes.length > 0) {
+                // Fallback: calculate from note names if no interval data
+                const rootNote = chordNotes[0];
+                const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                const rootIndex = chromaticNotes.indexOf(rootNote);
+                const noteIndex = chromaticNotes.indexOf(strippedNote);
+                if (rootIndex !== -1 && noteIndex !== -1) {
+                    const semitones = (noteIndex - rootIndex + 12) % 12;
+                    const colorIndex = (semitones + 7) % 20;
+                    circleColor = tab20Colors[colorIndex];
+                }
+            }
             
             // Draw note circle
             const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
             circle.setAttribute('cx', x);
             circle.setAttribute('cy', y);
             circle.setAttribute('r', config.noteRadius);
-            circle.setAttribute('fill', isRootNote ? '#ff6b35' : '#4CAF50'); // Orange for root, green for others
+            circle.setAttribute('fill', circleColor);
             circle.setAttribute('stroke', '#fff');
             circle.setAttribute('stroke-width', '1');
             svg.appendChild(circle);
         }
     });
     
-    // Draw note names below the fretboard
+    // Draw note names or intervals below the fretboard
     for (let stringIndex = 0; stringIndex < config.stringCount; stringIndex++) {
         const x = startX + stringIndex * stringSpacing;
         const y = startY + config.fretCount * fretHeight + 15;
         
-        const note = stringNotes.get(stringIndex);
-        if (note) {
+        let displayText = '';
+        if (showFretboardIntervals && stringIntervals.has(stringIndex)) {
+            // Show interval if intervals toggle is enabled and we have interval data
+            displayText = stringIntervals.get(stringIndex);
+        } else if (stringNotes.has(stringIndex)) {
+            // Show note name as fallback or when intervals are disabled
+            displayText = stringNotes.get(stringIndex);
+        }
+        
+        if (displayText) {
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
             text.setAttribute('x', x);
             text.setAttribute('y', y);
@@ -3004,12 +3306,91 @@ function createMiniFretboardVisualization(pattern, chordNotes) {
             text.setAttribute('font-size', config.noteNameSize);
             text.setAttribute('font-family', 'Arial, sans-serif');
             text.setAttribute('font-weight', 'bold');
-            text.textContent = note;
+            text.textContent = displayText;
             svg.appendChild(text);
         }
     }
     
-    return svg;
+    // Create a wrapper container for the SVG with copy functionality
+    const wrapper = document.createElement('div');
+    wrapper.className = 'mini-fretboard-wrapper';
+    wrapper.style.cssText = `
+        position: relative;
+        display: inline-block;
+        cursor: pointer;
+        border-radius: 6px;
+        transition: all 0.2s ease;
+    `;
+    
+    // Add hover effect
+    wrapper.addEventListener('mouseenter', () => {
+        wrapper.style.transform = 'scale(1.02)';
+        wrapper.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+    });
+    
+    wrapper.addEventListener('mouseleave', () => {
+        wrapper.style.transform = 'scale(1)';
+        wrapper.style.boxShadow = 'none';
+    });
+    
+    // Create copy button
+    const copyButton = document.createElement('button');
+    copyButton.className = 'mini-fretboard-copy-btn';
+    copyButton.innerHTML = '📋';
+    copyButton.title = 'Copy fretboard as PNG';
+    copyButton.style.cssText = `
+        position: absolute;
+        top: 5px;
+        right: 5px;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+        cursor: pointer;
+        opacity: 0;
+        transition: opacity 0.2s ease;
+        z-index: 10;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+    
+    // Show/hide copy button on hover
+    wrapper.addEventListener('mouseenter', () => {
+        copyButton.style.opacity = '1';
+    });
+    
+    wrapper.addEventListener('mouseleave', () => {
+        copyButton.style.opacity = '0';
+    });
+    
+    // Handle copy button click
+    copyButton.addEventListener('click', (e) => {
+        e.stopPropagation(); // Prevent event bubbling
+        copySvgAsPng(svg, chordName);
+    });
+    
+    // Handle right-click on the wrapper
+    wrapper.addEventListener('contextmenu', (e) => {
+        e.preventDefault(); // Prevent default context menu
+        copySvgAsPng(svg, chordName);
+    });
+    
+    // Add click handler for the entire wrapper as well
+    wrapper.addEventListener('click', (e) => {
+        // Only handle click if it's not on the copy button
+        if (e.target !== copyButton) {
+            copySvgAsPng(svg, chordName);
+        }
+    });
+    
+    wrapper.appendChild(svg);
+    wrapper.appendChild(copyButton);
+    
+    return wrapper;
 }
 
 /**
@@ -3482,6 +3863,7 @@ function createPatternSelector(chord, index) {
         flex-shrink: 0;
     `;
     nextButton.title = 'Next pattern';
+    // console.log(`Patterns: ${JSON.stringify(patterns)}`);
 
     // Function to update button states
     const updateButtonStates = () => {
@@ -3528,12 +3910,14 @@ function createPatternSelector(chord, index) {
         
         const pattern = patterns[patternIndex];
         const { chordNotes } = patternData;
-        
+        const chordName = getChordDisplayName(chord, index);
+        console.log(`Updating mini fretboard for pattern ${patternIndex}:`, pattern, chordNotes);
+
         // Clear existing mini fretboard
         miniFretboardContainer.innerHTML = '';
         
         // Create new mini fretboard
-        const miniFretboard = createMiniFretboardVisualization(pattern, chordNotes);
+        const miniFretboard = createMiniFretboardVisualization(pattern, chordNotes, chordName);
         if (miniFretboard) {
             miniFretboardContainer.appendChild(miniFretboard);
         }
@@ -3917,6 +4301,7 @@ function buildShareableState() {
             return scaleToggle ? scaleToggle.checked : (window.showScaleContext || true); // Default to true if no checkbox found
         })(),
         showMiniFretboards: showMiniFretboards,
+        showFretboardIntervals: showFretboardIntervals,
         showMiniPianos: showMiniPianos,
         useSeventhChords: useSeventhChords,
         
@@ -4123,6 +4508,19 @@ function applySharedState(state) {
         const miniFretboardToggle = document.getElementById('chord-progression-mini-fretboard-toggle');
         if (miniFretboardToggle) {
             miniFretboardToggle.checked = state.showMiniFretboards;
+        }
+        // Update the visibility of the intervals toggle based on mini fretboards setting
+        const fretboardIntervalsContainer = document.querySelector('#chord-progression-fretboard-intervals-toggle').parentElement;
+        if (fretboardIntervalsContainer) {
+            fretboardIntervalsContainer.style.display = state.showMiniFretboards ? 'flex' : 'none';
+        }
+    }
+    
+    if (state.showFretboardIntervals !== undefined) {
+        showFretboardIntervals = state.showFretboardIntervals;
+        const fretboardIntervalsToggle = document.getElementById('chord-progression-fretboard-intervals-toggle');
+        if (fretboardIntervalsToggle) {
+            fretboardIntervalsToggle.checked = state.showFretboardIntervals;
         }
     }
     
