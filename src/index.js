@@ -274,8 +274,12 @@ window.currentDisplayedChord = currentDisplayedChord;
 // const information = document.getElementById('info')
 // information.innerText = `This app is using Chrome (v${process.versions.chrome()}), Node.js (v${process.versions.node()}), and Electron (v${process.versions.electron()})`
 
-// const { Vex,  Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, Dot, StaveConnector, Voice, GhostNote } = require("vexflow");
-// const { Factory } = Vex.Flow;
+const { Vex,  Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, Dot, StaveConnector, Voice, GhostNote } = require("vexflow");
+const { Factory } = Vex.Flow;
+
+// Make VexFlow available globally for other modules
+window.Vex = Vex;
+window.VexFlowComponents = { Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, Dot, StaveConnector, Voice, GhostNote };
 
 
 

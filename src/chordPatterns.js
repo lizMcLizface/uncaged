@@ -17,6 +17,9 @@
  * Each pattern defines fingering relative to the root position
  * @returns {Object} Object containing all chord pattern definitions
  */
+
+// missing: mM7, +M7, +7, m6, o7sus2, osus2, b5, ø7sus2
+
 export function getChordPatterns() {
     return {
         
@@ -965,6 +968,323 @@ export function getChordPatterns() {
             minFret: 0,
             maxFret: 18
         },
+        'mM7_A_string2': {
+            name: 'mM7 (A String Root)',
+            description: 'mM7 chord with root on A string',
+            chordType: 'mM7',
+            rootString: 4,
+            notes: [
+                { string: 4, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 3, fretOffset: 2, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 1, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 1, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 0, interval: 5, label: '5' }  // Perfect 5th
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        'mM7_G_string2': {
+            name: 'mM7 (G String Root)',
+            description: 'mM7 chord with root on G string',
+            chordType: 'mM7',
+            rootString: 2,
+            notes: [
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: -1, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 2, interval: 5, label: '5' }  // Perfect 5th
+            ],
+            openVoicingOnly: false,
+            minFret: 1,
+            maxFret: 18
+        },
+        'mM7_D_string': {
+            name: 'mM7 (D String Root)',
+            description: 'mM7 chord with root on D string',
+            chordType: 'mM7',
+            rootString: 3,
+            notes: [
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: -2, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: -2, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: -3, interval: 5, label: '5' }  // Perfect 5th
+            ],
+            openVoicingOnly: false,
+            minFret: 3,
+            maxFret: 18
+        },
+        'mM7_D_string2': {
+            name: 'mM7 (D String Root) 2',
+            description: 'mM7 chord with root on D string',
+            chordType: 'mM7',
+            rootString: 3,
+            notes: [
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 2, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 2, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 1, interval: 5, label: '5' }  // Perfect 5th
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        'mM7_D_string': {
+            name: 'mM7 (D String Root)',
+            description: 'mM7 chord with root on D string',
+            chordType: 'mM7',
+            rootString: 5,
+            notes: [
+                { string: 5, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 4, fretOffset: 2, interval: 2, label: '2' }, // Major 2nd
+                { string: 3, fretOffset: 1, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 0, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 0, interval: 5, label: '5' }  // Perfect 5th
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        '+M7_G_string': {
+            name: '+M7 (G String Root)',
+            description: '+M7 chord with root on G string',
+            chordType: '+M7',
+            rootString: 2,
+            notes: [
+                { string: 4, fretOffset: 2, interval: 2, label: '2' }, // Major 2nd
+                { string: 3, fretOffset: 1, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 0, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 2, interval: 5, label: '5' }  // Perfect 5th
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        '+M7_D_string': {
+            name: '+M7 (D String Root)',
+            description: '+M7 chord with root on D string',
+            chordType: '+M7',
+            rootString: 3,
+            notes: [
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: -1, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: -1, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: -3, interval: 5, label: '5' }  // Perfect 5th
+            ],
+            openVoicingOnly: false,
+            minFret: 3,
+            maxFret: 18
+        },
+        '+M7_D_string2': {
+            name: '+M7 (D String Root)',
+            description: '+M7 chord with root on D string',
+            chordType: '+M7',
+            rootString: 3,
+            notes: [
+                { string: 4, fretOffset: 1, interval: 2, label: '2' }, // Major 2nd
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: -1, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 2, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 2, interval: 5, label: '5' }  // Perfect 5th
+            ],
+            openVoicingOnly: false,
+            minFret: 1,
+            maxFret: 18
+        },
+
+        '+7_B_string': {
+            name: '+7 (B String Root)',
+            description: '+7 chord with root on B string',
+            chordType: '+7',
+            rootString: 1,
+            notes: [
+                { string: 4, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 3, fretOffset: 1, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 0, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        '+7_B_string2': {
+            name: '+7 (B String Root)',
+            description: '+7 chord with root on B string',
+            chordType: '+7',
+            rootString: 1,
+            notes: [
+                { string: 4, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 3, fretOffset: 1, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 2, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 0, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 3, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        '+7_A_string2': {
+            name: '+7 (A String Root)',
+            description: '+7 chord with root on A string',
+            chordType: '+7',
+            rootString: 4,
+            notes: [
+                { string: 4, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 3, fretOffset: 3, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 2, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 1, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        '+7_G_string2': {
+            name: '+7 (G String Root)',
+            description: '+7 chord with root on G string',
+            chordType: '+7',
+            rootString: 2,
+            notes: [
+                { string: 3, fretOffset: 1, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 0, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 1, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        '+7_E_string2': {
+            name: '+7 (E String Root)',
+            description: '+7 chord with root on E string',
+            chordType: '+7',
+            rootString: 0,
+            notes: [
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 1, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 1, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 0, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        'm6_B_string2': {
+            name: 'm6 (A String Root)',
+            description: 'm6 chord with root on A string',
+            chordType: 'm6',
+            rootString: 1,
+            notes: [
+                { string: 4, fretOffset: 2, interval: 5, label: '5' }, // Perfect 5th
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 1, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 0, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 2, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        'm6_G_string': {
+            name: 'm6 (G String Root)',
+            description: 'm6 chord with root on G string',
+            chordType: 'm6',
+            rootString: 2,
+            notes: [
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: -1, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 0, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 1,
+            maxFret: 18
+        },
+        'm6_G_string2': {
+            name: 'm6 (G String Root)',
+            description: 'm6 chord with root on G string',
+            chordType: 'm6',
+            rootString: 2,
+            notes: [
+                { string: 5, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 4, fretOffset: 1, interval: 5, label: '5' }, // Perfect 5th
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 1, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 3, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 0, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        'm6_E_string2': {
+            name: 'm6 (E String Root)',
+            description: 'm6 chord with root on E string',
+            chordType: 'm6',
+            rootString: 0,
+            notes: [
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 0, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: -1, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 1,
+            maxFret: 18
+        },
+        'm6_E_string2': {
+            name: 'm6 (E String Root)',
+            description: 'm6 chord with root on E string',
+            chordType: 'm6',
+            rootString: 5,
+            notes: [
+                { string: 5, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 4, fretOffset: 2, interval: 5, label: '5' }, // Perfect 5th
+                { string: 3, fretOffset: 2, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 2, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 0, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+        'm6_D_string2': {
+            name: 'm6 (D String Root)',
+            description: 'm6 chord with root on D string',
+            chordType: 'm6',
+            rootString: 3,
+            notes: [
+                { string: 3, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+                { string: 2, fretOffset: 2, interval: 2, label: '2' }, // Major 2nd
+                { string: 1, fretOffset: 0, interval: 1, label: 'R' }, // Root
+                { string: 0, fretOffset: 1, interval: 1, label: 'R' }, // Root
+            ],
+            openVoicingOnly: false,
+            minFret: 0,
+            maxFret: 18
+        },
+// missing: o7sus2, osus2, b5, ø7sus2
+        // 'm6_E_string2': {
+        //     name: 'm6 (E String Root)',
+        //     description: 'm6 chord with root on E string',
+        //     chordType: 'm6',
+        //     rootString: 5,
+        //     notes: [
+        //         { string: 5, fretOffset: 0, interval: 5, label: '5' }, // Perfect 5th
+        //         { string: 4, fretOffset: 2, interval: 5, label: '5' }, // Perfect 5th
+        //         { string: 3, fretOffset: 2, interval: 5, label: '5' }, // Perfect 5th
+        //         { string: 2, fretOffset: 0, interval: 2, label: '2' }, // Major 2nd
+        //         { string: 1, fretOffset: 2, interval: 1, label: 'R' }, // Root
+        //         { string: 0, fretOffset: 0, interval: 1, label: 'R' }, // Root
+        //     ],
+        //     openVoicingOnly: false,
+        //     minFret: 0,
+        //     maxFret: 18
+        // },
+
 
     };
 }

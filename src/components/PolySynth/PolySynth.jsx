@@ -1688,7 +1688,7 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
         });
     };
 
-    // Helper function to parse note strings like "C4", "D#5", "C/4", "D#/5", etc.
+    // Helper function to parse note strings like "C4", "D#5", "Eb4", "C##3", "Dbb5", etc.
     const parseNoteString = (noteString) => {
         if (!noteString || typeof noteString !== 'string') {
             console.warn('⚠️ parseNoteString received invalid input:', noteString);
@@ -1696,62 +1696,83 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
         }
         
         // Normalize the note string by removing any slashes
-        const normalizedNoteString = noteString.replace('/', '');
+        let normalizedNoteString = noteString.replace('/', '');
         
-        const match = normalizedNoteString.match(/^([A-G]#?)(\d+)$/);
+        // Replace Unicode sharp and flat symbols with ASCII equivalents
+        normalizedNoteString = normalizedNoteString
+            .replace(/♯/g, '#')  // Unicode sharp
+            .replace(/♭/g, 'b')  // Unicode flat
+            .replace(/𝄪/g, '##') // Unicode double sharp
+            .replace(/𝄫/g, 'bb'); // Unicode double flat
+        
+        // Match note name with accidentals and octave number
+        const match = normalizedNoteString.match(/^([A-G])(#{1,2}|b{1,2})?(\d+)$/);
         if (!match) {
             console.warn('⚠️ parseNoteString: Invalid note format:', noteString, '(normalized:', normalizedNoteString, ')');
             return null;
         }
         
-        const noteName = match[1];
-        const octave = parseInt(match[2]);
+        const baseLetter = match[1];
+        const accidental = match[2] || '';
+        const octave = parseInt(match[3]);
         
         if (isNaN(octave) || octave < 0 || octave > 9) {
             console.warn('⚠️ parseNoteString: Invalid octave:', octave, 'for note:', noteString);
             return null;
         }
         
-        // Get base frequency and apply microtonal adjustments
-        // const baseFreq = {
-        //     'C': 261.63, 'C#': 277.18, 'D': 293.66, 'D#': 311.13,
-        //     'E': 329.63, 'F': 349.23, 'F#': 369.99, 'G': 392.00,
-        //     'G#': 415.30, 'A': 440.00, 'A#': 466.16, 'B': 493.88
-        // }[noteName];
-
+        // Convert enharmonic equivalents to standard sharp notation
+        const convertToStandardNotation = (letter, accidental) => {
+            const noteOrder = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const letterToIndex = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
+            
+            let semitoneOffset = 0;
+            if (accidental) {
+                if (accidental === '#') semitoneOffset = 1;
+                else if (accidental === '##') semitoneOffset = 2;
+                else if (accidental === 'b') semitoneOffset = -1;
+                else if (accidental === 'bb') semitoneOffset = -2;
+            }
+            
+            let targetIndex = (letterToIndex[letter] + semitoneOffset + 12) % 12;
+            return noteOrder[targetIndex];
+        };
+        
+        const standardNoteName = convertToStandardNotation(baseLetter, accidental);
+        
         let noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
         let baseFrequency = 261.63; // Default base frequency for C4
         let baseFrequencies = [baseFrequency]
         for(let i = 1; i < noteNames.length; i++) {
             baseFrequencies.push(baseFrequencies[i - 1] * Math.pow(pitchEnv.Octave, 1/12));
         }
-        const baseFreq = {            'C': baseFrequencies[0], 'C#': baseFrequencies[1], 'D': baseFrequencies[2], 'D#': baseFrequencies[3],
+        const baseFreq = {
+            'C': baseFrequencies[0], 'C#': baseFrequencies[1], 'D': baseFrequencies[2], 'D#': baseFrequencies[3],
             'E': baseFrequencies[4], 'F': baseFrequencies[5], 'F#': baseFrequencies[6], 'G': baseFrequencies[7],
             'G#': baseFrequencies[8], 'A': baseFrequencies[9], 'A#': baseFrequencies[10], 'B': baseFrequencies[11]
-        }[noteName];
+        }[standardNoteName];
 
         if (!baseFreq) {
-            console.warn('⚠️ parseNoteString: Unknown note name:', noteName, 'for note:', noteString);
+            console.warn('⚠️ parseNoteString: Unknown note name:', standardNoteName, 'for note:', noteString);
             return null;
         }
         
-        // Apply microtonal pitch adjustments
+        // Apply microtonal pitch adjustments using standard notation
         const pitchAdjustments = {
             'C': pitchEnv.C, 'C#': pitchEnv.CSharp, 'D': pitchEnv.D, 'D#': pitchEnv.DSharp,
             'E': pitchEnv.E, 'F': pitchEnv.F, 'F#': pitchEnv.FSharp, 'G': pitchEnv.G,
             'G#': pitchEnv.GSharp, 'A': pitchEnv.A, 'A#': pitchEnv.ASharp, 'B': pitchEnv.B
         };
         
-        const adjustedBaseFreq = baseFreq* pitchAdjustments[noteName] * pitchEnv.AllThemPitches;
+        const adjustedBaseFreq = baseFreq * pitchAdjustments[standardNoteName] * pitchEnv.AllThemPitches;
         
         // Calculate frequency using custom octave ratio instead of fixed 2.0
         const freq = adjustedBaseFreq * Math.pow(pitchEnv.Octave, octave - 4);
-        // console.log(`Base frequency for ${noteName}: ${baseFreq}, Adjusted: ${adjustedBaseFreq}, Octave: ${octave}, Frequency: ${freq}`);
-
-
-        // console.log(`Parsed note: ${noteString}, Frequency: ${freq}, Octave: ${octave},`, pitchAdjustments, pitchEnv);
+        
+        // console.log(`Parsed note: ${noteString} -> ${standardNoteName}${octave}, Frequency: ${freq}`);
         return {
-            note: noteString,
+            note: noteString, // Keep original note name for display purposes
+            standardNote: `${standardNoteName}${octave}`, // Add standardized notation
             oct: octave,
             freq: freq
         };

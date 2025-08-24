@@ -6,6 +6,7 @@ import {
     stripOctave as notationStripOctave
 } from './notation';
 import { createChordPiano, createMixedPiano } from './components/MiniPiano/MiniPiano';
+import { createChordStave, createMixedStave } from './components/MiniStave/MiniStave';
 
 /**
  * Process a chord to get the actual notes based on selected pattern
@@ -231,6 +232,7 @@ function getFretboardForProgression() {
  * - Show scale context toggle
  * - Mini fretboards toggle  
  * - Mini pianos toggle
+ * - Mini staves toggle
  * - Use seventh chords toggle
  * - Current root note (human readable, e.g., "C", "F♯")
  * - Current scale (human readable, e.g., "Major-1", "Minor-1")
@@ -245,6 +247,9 @@ let hoveredChordIndex = null;
 let selectedPatternIndexes = new Map(); // Map of chord index to selected pattern index
 let showMiniFretboards = false; // Global toggle for mini fretboard visualization
 let showMiniPianos = false; // Global toggle for mini piano visualization
+let showMiniStaves = false; // Global toggle for mini stave visualization
+let staveKey = 'C'; // Global key signature for mini staves
+let staveTheoryMode = false; // Global toggle for theory mode (4th octave notes)
 let useSeventhChords = false; // Global toggle for triads vs seventh chords
 
 // Caching system for performance optimization
@@ -726,15 +731,17 @@ function resolveRomanChord(romanChord) {
         const intervals = scaleDefinition.intervals;
         const scaleNotes = getScaleNotes(scaleRootNote, intervals);
         
-        if (!scaleNotes || scaleNotes.length < 7) {
-            console.warn(`Incomplete scale notes for ${primaryScale}. Using fallback resolution.`);
-            return resolveFallbackRomanChord(romanChord, scaleRootNote);
-        }
+        // if (!scaleNotes || scaleNotes.length < 7) {
+        //     console.warn(`Incomplete scale notes for ${primaryScale}. Using fallback resolution.`);
+        //     return resolveFallbackRomanChord(romanChord, scaleRootNote);
+        // }
         
         // Use identifySyntheticChords to get scale-aware chord types
         let diatonicChords;
         try {
-            diatonicChords = identifySyntheticChords(scaleDefinition, 3, scaleRootNote);
+            // Use length 4 for seventh chords when the toggle is enabled, otherwise use 3 for triads
+            const chordLength = useSeventhChords ? 4 : 3;
+            diatonicChords = identifySyntheticChords(scaleDefinition, chordLength, scaleRootNote);
         } catch (error) {
             console.warn(`Failed to identify diatonic chords for ${primaryScale}. Using fallback resolution.`);
             return resolveFallbackRomanChord(romanChord, scaleRootNote);
@@ -758,21 +765,28 @@ function resolveRomanChord(romanChord) {
             // Use the first match as the primary chord type
             chordType = diatonicChord.matches[0];
             
+            // Debug output for chord type generation
+            console.log(`🎵 Chord ${romanChord.degree}: ${chordRoot}${chordType} (diatonic, useSeventhChords: ${useSeventhChords})`);
+            
             // Handle suffix modifications if present
             if (romanChord.suffix) {
                 chordType = modifyChordTypeWithSuffix(chordType, romanChord.suffix);
-            } else if (useSeventhChords) {
-                // Apply seventh chord toggle if no explicit suffix
-                chordType = addSeventhToChordType(chordType);
             }
+            // No need to apply addSeventhToChordType here since we already generated 
+            // the correct diatonic chord types based on useSeventhChords toggle
         } else {
             // Fallback to traditional Roman numeral interpretation
             console.warn(`No diatonic chord found for degree ${romanChord.degree}, using traditional interpretation`);
             if (romanChord.suffix) {
                 chordType = romanSuffixToChordType(romanChord.suffix, romanChord.isNaturallyMinor);
             } else if (useSeventhChords) {
-                // Apply seventh chords based on natural quality
-                chordType = romanChord.isNaturallyMinor ? 'm7' : '7';
+                // Apply seventh chords based on natural quality with scale degree context
+                if (romanChord.isNaturallyMinor) {
+                    chordType = 'm7';
+                } else {
+                    chordType = addSeventhToChordType('', romanChord.degree, primaryScale);
+                }
+                console.log(`🎵 Chord ${romanChord.degree}: ${chordRoot}${chordType} (fallback, useSeventhChords: ${useSeventhChords})`);
             } else if (romanChord.isNaturallyMinor) {
                 chordType = 'min';
             } else {
@@ -848,14 +862,26 @@ function modifyChordTypeWithSuffix(baseChordType, suffix) {
 /**
  * Add seventh to a chord type when seventh toggle is enabled
  * @param {string} baseChordType - Base chord type
+ * @param {number} [scaleDegree] - Optional scale degree (1-7) to determine proper seventh type
+ * @param {string} [scaleName] - Optional scale name for context
  * @returns {string} Chord type with seventh added
  */
-function addSeventhToChordType(baseChordType) {
+function addSeventhToChordType(baseChordType, scaleDegree = null, scaleName = null) {
     // Handle various chord type formats
     const lowerType = baseChordType.toLowerCase();
     
     if (baseChordType === '' || baseChordType === 'maj' || baseChordType === 'Major') {
-        return '7'; // Dominant 7th for major chords
+        // For major chords, determine if it should be major 7th or dominant 7th based on scale degree
+        if (scaleDegree !== null && scaleName) {
+            // In major scales, I and IV chords typically get major 7th, V gets dominant 7th
+            // In minor scales, it varies but let's use the same logic for now
+            if (scaleDegree === 1 || scaleDegree === 4) {
+                return 'maj7'; // Major 7th for I and IV chords
+            } else if (scaleDegree === 5) {
+                return '7'; // Dominant 7th for V chord
+            }
+        }
+        return '7'; // Default to dominant 7th if no context
     } else if (lowerType === 'min' || lowerType === 'm' || lowerType === 'minor') {
         return 'm7'; // Minor 7th
     } else if (lowerType === 'dim' || lowerType === 'o' || lowerType === 'diminished') {
@@ -959,14 +985,19 @@ function resolveFallbackRomanChord(romanChord, scaleRootNote) {
         if (romanChord.suffix) {
             chordType = romanSuffixToChordType(romanChord.suffix, romanChord.isNaturallyMinor);
         } else if (useSeventhChords) {
-            // Apply seventh chords based on natural quality
-            chordType = romanChord.isNaturallyMinor ? 'm7' : '7';
+            // Apply seventh chords based on natural quality with scale degree context
+            if (romanChord.isNaturallyMinor) {
+                chordType = 'm7';
+            } else {
+                chordType = addSeventhToChordType('', romanChord.degree, 'Major'); // Assume major scale for fallback
+            }
         } else if (romanChord.isNaturallyMinor) {
             chordType = 'min';
         } else {
             chordType = '';
         }
-        
+        console.log(`Resolved chord type for ${romanChord.originalToken}:`, chordType);
+
         const fullChordName = chordRootNote + chordType;
         let chordInfo = processChord(fullChordName);
         
@@ -1091,7 +1122,7 @@ function createChordProgressionUI(fretboard) {
     
     // Create title
     const title = document.createElement('h3');
-    title.textContent = 'Chord Progression Builder';
+    title.textContent = 'unCAGED';
     title.style.cssText = `
         margin: 0 0 15px 0;
         color: #fff;
@@ -1116,6 +1147,8 @@ function createChordProgressionUI(fretboard) {
     // Use setTimeout to ensure DOM is ready
     setTimeout(() => {
         initializeNavigationButtonsDirect();
+        // Initialize the scale notes display with current scale (with retries)
+        initializeScaleNotesDisplay();
     }, 100);
     
     return progressionContainer;
@@ -1140,7 +1173,7 @@ function setupScaleChangeListener() {
             currentScale = newScale;
             currentRoot = newRoot;
             
-            // Update progression display to refresh mini pianos with new scale context
+            // Update progression display to refresh mini pianos and mini staves with new scale context
             updateProgressionDisplayForScaleChange();
         }
     });
@@ -1157,24 +1190,167 @@ function setupScaleChangeListener() {
             currentScale = newScale;
             currentRoot = newRoot;
             
-            // Update progression display to refresh mini pianos with new scale context
+            // Update progression display to refresh mini pianos and mini staves with new scale context
             updateProgressionDisplayForScaleChange();
         }
     };
     
     // Check every 2000ms for scale changes (reduced frequency since event system is primary)
     setInterval(checkForScaleChanges, 2000);
+    
+    // Also add a more frequent check specifically for scale notes display updates
+    let lastDisplayedNotes = '';
+    setInterval(() => {
+        const scaleNotesDisplay = document.getElementById('scaleNotesDisplay');
+        if (scaleNotesDisplay) {
+            const currentDisplayedNotes = scaleNotesDisplay.textContent;
+            if (currentDisplayedNotes === 'Loading...' || currentDisplayedNotes === 'No scale selected') {
+                // Try to update if we're showing a fallback message
+                updateScaleNotesDisplay();
+            }
+        }
+    }, 1000);
 }
 
 /**
- * Update progression display when scale changes to refresh mini pianos and Roman numerals
+ * Initialize the scale notes display with retries to ensure data is loaded
+ */
+function initializeScaleNotesDisplay() {
+    let retryCount = 0;
+    const maxRetries = 5;
+    const retryDelay = 400;
+    
+    const tryUpdate = () => {
+        const rootNote = getPrimaryRootNote();
+        const primaryScale = getPrimaryScale();
+        
+        if (rootNote && primaryScale && primaryScale.intervals) {
+            updateScaleNotesDisplay();
+            return;
+        }
+        
+        retryCount++;
+        if (retryCount < maxRetries) {
+            setTimeout(tryUpdate, retryDelay);
+        } else {
+            // Try to set a default
+            const scaleNotesDisplay = document.getElementById('scaleNotesDisplay');
+            if (scaleNotesDisplay) {
+                scaleNotesDisplay.textContent = 'C D E F G A B';
+            }
+        }
+    };
+    
+    tryUpdate();
+}
+
+/**
+ * Update the scale notes display with current scale notes
+ */
+function updateScaleNotesDisplay() {
+    const scaleNotesDisplay = document.getElementById('scaleNotesDisplay');
+    if (!scaleNotesDisplay) return;
+    
+    try {
+        const rootNote = getPrimaryRootNote();
+        const primaryScale = getPrimaryScale();
+        
+        // Try to get scale notes, but provide fallbacks
+        if (rootNote && primaryScale && primaryScale.intervals) {
+            // Get the scale notes using the existing function
+            const scaleNotes = getScaleNotes(rootNote, primaryScale.intervals);
+            
+            if (scaleNotes && scaleNotes.length > 0) {
+                // Display the notes joined with spaces
+                scaleNotesDisplay.textContent = scaleNotes.join(' ');
+                return;
+            }
+        }
+        
+        // Fallback: Try to read from the current scale/root display elements
+        const currentRootNode = document.getElementById('currentRootNode');
+        const currentScaleNode = document.getElementById('currentScaleNode');
+        
+        if (currentRootNode && currentScaleNode) {
+            const displayedRoot = currentRootNode.textContent?.trim();
+            const displayedScale = currentScaleNode.textContent?.trim();
+            
+            // Simple fallback for common scales
+            if (displayedRoot && displayedScale) {
+                const fallbackNotes = generateFallbackScaleNotes(displayedRoot, displayedScale);
+                if (fallbackNotes) {
+                    scaleNotesDisplay.textContent = fallbackNotes;
+                    return;
+                }
+            }
+        }
+        
+        // If all else fails, try once more after a short delay
+        setTimeout(() => {
+            const retryRootNote = getPrimaryRootNote();
+            const retryPrimaryScale = getPrimaryScale();
+            
+            if (retryRootNote && retryPrimaryScale && retryPrimaryScale.intervals) {
+                const retryScaleNotes = getScaleNotes(retryRootNote, retryPrimaryScale.intervals);
+                if (retryScaleNotes && retryScaleNotes.length > 0) {
+                    scaleNotesDisplay.textContent = retryScaleNotes.join(' ');
+                    return;
+                }
+            }
+            
+            scaleNotesDisplay.textContent = 'Loading...';
+        }, 300);
+        
+    } catch (error) {
+        console.error('Error updating scale notes display:', error);
+        scaleNotesDisplay.textContent = 'Error loading notes';
+    }
+}
+
+/**
+ * Generate fallback scale notes for common scales
+ * @param {string} root - Root note
+ * @param {string} scaleName - Scale name
+ * @returns {string|null} Scale notes string or null
+ */
+function generateFallbackScaleNotes(root, scaleName) {
+    // Simple major scale pattern (whole and half steps)
+    const majorIntervals = [0, 2, 4, 5, 7, 9, 11];
+    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    
+    // Find root note index
+    let rootIndex = chromaticNotes.indexOf(root);
+    if (rootIndex === -1) {
+        // Try with flat notation
+        const flatNotes = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B'];
+        rootIndex = flatNotes.indexOf(root);
+        if (rootIndex === -1) return null;
+    }
+    
+    // For now, just handle major scales
+    if (scaleName.toLowerCase().includes('major')) {
+        const scaleNotes = majorIntervals.map(interval => {
+            const noteIndex = (rootIndex + interval) % 12;
+            return chromaticNotes[noteIndex];
+        });
+        return scaleNotes.join(' ');
+    }
+    
+    return null;
+}
+
+/**
+ * Update progression display when scale changes to refresh mini pianos, mini staves and Roman numerals
  */
 function updateProgressionDisplayForScaleChange() {
     // First update any Roman numeral chords
     updateRomanNumeralChords();
     
-    // Then refresh the entire progression display to update mini pianos with new scale context
-    // This ensures all mini pianos (not just Roman numeral chords) show the updated scale
+    // Update the scale notes display
+    updateScaleNotesDisplay();
+    
+    // Then refresh the entire progression display to update mini pianos and mini staves with new scale context
+    // This ensures all mini pianos and mini staves (not just Roman numeral chords) show the updated scale
     updateProgressionDisplay();
     
     console.log('Progression display updated for scale change');
@@ -1431,6 +1607,45 @@ function createInputSection() {
     scaleControlsContainer.appendChild(nextScaleBtn);
     
     controlsContainer.appendChild(scaleControlsContainer);
+    
+    // Create scale notes display container
+    const scaleNotesContainer = document.createElement('div');
+    scaleNotesContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 10px;
+        background: rgba(68, 255, 68, 0.1);
+        border: 1px solid rgba(68, 255, 68, 0.3);
+        border-radius: 6px;
+        margin-left: 8px;
+    `;
+    
+    // Create scale notes label
+    const scaleNotesLabel = document.createElement('span');
+    scaleNotesLabel.textContent = 'Notes:';
+    scaleNotesLabel.style.cssText = `
+        color: #c9c9c9ff;
+        font-weight: bold;
+        font-size: 12px;
+        margin: 0;
+    `;
+    scaleNotesContainer.appendChild(scaleNotesLabel);
+    
+    // Create scale notes display
+    const scaleNotesDisplay = document.createElement('div');
+    scaleNotesDisplay.id = 'scaleNotesDisplay';
+    scaleNotesDisplay.textContent = 'C D E F G A B';
+    scaleNotesDisplay.style.cssText = `
+        color: #c9c9c9ff;
+        font-weight: normal;
+        font-size: 12px;
+        font-family: monospace;
+        letter-spacing: 1px;
+    `;
+    scaleNotesContainer.appendChild(scaleNotesDisplay);
+    
+    controlsContainer.appendChild(scaleNotesContainer);
     labelContainer.appendChild(controlsContainer);
     section.appendChild(labelContainer);
     
@@ -1602,8 +1817,8 @@ function createProgressionControlsSection() {
             displayAllChordPatterns();
         }
         
-        // Also refresh mini pianos if they are enabled
-        if (showMiniPianos) {
+        // Also refresh mini pianos and mini staves if they are enabled
+        if (showMiniPianos || showMiniStaves) {
             updateProgressionDisplay();
         }
     });
@@ -1690,6 +1905,152 @@ function createProgressionControlsSection() {
     
     miniPianoToggleContainer.appendChild(miniPianoToggleCheckbox);
     miniPianoToggleContainer.appendChild(miniPianoToggleLabel);
+    
+    // Mini staves toggle
+    const miniStavesToggleContainer = document.createElement('div');
+    miniStavesToggleContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    const miniStavesToggleCheckbox = document.createElement('input');
+    miniStavesToggleCheckbox.type = 'checkbox';
+    miniStavesToggleCheckbox.id = 'chord-progression-mini-staves-toggle';
+    miniStavesToggleCheckbox.checked = showMiniStaves;
+    miniStavesToggleCheckbox.style.cssText = `
+        transform: scale(1.2);
+    `;
+    
+    // Add change event listener to refresh display
+    miniStavesToggleCheckbox.addEventListener('change', (e) => {
+        showMiniStaves = e.target.checked;
+        updateProgressionDisplay(); // Refresh the entire display to show/hide mini staves
+    });
+    
+    const miniStavesToggleLabel = document.createElement('label');
+    miniStavesToggleLabel.htmlFor = 'chord-progression-mini-staves-toggle';
+    miniStavesToggleLabel.textContent = 'Show Mini Staves';
+    miniStavesToggleLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+    `;
+    
+    miniStavesToggleContainer.appendChild(miniStavesToggleCheckbox);
+    miniStavesToggleContainer.appendChild(miniStavesToggleLabel);
+    
+    // Stave key selector (only show when mini staves are enabled)
+    const staveKeyContainer = document.createElement('div');
+    staveKeyContainer.style.cssText = `
+        display: ${showMiniStaves ? 'flex' : 'none'};
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    const staveKeyLabel = document.createElement('span');
+    staveKeyLabel.textContent = 'Stave Key:';
+    staveKeyLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+    `;
+    
+    const staveKeyDropdown = document.createElement('select');
+    staveKeyDropdown.id = 'chord-progression-stave-key';
+    staveKeyDropdown.style.cssText = `
+        padding: 4px 8px;
+        border: 1px solid #666;
+        border-radius: 4px;
+        background: #333;
+        color: #fff;
+        font-size: 12px;
+        cursor: pointer;
+    `;
+    
+    // Add key signature options
+    const keyOptions = [
+        { value: 'C', label: 'C Major / A Minor' },
+        { value: 'G', label: 'G Major / E Minor' },
+        { value: 'D', label: 'D Major / B Minor' },
+        { value: 'A', label: 'A Major / F# Minor' },
+        { value: 'E', label: 'E Major / C# Minor' },
+        { value: 'B', label: 'B Major / G# Minor' },
+        { value: 'F#', label: 'F# Major / D# Minor' },
+        { value: 'C#', label: 'C# Major / A# Minor' },
+        { value: 'F', label: 'F Major / D Minor' },
+        { value: 'Bb', label: 'Bb Major / G Minor' },
+        { value: 'Eb', label: 'Eb Major / C Minor' },
+        { value: 'Ab', label: 'Ab Major / F Minor' },
+        { value: 'Db', label: 'Db Major / Bb Minor' },
+        { value: 'Gb', label: 'Gb Major / Eb Minor' },
+        { value: 'Cb', label: 'Cb Major / Ab Minor' }
+    ];
+    
+    keyOptions.forEach(option => {
+        const optionElement = document.createElement('option');
+        optionElement.value = option.value;
+        optionElement.textContent = option.label;
+        optionElement.selected = option.value === staveKey;
+        staveKeyDropdown.appendChild(optionElement);
+    });
+    
+    staveKeyDropdown.addEventListener('change', (e) => {
+        staveKey = e.target.value;
+        if (showMiniStaves) {
+            updateProgressionDisplay(); // Refresh display with new key signature
+        }
+    });
+    
+    // Update stave key container visibility when mini staves toggle changes
+    miniStavesToggleCheckbox.addEventListener('change', (e) => {
+        staveKeyContainer.style.display = e.target.checked ? 'flex' : 'none';
+    });
+    
+    staveKeyContainer.appendChild(staveKeyLabel);
+    staveKeyContainer.appendChild(staveKeyDropdown);
+    
+    // Theory mode toggle for mini staves
+    const staveTheoryModeContainer = document.createElement('div');
+    staveTheoryModeContainer.style.cssText = `
+        display: ${showMiniStaves ? 'flex' : 'none'};
+        align-items: center;
+        gap: 8px;
+    `;
+    
+    const staveTheoryModeCheckbox = document.createElement('input');
+    staveTheoryModeCheckbox.type = 'checkbox';
+    staveTheoryModeCheckbox.id = 'chord-progression-stave-theory-mode';
+    staveTheoryModeCheckbox.checked = staveTheoryMode;
+    staveTheoryModeCheckbox.style.cssText = `
+        transform: scale(1.2);
+    `;
+    
+    staveTheoryModeCheckbox.addEventListener('change', (e) => {
+        staveTheoryMode = e.target.checked;
+        if (showMiniStaves) {
+            updateProgressionDisplay(); // Refresh display with new mode
+        }
+    });
+    
+    const staveTheoryModeLabel = document.createElement('label');
+    staveTheoryModeLabel.htmlFor = 'chord-progression-stave-theory-mode';
+    staveTheoryModeLabel.textContent = 'Theory Mode (4th octave)';
+    staveTheoryModeLabel.style.cssText = `
+        color: white;
+        font-size: 14px;
+        font-weight: normal;
+        cursor: pointer;
+    `;
+    
+    // Update theory mode container visibility when mini staves toggle changes
+    miniStavesToggleCheckbox.addEventListener('change', (e) => {
+        staveKeyContainer.style.display = e.target.checked ? 'flex' : 'none';
+        staveTheoryModeContainer.style.display = e.target.checked ? 'flex' : 'none';
+    });
+    
+    staveTheoryModeContainer.appendChild(staveTheoryModeCheckbox);
+    staveTheoryModeContainer.appendChild(staveTheoryModeLabel);
     
     // Triads vs Sevenths toggle
     const chordsToggleContainer = document.createElement('div');
@@ -2265,6 +2626,9 @@ function createProgressionControlsSection() {
     section.appendChild(scaleToggleContainer);
     section.appendChild(miniFretboardToggleContainer);
     section.appendChild(miniPianoToggleContainer);
+    section.appendChild(miniStavesToggleContainer);
+    section.appendChild(staveKeyContainer);
+    section.appendChild(staveTheoryModeContainer);
     section.appendChild(chordsToggleContainer);
     section.appendChild(presetsContainer);
     section.appendChild(shareButton);
@@ -2834,6 +3198,96 @@ function createChordElement(chord, index) {
                     margin: 8px auto;
                 `;
                 element.appendChild(miniPiano);
+            }
+        }
+        
+        // Add mini stave visualization if enabled
+        if (showMiniStaves) {
+            // Choose notes based on theory mode
+            let notesToUse;
+            let theoreticalNotes = null; // For enharmonic correction reference
+            
+            if (staveTheoryMode) {
+                // Theory mode: use chord theory notes in 4th octave
+                if (chord.chordInfo && chord.chordInfo.notes) {
+                    theoreticalNotes = chord.chordInfo.notes; // Keep original theory notes for reference
+                    notesToUse = chord.chordInfo.notes.map(note => {
+                        const cleanNote = notationStripOctave(note);
+                        return cleanNote + '4'; // Force 4th octave for theory
+                    });
+                } else {
+                    notesToUse = [];
+                }
+            } else {
+                // Fretboard mode: use actual fretboard notes with their octaves
+                notesToUse = getProcessedChordNotes(chord, index);
+                // Also get theoretical notes for enharmonic correction if available
+                if (chord.chordInfo && chord.chordInfo.notes) {
+                    theoreticalNotes = chord.chordInfo.notes;
+                }
+            }
+            
+            // Create version without octaves for scale mixing
+            const notesNoOctave = notesToUse.map(note => notationStripOctave(note));
+            
+            // Get current scale notes for enharmonic correction
+            let currentScaleNotes = null;
+            const primaryScaleId = getPrimaryScale();
+            const primaryRoot = getPrimaryRootNote();
+            if (primaryScaleId && primaryRoot) {
+                try {
+                    const [family, mode] = primaryScaleId.split('-');
+                    const scales = HeptatonicScales;
+                    if (scales[family] && scales[family][parseInt(mode, 10) - 1]) {
+                        const intervals = scales[family][parseInt(mode, 10) - 1].intervals;
+                        currentScaleNotes = getScaleNotes(primaryRoot, intervals);
+                    }
+                } catch (error) {
+                    console.warn('Error getting scale notes for enharmonic correction:', error);
+                }
+            }
+            
+            const scaleToggleCheckbox = document.getElementById('chord-progression-scale-toggle');
+            const showScaleContext = scaleToggleCheckbox && scaleToggleCheckbox.checked;
+            
+            let miniStave;
+            if (showScaleContext) {
+                // Get current scale notes for context
+                if (primaryScaleId && primaryRoot && currentScaleNotes) {
+                    try {
+                        const scaleNotesNoOctave = currentScaleNotes.map(note => notationStripOctave(note));
+                        
+                        // Create mixed stave showing both chord and scale
+                        miniStave = createMixedStave(notesNoOctave, scaleNotesNoOctave, notesNoOctave[0] || notes[0], staveKey, theoreticalNotes);
+                    } catch (error) {
+                        console.warn('Error creating mixed stave:', error);
+                        // Fallback to chord-only display
+                        miniStave = createChordStave(notesToUse, notesToUse[0] || notes[0], staveKey, theoreticalNotes, currentScaleNotes);
+                    }
+                } else {
+                    // Fallback to chord-only display
+                    miniStave = createChordStave(notesToUse, notesToUse[0] || notes[0], staveKey, theoreticalNotes, currentScaleNotes);
+                }
+            } else {
+                // Show chord only
+                miniStave = createChordStave(notesToUse, notesToUse[0] || notes[0], staveKey, theoreticalNotes, currentScaleNotes);
+            }
+            
+            if (miniStave) {
+                // Create a wrapper container for better positioning
+                const miniStaveWrapper = document.createElement('div');
+                miniStaveWrapper.style.cssText = `
+                    margin: 8px auto;
+                    position: relative;
+                    z-index: 10;
+                    background: white;
+                    border-radius: 6px;
+                    padding: 4px;
+                    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+                    border: 1px solid #ccc;
+                `;
+                miniStaveWrapper.appendChild(miniStave);
+                element.appendChild(miniStaveWrapper);
             }
         }
     } else {

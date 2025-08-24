@@ -11,7 +11,7 @@ import PolySynthWrapper from './components/PolySynthWrapper';
 function App() {
   const { theme, themes } = useTheme();
   const [showPolySynth, setShowPolySynth] = useState(false);
-  const [polySynthEnabled, setPolySynthEnabled] = useState(false);
+  const [polySynthEnabled, setPolySynthEnabled] = useState(true);
   const polySynthRef = useRef(null);
 
   // Make polySynth globally accessible for progression triggering

@@ -162,6 +162,17 @@ function createAccidental(offset) {
  * Generate a scale with proper enharmonic spelling
  */
 function generateProperScale(rootNote, intervals) {
+    // Add error checking for intervals
+    if (!intervals || !Array.isArray(intervals) || intervals.length === 0) {
+        console.error('generateProperScale: Invalid intervals array:', intervals);
+        return [rootNote]; // Return just the root note as fallback
+    }
+    
+    // For scales with fewer than 7 notes, use a different approach
+    if (intervals.length < 6) {
+        return generateProperScaleNonHeptatonic(rootNote, intervals);
+    }
+    
     const rootBase = getBaseNote(rootNote);
     const rootAccidentals = rootNote.slice(1);
     const rootOffset = getAccidentalOffset(rootAccidentals);
@@ -212,6 +223,87 @@ function generateProperScale(rootNote, intervals) {
     }
     
     return scale;
+}
+
+/**
+ * Generate a scale with proper enharmonic spelling for non-heptatonic scales (pentatonic, hexatonic)
+ * This version doesn't force consecutive letter names, allowing gaps in the note name sequence
+ */
+function generateProperScaleNonHeptatonic(rootNote, intervals) {
+    const rootBase = getBaseNote(rootNote);
+    const rootAccidentals = rootNote.slice(1);
+    const rootOffset = getAccidentalOffset(rootAccidentals);
+    
+    // Get the root's position in the chromatic scale
+    const noteToSemitone = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+    let currentSemitone = (noteToSemitone[rootBase] + rootOffset + 12) % 12;
+    
+    // Start with the root note
+    const scale = [rootNote];
+    const usedNoteNames = new Set([rootBase]);
+    
+    // Generate each scale degree using intervals
+    for (let i = 0; i < intervals.length; i++) {
+        const interval = intervals[i];
+        let semitoneStep = 0;
+        
+        // Convert interval notation to semitones
+        switch (interval) {
+            case 'H': semitoneStep = 1; break;  // Half step
+            case 'W': semitoneStep = 2; break;  // Whole step
+            case 'A': semitoneStep = 3; break;  // Augmented step
+            case 'P': semitoneStep = 4; break;  // Perfect step (used in some scales)
+            default: semitoneStep = 1; break;
+        }
+        
+        currentSemitone = (currentSemitone + semitoneStep) % 12;
+        
+        // Find the best note name for this semitone
+        const bestNoteName = findBestNoteName(currentSemitone, usedNoteNames);
+        usedNoteNames.add(getBaseNote(bestNoteName));
+        scale.push(bestNoteName);
+    }
+    
+    return scale;
+}
+
+/**
+ * Find the best note name for a given semitone, avoiding already used note names when possible
+ */
+function findBestNoteName(semitone, usedNoteNames) {
+    const noteToSemitone = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+    const semitoneToNotes = {
+        0: ['C'],
+        1: ['C#', 'Db'],
+        2: ['D'],
+        3: ['D#', 'Eb'],
+        4: ['E'],
+        5: ['F'],
+        6: ['F#', 'Gb'],
+        7: ['G'],
+        8: ['G#', 'Ab'],
+        9: ['A'],
+        10: ['A#', 'Bb'],
+        11: ['B']
+    };
+    
+    const possibleNotes = semitoneToNotes[semitone];
+    
+    // If there's only one option, use it
+    if (possibleNotes.length === 1) {
+        return possibleNotes[0];
+    }
+    
+    // For enharmonic equivalents, prefer the one that hasn't been used
+    for (const note of possibleNotes) {
+        const baseName = getBaseNote(note);
+        if (!usedNoteNames.has(baseName)) {
+            return note;
+        }
+    }
+    
+    // If all base names are used, prefer sharps over flats for consistency
+    return possibleNotes[0];
 }
 
 /**
@@ -378,6 +470,7 @@ function translateNotes(notes) {
  * Remove octave information from note names
  */
 function stripOctave(noteName) {
+    noteName = normalizeNote(noteName);
     if (typeof noteName === 'string' && noteName.includes('/')) {
         return noteName.split('/')[0];
     }

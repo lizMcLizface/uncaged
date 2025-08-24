@@ -701,6 +701,7 @@ function identifySyntheticChords(scale, length = 3, root = 'C') {
             // console.log(`Matched Chords for ${chord}: ${matchedChords}`);
         } else {
             console.log(`No matches found for ${chord}`);
+            console.log('Synthentic Chords:', syntheticChords)
             matchChord(chord, chords, true);
             throw new Error(`No matches found for ${chord}`);
         }

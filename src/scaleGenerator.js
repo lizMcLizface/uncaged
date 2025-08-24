@@ -802,7 +802,8 @@ function createRootNoteTable() {
                         
                         // Highlight keyboard for preview
                         highlightKeysForScales(scaleNotes);
-                        
+                        console.log(`Scale notes for ${note}:`, scaleNotes);
+
                         // Create mini piano
                         const scaleNotesNoOctave = scaleNotes.map(n => typeof n === 'string' && n.includes('/') ? n.split('/')[0] : n);
                         const miniPiano = createScalePiano(scaleNotesNoOctave, note);
@@ -1475,9 +1476,11 @@ function createHeptatonicScaleTable() {
                         `;
                         tooltip.appendChild(tooltipContent);
                         
-                        let scaleNotes = getScaleNotes(getPrimaryRootNote(), currentScale[j-1].intervals);
+                        let scaleNotes = getScaleNotes(getPrimaryRootNote(), currentScale[j-1]?.intervals);
                         // console.log("Scale Notes for", scaleName, ":", scaleNotes);
-                        highlightKeysForScales(scaleNotes);
+                        if (currentScale[j-1]?.intervals) {
+                            highlightKeysForScales(scaleNotes);
+                        }
                         
                         // Add mini piano visualization
                         try {
@@ -1496,7 +1499,7 @@ function createHeptatonicScaleTable() {
                             console.warn('Error creating mini piano for scale tooltip:', e);
                         }
                         
-                        if (scales[scaleNames[i-1]][j-1].intervals.length === 7) {
+                        if (scales[scaleNames[i-1]][j-1]?.intervals?.length === 7) {
                             let identifiedChords_3 = identifySyntheticChords(scales[scaleNames[i-1]][j-1], 3);
                             let identifiedChords_4 = identifySyntheticChords(scales[scaleNames[i-1]][j-1], 4);
 

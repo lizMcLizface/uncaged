@@ -232,7 +232,7 @@ let HeptatonicScales = {
     {
         'name': 'Minor Hexatonic',
         'alternativeNames': ['Minor Hexatonic'],
-        'intervals':['W', 'H', 'W', 'W', 'A', 'W']
+        'intervals': ['W', 'H', 'W', 'W', 'A', 'W']
     },
     {
         'name': "Ritsu Onkai",
@@ -290,7 +290,7 @@ let HeptatonicScales = {
     {
         'name': 'Japanese',
         'alternativeNames': ['Japanese', 'Insen', 'Ryukyu'],
-        'intervals:': ['W', 'H', 'P', 'H', 'P']
+        'intervals': ['W', 'H', 'P', 'H', 'P']
     }
 ]
 }
@@ -304,7 +304,7 @@ let HexatonicScales = [
     {
         'name': 'Minor Hexatonic',
         'alternativeNames': ['Minor Hexatonic'],
-        'intervals':['W', 'H', 'W', 'W', 'A', 'W']
+        'intervals': ['W', 'H', 'W', 'W', 'A', 'W']
     },
     {
         'name': "Ritsu Onkai",
@@ -363,7 +363,7 @@ let PentatonicScales = [
     {
         'name': 'Japanese',
         'alternativeNames': ['Japanese', 'Insen', 'Ryukyu'],
-        'intervals:': ['W', 'H', 'P', 'H', 'P']
+        'intervals': ['W', 'H', 'P', 'H', 'P']
     }
 ]
 
@@ -580,11 +580,14 @@ function getChordCacheStats() {
 function getScaleNotes(rootNote, intervals) {
     // console.log("Generating scale notes for root:", rootNote, "with intervals:", intervals);
     
+    // Add error checking for intervals
+    if (!intervals || !Array.isArray(intervals) || intervals.length === 0) {
+        console.error('getScaleNotes: Invalid intervals array:', intervals);
+        return [rootNote + "/5"]; // Return just the root note as fallback
+    }
+    
     // Set up the scale context for proper notation
     setScaleContext(rootNote, intervals);
-    
-    // Generate the scale with proper enharmonic spelling
-    const properScale = generateProperScale(rootNote, intervals);
     
     // Convert to the format expected by the rest of the application (with octaves)
     let rootNoteMidi = noteToMidi(rootNote + "/5");
