@@ -69,6 +69,23 @@ const DEFAULT_COLORS = {
     text: '#ffffff'
 };
 
+const SCALE_POSITION_ROW_STRINGS = ['B', 'A', 'G', 'E', 'D'];
+const SCALE_POSITION_DEGREES = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
+const MINI_SCALE_FRET_COUNT = 6;
+const MINI_SCALE_STRING_TUNING = ['E/4', 'B/3', 'G/3', 'D/3', 'A/2', 'E/2'];
+const SCALE_POSITION_PATTERN_SCALE = 1.28;
+const GENERIC_VISIBLE_FRET_START = 1;
+const GENERIC_ROOT_DISPLAY_COLUMN = 1;
+const SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET = 0;
+
+let scalePositionPatternScale = SCALE_POSITION_PATTERN_SCALE;
+let scalePositionUseAbsoluteFretLabels = false;
+let scalePositionDotScale = 1;
+let scalePositionShowChordNames = false;
+let scalePositionUseInstancedScale = false;
+
+const SEMITONE_TO_SCALE_INTERVAL_LABEL = ['R', 'm2', 'M2', 'm3', 'M3', 'A3', 'd5', 'P5', 'm6', 'M6', 'm7', 'M7'];
+
 /**
  * Utility function to add both mouse and touch event listeners for better mobile support
  * @param {HTMLElement} element - The element to add events to
@@ -821,7 +838,11 @@ class Fretboard {
     /**
      * Mark scale notes with color coding based on scale degrees
      */
-    markScale(scaleNotes, rootNote) {
+    markScale(scaleNotes, rootNote, options = {}) {
+        const {
+            showIntervals = false
+        } = options;
+
         this.clearMarkers();
         
         // Normalize scale notes (remove octave numbers) and translate to proper notation
@@ -844,8 +865,9 @@ class Fretboard {
                     // Map scale colors to border colors for the new styling
                     const scaleColor = isRoot ? SCALE_COLORS[1] : SCALE_COLORS[scaleDegree] || DEFAULT_COLORS.primary;
                     
-                    // Use the properly notated note name for display
-                    const displayNoteName = matchedScaleNote;
+                    // Use either interval labels relative to the root or note names
+                    const intervalLabel = getIntervalLabelFromRoot(normalizedRoot, matchedScaleNote);
+                    const displayNoteName = showIntervals && intervalLabel ? intervalLabel : matchedScaleNote;
                     
                     this.markFret(stringIndex, fret, {
                         backgroundColor: '#ffffff',
@@ -986,7 +1008,9 @@ class Fretboard {
             textColor = '#333333',
             borderWidth = 3,
             size = 28,
-            showScaleContext = true
+            showScaleContext = true,
+            showIntervals = false,
+            intervalLabels = []
         } = options;
         
         if (clearFirst) {
@@ -1051,6 +1075,9 @@ class Fretboard {
         translatedChordNotes.forEach((note, index) => {
             const noteName = this.extractNoteName(note);
             const positions = this.findNotePositions(noteName);
+            const intervalLabel = intervalLabels[index] || '';
+            const normalizedIntervalLabel = intervalLabel === 'P1' ? 'R' : intervalLabel;
+            const markerLabel = showIntervals && normalizedIntervalLabel ? normalizedIntervalLabel : noteName;
             
             positions.forEach(pos => {
                 // Override any existing marker (including scale context markers) with chord tone marker
@@ -1060,7 +1087,7 @@ class Fretboard {
                     borderWidth: index === 0 ? borderWidth + 1 : borderWidth, // Root gets thicker border
                     textColor,
                     size: index === 0 ? size + 2 : size, // Root gets slightly larger
-                    label: noteName,
+                    label: markerLabel,
                     isRoot: index === 0,
                     useCustomStyle: true,
                     disableAnimation: true  // Disable animation for chord display
@@ -2011,6 +2038,7 @@ let fretboardsShowingChords = new Set();
 let currentChordType = 'triads'; // 'triads' or 'sevenths'
 let currentDisplayedChord = null; // Currently displayed chord index (0-6)
 let isInHoverState = false; // Track if we're currently in a temporary hover state
+let showMainFretboardIntervals = false; // Show interval labels instead of note names for chord displays
 
 // Track chord grid state
 let currentChordGridSelection = null; // Track permanent chord grid selections {note, chordType}
@@ -2029,8 +2057,49 @@ const CHORD_LINE_COLORS = [
     '#fd79a8'  // Pink
 ];
 
+const SEMITONE_TO_INTERVAL_LABEL = {
+    0: 'R',
+    1: 'm2',
+    2: 'M2',
+    3: 'm3',
+    4: 'M3',
+    5: 'P4',
+    6: 'd5',
+    7: 'P5',
+    8: 'm6',
+    9: 'M6',
+    10: 'm7',
+    11: 'M7'
+};
+
 // Flag to prevent infinite update loops
 let isUpdatingFretboards = false;
+
+function normalizeIntervalLabel(label) {
+    if (!label || label === '?') {
+        return '';
+    }
+    return label === 'P1' ? 'R' : label;
+}
+
+function getIntervalLabelFromRoot(rootNote, targetNote) {
+    if (!rootNote || !targetNote) {
+        return '';
+    }
+
+    try {
+        const normalizedRoot = notationStripOctave(normalizeNote(rootNote));
+        const normalizedTarget = notationStripOctave(normalizeNote(targetNote));
+
+        const rootMidi = notationNoteToMidi(`${normalizedRoot}/4`);
+        const targetMidi = notationNoteToMidi(`${normalizedTarget}/4`);
+        const semitoneDistance = (targetMidi - rootMidi + 12) % 12;
+
+        return SEMITONE_TO_INTERVAL_LABEL[semitoneDistance] || '';
+    } catch (error) {
+        return '';
+    }
+}
 
 /**
  * Create a new fretboard instance
@@ -2200,7 +2269,9 @@ function createFretboardControls(fretboard) {
             const rootNote = getPrimaryRootNote();
             const scaleNotes = getScaleNotes(rootNote, intervals);
             
-            fretboard.markScale(scaleNotes, rootNote);
+            fretboard.markScale(scaleNotes, rootNote, {
+                showIntervals: showMainFretboardIntervals
+            });
             
             // Track that this fretboard is showing the current scale
             fretboardsShowingScale.add(fretboard.containerId);
@@ -2717,6 +2788,49 @@ function createFretboardControls(fretboard) {
             showChordOnFretboard(currentDisplayedChord - 1);
         }
     });
+
+    const intervalsToggleContainer = document.createElement('div');
+    intervalsToggleContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-right: 10px;
+    `;
+
+    const intervalsToggleCheckbox = document.createElement('input');
+    intervalsToggleCheckbox.type = 'checkbox';
+    intervalsToggleCheckbox.id = 'main-fretboard-intervals-toggle';
+    intervalsToggleCheckbox.checked = showMainFretboardIntervals;
+    intervalsToggleCheckbox.style.cssText = `
+        transform: scale(1.1);
+        cursor: pointer;
+    `;
+
+    const intervalsToggleLabel = document.createElement('label');
+    intervalsToggleLabel.htmlFor = 'main-fretboard-intervals-toggle';
+    intervalsToggleLabel.textContent = 'Show Intervals';
+    intervalsToggleLabel.style.cssText = `
+        font-size: 12px;
+        color: #fff;
+        cursor: pointer;
+        user-select: none;
+        white-space: nowrap;
+    `;
+
+    intervalsToggleCheckbox.addEventListener('change', (e) => {
+        showMainFretboardIntervals = e.target.checked;
+
+        if (currentChordGridSelection) {
+            showChordPatternOnFretboard(currentChordGridSelection.note, currentChordGridSelection.chordType, false);
+        } else if (currentDisplayedChord === 0) {
+            showScaleOnFretboard();
+        } else if (currentDisplayedChord !== null && currentDisplayedChord > 0) {
+            showChordOnFretboard(currentDisplayedChord - 1);
+        }
+    });
+
+    intervalsToggleContainer.appendChild(intervalsToggleCheckbox);
+    intervalsToggleContainer.appendChild(intervalsToggleLabel);
     
     // Roman numeral chord buttons + Scale button
     const romanNumerals = ['Scale', 'I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
@@ -2812,6 +2926,7 @@ function createFretboardControls(fretboard) {
     
     chordControlsContainer.appendChild(chordTypeLabel);
     chordControlsContainer.appendChild(chordTypeSelect);
+    chordControlsContainer.appendChild(intervalsToggleContainer);
     
     // Create chord info display
     const chordInfoContainer = document.createElement('div');
@@ -3082,7 +3197,9 @@ function createFretboardControls(fretboard) {
     
     // Add chord button grid after the fretboard
     const chordGrid = createChordButtonGrid();
+    const scalePositionGrid = createScalePositionGrid();
     if (chordGrid) {
+        fretboard.container.appendChild(scalePositionGrid);
         scalesAndChordsContainer.appendChild(scaleControlsContainer);
         scalesAndChordsContainer.appendChild(chordGrid);
         fretboard.container.appendChild(scalesAndChordsContainer);
@@ -3091,6 +3208,7 @@ function createFretboardControls(fretboard) {
         // Use setTimeout to ensure the DOM elements are fully added before updating colors
         setTimeout(() => {
             updateChordGridColors();
+            renderScalePositionGrid();
         }, 100);
     }
 }
@@ -3359,6 +3477,767 @@ function createChordButtonGrid() {
 }
 
 /**
+ * Get the active scale notes with octave removed and duplicates removed.
+ * @returns {Array<string>} Normalized scale notes
+ */
+function getCurrentScaleNoteNames() {
+    const primaryScale = getPrimaryScale();
+    const scaleRootNote = getPrimaryRootNote();
+
+    if (!primaryScale || !scaleRootNote) {
+        return [];
+    }
+
+    const [family, mode] = primaryScale.split('-');
+    const modeIndex = parseInt(mode, 10) - 1;
+
+    if (!HeptatonicScales || !HeptatonicScales[family] || !HeptatonicScales[family][modeIndex]) {
+        return [];
+    }
+
+    const intervals = HeptatonicScales[family][modeIndex].intervals;
+    const scaleNotes = getScaleNotes(scaleRootNote, intervals);
+    const translatedScaleNotes = notationTranslateNotes(scaleNotes);
+    const noteNames = translatedScaleNotes.map(note => notationStripOctave(note));
+
+    return [...new Set(noteNames)];
+}
+
+/**
+ * Convert an interval in semitones to a color.
+ * @param {number} semitone - Interval distance from reference root (0-11)
+ * @returns {string} Hex color
+ */
+function getIntervalColor(semitone) {
+    const colors = [
+        '#ff4d4d', // 1
+        '#ff8a3d', // b2
+        '#ffb347', // 2
+        '#ffd34f', // b3
+        '#d2f25f', // 3
+        '#8fdc5b', // 4
+        '#4dd6b8', // b5
+        '#45b6ff', // 5
+        '#5a88ff', // b6
+        '#7a6cff', // 6
+        '#a46cff', // b7
+        '#d26bff'  // 7
+    ];
+    return colors[((semitone % 12) + 12) % 12];
+}
+
+/**
+ * Build ordered semitone/note data for the active scale from its root.
+ * @param {Array<string>} scaleNotes
+ * @param {string} rootNote
+ * @returns {Array<{ note: string, semitone: number, intervalLabel: string }>}
+ */
+function getScaleIntervalEntries(scaleNotes, rootNote) {
+    const entries = [];
+    const seen = new Set();
+
+    for (const note of scaleNotes) {
+        const semitone = getSemitoneFromReference(rootNote, note);
+        if (seen.has(semitone)) {
+            continue;
+        }
+        seen.add(semitone);
+        entries.push({
+            note,
+            semitone,
+            intervalLabel: SEMITONE_TO_SCALE_INTERVAL_LABEL[semitone]
+        });
+    }
+
+    return entries;
+}
+
+/**
+ * Derive a compact chord suffix from chord notes if it matches common qualities.
+ * @param {string} chordRoot
+ * @param {Array<string>} chordNotes
+ * @returns {string} Suffix such as '', 'm', 'dim', 'aug', '7', 'maj7', 'm7', 'm7b5', or '?'
+ */
+function deriveChordSuffix(chordRoot, chordNotes) {
+    if (!chordRoot || !Array.isArray(chordNotes) || chordNotes.length === 0) {
+        return '?';
+    }
+
+    const uniqueSemitones = [...new Set(chordNotes.map(note => getSemitoneFromReference(chordRoot, note)))].sort((a, b) => a - b);
+    const pattern = uniqueSemitones.join(',');
+
+    const qualityMap = {
+        '0,4,7': '',
+        '0,3,7': 'm',
+        '0,3,6': 'dim',
+        '0,4,8': 'aug',
+        '0,4,7,10': '7',
+        '0,4,7,11': 'maj7',
+        '0,3,7,10': 'm7',
+        '0,3,6,10': 'm7b5',
+        '0,3,6,9': 'dim7'
+    };
+
+    return qualityMap[pattern] !== undefined ? qualityMap[pattern] : '?';
+}
+
+/**
+ * Build degree header label with optional chord name.
+ * @param {string} roman
+ * @param {string} chordRoot
+ * @param {Array<string>} chordNotes
+ * @returns {string}
+ */
+function buildDegreeHeaderLabel(roman, chordRoot, chordNotes) {
+    if (!scalePositionShowChordNames) {
+        return roman;
+    }
+
+    const suffix = deriveChordSuffix(chordRoot, chordNotes);
+    const fullChord = `${chordRoot}${suffix}`;
+    // Keep the derived quality available from the selected root chord name.
+    const derivedQuality = fullChord.replace(chordRoot, '');
+    const displayChord = derivedQuality ? `${chordRoot}${derivedQuality}` : chordRoot;
+    return `${roman}\n${displayChord}`;
+}
+
+/**
+ * Get chromatic interval distance from a reference root.
+ * @param {string} referenceRootNote - Root note name without octave
+ * @param {string} targetNote - Target note name without octave
+ * @returns {number} Semitone interval in [0, 11]
+ */
+function getSemitoneFromReference(referenceRootNote, targetNote) {
+    const referenceMidi = notationNoteToMidi(`${normalizeNote(referenceRootNote)}/4`);
+    const targetMidi = notationNoteToMidi(`${normalizeNote(targetNote)}/4`);
+    return ((targetMidi - referenceMidi) % 12 + 12) % 12;
+}
+
+/**
+ * Resolve which string in the mini tuning is used as the row anchor.
+ * @param {string} rowString - One of B, A, G, E, D
+ * @returns {number} String index in MINI_SCALE_STRING_TUNING
+ */
+function getRowAnchorStringIndex(rowString) {
+    switch (rowString) {
+        case 'B': return 1;
+        case 'A': return 4;
+        case 'G': return 2;
+        case 'D': return 3;
+        case 'E': return 5;
+        default: return 5;
+    }
+}
+
+/**
+ * Find the first matching fret at or above a minimum fret for a row root note.
+ * @param {string} rowString - One of B, A, G, E, D
+ * @param {string} rowScaleRootNote - Scale root note used to anchor the row
+ * @param {number} minFret - Minimum target fret
+ * @returns {number|null} Absolute fret number or null if not found in range
+ */
+function findRowRootAbsoluteFret(rowString, rowScaleRootNote, minFret = SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET) {
+    const anchorIndex = getRowAnchorStringIndex(rowString);
+    const anchorOpenMidi = notationNoteToMidi(MINI_SCALE_STRING_TUNING[anchorIndex]);
+    const rootPitchClass = ((notationNoteToMidi(`${normalizeNote(rowScaleRootNote)}/4`) % 12) + 12) % 12;
+
+    for (let fret = Math.max(0, minFret); fret <= FRET_COUNT; fret++) {
+        const pitchClass = ((anchorOpenMidi + fret) % 12 + 12) % 12;
+        if (pitchClass === rootPitchClass) {
+            return fret;
+        }
+    }
+
+    for (let fret = 0; fret <= FRET_COUNT; fret++) {
+        const pitchClass = ((anchorOpenMidi + fret) % 12 + 12) % 12;
+        if (pitchClass === rootPitchClass) {
+            return fret;
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Convert display column index to absolute fret for the row-generic board.
+ * @param {number} rowRootAbsoluteFret - Absolute fret where row root is anchored
+ * @param {number} displayColumn - Display column index from 0..MINI_SCALE_FRET_COUNT
+ * @returns {number}
+ */
+function getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn) {
+    return rowRootAbsoluteFret + (displayColumn - GENERIC_ROOT_DISPLAY_COLUMN);
+}
+
+/**
+ * Create one mini fretboard used inside each scale position grid cell.
+ * @param {Array<string>} scaleNoteNames - Full active scale notes
+ * @param {Array<string>} displayedNotes - Notes shown in this specific cell
+ * @param {string} referenceRootNote - Reference root used for interval coloring
+ * @param {string} rowRootString - Target row string label (B, A, G, E, D)
+ * @param {string} rowScaleRootNote - Scale root used to anchor row-generic fret layout
+ * @param {boolean} showOnlyDisplayedNotes - If true, only notes from displayedNotes are rendered
+ * @param {boolean} showRelativeFretLabels - If true, show R/-1/+1 labels under fret columns
+ * @returns {HTMLElement} Mini fretboard element
+ */
+function createScalePositionMiniFretboard(
+    scaleNoteNames,
+    displayedNotes,
+    referenceRootNote,
+    rowRootString,
+    rowScaleRootNote,
+    showOnlyDisplayedNotes = false,
+    patternScale = scalePositionPatternScale,
+    showRelativeFretLabels = true,
+    showAbsoluteFretLabels = scalePositionUseAbsoluteFretLabels
+) {
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    const width = Math.round(122 * patternScale);
+    const height = Math.round(104 * patternScale);
+    const startX = Math.round(10 * patternScale);
+    const startY = Math.round(10 * patternScale);
+    const fretGap = 18 * patternScale;
+    const stringGap = 12 * patternScale;
+
+    svg.setAttribute('width', String(width));
+    svg.setAttribute('height', String(height));
+    svg.style.cssText = `
+        background: rgba(0,0,0,0.22);
+        border: 1px solid #505050;
+        border-radius: 4px;
+    `;
+
+    for (let fret = 0; fret <= MINI_SCALE_FRET_COUNT; fret++) {
+        const x = startX + fret * fretGap;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', String(x));
+        line.setAttribute('y1', String(startY));
+        line.setAttribute('x2', String(x));
+        line.setAttribute('y2', String(startY + (MINI_SCALE_STRING_TUNING.length - 1) * stringGap));
+        line.setAttribute('stroke', '#6c6c6c');
+        line.setAttribute('stroke-width', '1');
+        svg.appendChild(line);
+    }
+
+    for (let stringIndex = 0; stringIndex < MINI_SCALE_STRING_TUNING.length; stringIndex++) {
+        const y = startY + stringIndex * stringGap;
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', String(startX));
+        line.setAttribute('y1', String(y));
+        line.setAttribute('x2', String(startX + MINI_SCALE_FRET_COUNT * fretGap));
+        line.setAttribute('y2', String(y));
+        line.setAttribute('stroke', '#8a8a8a');
+        line.setAttribute('stroke-width', '1');
+        svg.appendChild(line);
+    }
+
+    const scaleArray = Array.isArray(scaleNoteNames) ? scaleNoteNames : [];
+    const displayedArray = Array.isArray(displayedNotes) ? displayedNotes : [];
+    const rowRootAbsoluteFret = findRowRootAbsoluteFret(rowRootString, rowScaleRootNote, SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET);
+
+    if (rowRootAbsoluteFret === null) {
+        wrapper.appendChild(svg);
+        return wrapper;
+    }
+
+    for (let stringIndex = 0; stringIndex < MINI_SCALE_STRING_TUNING.length; stringIndex++) {
+        const openMidi = notationNoteToMidi(MINI_SCALE_STRING_TUNING[stringIndex]);
+        const stringName = notationStripOctave(MINI_SCALE_STRING_TUNING[stringIndex]);
+
+        for (let displayColumn = 0; displayColumn <= MINI_SCALE_FRET_COUNT; displayColumn++) {
+            const absoluteFret = getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn);
+            if (absoluteFret < -1) {
+                continue;
+            }
+            const midi = openMidi + absoluteFret;
+            const noteName = notationStripOctave(notationMidiToNote(midi));
+
+            const isInScale = noteArrayContains(scaleArray, noteName);
+            const isDisplayed = noteArrayContains(displayedArray, noteName);
+
+            if (!isInScale) {
+                continue;
+            }
+
+            if (showOnlyDisplayedNotes && !isDisplayed) {
+                continue;
+            }
+
+            const x = startX + displayColumn * fretGap;
+            const y = startY + stringIndex * stringGap;
+            const isRoot = areEnharmonicEquivalent(noteName, referenceRootNote);
+            const isTargetRootString = stringName === rowRootString;
+            const semitone = getSemitoneFromReference(referenceRootNote, noteName);
+            const intervalColor = getIntervalColor(semitone);
+
+            const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+            marker.setAttribute('cx', String(x));
+            marker.setAttribute('cy', String(y));
+            const baseRadius = isRoot ? 3.4 : 2.9;
+            marker.setAttribute('r', String(baseRadius * scalePositionDotScale));
+            marker.setAttribute('fill', intervalColor);
+
+            if (isRoot && isTargetRootString) {
+                marker.setAttribute('stroke', '#ffffff');
+                marker.setAttribute('stroke-width', '1');
+            } else {
+                marker.setAttribute('stroke', 'rgba(0,0,0,0.5)');
+                marker.setAttribute('stroke-width', '0.5');
+            }
+
+            svg.appendChild(marker);
+        }
+    }
+
+    if (showRelativeFretLabels) {
+        const labelY = startY + (MINI_SCALE_STRING_TUNING.length - 1) * stringGap + (12 * patternScale);
+        for (let displayColumn = 0; displayColumn <= MINI_SCALE_FRET_COUNT; displayColumn++) {
+            const x = startX + displayColumn * fretGap;
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', String(x));
+            text.setAttribute('y', String(labelY));
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('dominant-baseline', 'middle');
+            text.setAttribute('fill', '#d6d6d6');
+            text.setAttribute('font-size', String(Math.max(8, Math.round(8 * patternScale))));
+            text.setAttribute('font-family', 'monospace');
+
+            if (showAbsoluteFretLabels) {
+                const absoluteFret = getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn);
+                text.textContent = String(absoluteFret);
+            } else {
+                const delta = displayColumn - GENERIC_ROOT_DISPLAY_COLUMN;
+                text.textContent = delta === 0 ? 'R' : (delta > 0 ? `+${delta}` : String(delta));
+            }
+
+            svg.appendChild(text);
+        }
+    }
+
+    wrapper.appendChild(svg);
+    return wrapper;
+}
+
+/**
+ * Create or rebuild the scale position grid that sits between the main fretboard and chord grid.
+ */
+function renderScalePositionGrid() {
+    const container = document.getElementById('scalePositionGridContainer');
+    if (!container) {
+        return;
+    }
+
+    const scaleNoteNames = getCurrentScaleNoteNames();
+    const primaryScale = getPrimaryScale();
+    const primaryRoot = getPrimaryRootNote() || 'C';
+    const normalizedRoot = notationStripOctave(normalizeNote(primaryRoot));
+    const noteCount = scaleNoteNames.length;
+    const columnCount = Math.min(8, Math.max(6, noteCount || 7));
+
+    container.innerHTML = '';
+
+    const title = document.createElement('h3');
+    title.textContent = 'Scale Position Grid';
+    title.style.cssText = `
+        margin: 0 0 10px 0;
+        font-size: 16px;
+        font-weight: bold;
+        text-align: center;
+        color: #fff;
+    `;
+    container.appendChild(title);
+
+    const description = document.createElement('div');
+    description.style.cssText = `
+        color: #cbcbcb;
+        font-size: 11px;
+        text-align: center;
+        margin-bottom: 10px;
+    `;
+    description.textContent = 'Generic row boards: root is fixed at displayed fret 2 (with one fret left), labels are row-consistent, and each row shifts by root string context.';
+    container.appendChild(description);
+
+    const controls = document.createElement('div');
+    controls.style.cssText = `
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 12px;
+        align-items: center;
+        margin-bottom: 10px;
+        color: #e3e3e3;
+        font-size: 11px;
+    `;
+
+    const scaleControl = document.createElement('label');
+    scaleControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const scaleLabel = document.createElement('span');
+    scaleLabel.textContent = 'Pattern Size';
+    const scaleInput = document.createElement('input');
+    scaleInput.type = 'range';
+    scaleInput.min = '0.8';
+    scaleInput.max = '2.2';
+    scaleInput.step = '0.05';
+    scaleInput.value = String(scalePositionPatternScale);
+    const scaleValue = document.createElement('span');
+    scaleValue.style.cssText = 'min-width: 34px; text-align: right; font-family: monospace;';
+    scaleValue.textContent = `${scalePositionPatternScale.toFixed(2)}x`;
+    scaleInput.addEventListener('input', (event) => {
+        const newValue = parseFloat(event.target.value);
+        if (!Number.isNaN(newValue)) {
+            scalePositionPatternScale = newValue;
+            scaleValue.textContent = `${newValue.toFixed(2)}x`;
+            renderScalePositionGrid();
+        }
+    });
+    scaleControl.appendChild(scaleLabel);
+    scaleControl.appendChild(scaleInput);
+    scaleControl.appendChild(scaleValue);
+
+    const dotControl = document.createElement('label');
+    dotControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const dotLabel = document.createElement('span');
+    dotLabel.textContent = 'Dot Size';
+    const dotInput = document.createElement('input');
+    dotInput.type = 'range';
+    dotInput.min = '0.5';
+    dotInput.max = '2';
+    dotInput.step = '0.05';
+    dotInput.value = String(scalePositionDotScale);
+    const dotValue = document.createElement('span');
+    dotValue.style.cssText = 'min-width: 34px; text-align: right; font-family: monospace;';
+    dotValue.textContent = `${scalePositionDotScale.toFixed(2)}x`;
+    dotInput.addEventListener('input', (event) => {
+        const newValue = parseFloat(event.target.value);
+        if (!Number.isNaN(newValue)) {
+            scalePositionDotScale = newValue;
+            dotValue.textContent = `${newValue.toFixed(2)}x`;
+            renderScalePositionGrid();
+        }
+    });
+    dotControl.appendChild(dotLabel);
+    dotControl.appendChild(dotInput);
+    dotControl.appendChild(dotValue);
+
+    const modeControl = document.createElement('label');
+    modeControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const modeToggle = document.createElement('input');
+    modeToggle.type = 'checkbox';
+    modeToggle.checked = scalePositionUseAbsoluteFretLabels;
+    const modeLabel = document.createElement('span');
+    modeLabel.textContent = scalePositionUseAbsoluteFretLabels ? 'Fret Labels: Absolute' : 'Fret Labels: Relative';
+    modeToggle.addEventListener('change', (event) => {
+        scalePositionUseAbsoluteFretLabels = event.target.checked;
+        modeLabel.textContent = scalePositionUseAbsoluteFretLabels ? 'Fret Labels: Absolute' : 'Fret Labels: Relative';
+        renderScalePositionGrid();
+    });
+    modeControl.appendChild(modeToggle);
+    modeControl.appendChild(modeLabel);
+
+    const chordHeaderControl = document.createElement('label');
+    chordHeaderControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const chordHeaderToggle = document.createElement('input');
+    chordHeaderToggle.type = 'checkbox';
+    chordHeaderToggle.checked = scalePositionShowChordNames;
+    const chordHeaderLabel = document.createElement('span');
+    chordHeaderLabel.textContent = 'Show Chord Names In Headers';
+    chordHeaderToggle.addEventListener('change', (event) => {
+        scalePositionShowChordNames = event.target.checked;
+        renderScalePositionGrid();
+    });
+    chordHeaderControl.appendChild(chordHeaderToggle);
+    chordHeaderControl.appendChild(chordHeaderLabel);
+
+    const instancedScaleControl = document.createElement('label');
+    instancedScaleControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const instancedScaleToggle = document.createElement('input');
+    instancedScaleToggle.type = 'checkbox';
+    instancedScaleToggle.checked = scalePositionUseInstancedScale;
+    const instancedScaleLabel = document.createElement('span');
+    instancedScaleLabel.textContent = 'Instanced Scale Labels (Notes)';
+    instancedScaleToggle.addEventListener('change', (event) => {
+        scalePositionUseInstancedScale = event.target.checked;
+        renderScalePositionGrid();
+    });
+    instancedScaleControl.appendChild(instancedScaleToggle);
+    instancedScaleControl.appendChild(instancedScaleLabel);
+
+    controls.appendChild(scaleControl);
+    controls.appendChild(dotControl);
+    controls.appendChild(modeControl);
+    controls.appendChild(chordHeaderControl);
+    controls.appendChild(instancedScaleControl);
+    container.appendChild(controls);
+
+    const fallbackScale = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    const workingScale = scaleNoteNames.length > 0 ? scaleNoteNames : fallbackScale;
+    const scaleIntervalEntries = getScaleIntervalEntries(workingScale, normalizedRoot);
+    const intervalSummary = `${scaleIntervalEntries.map(entry => entry.intervalLabel).join(' - ')} - O`;
+    const scaleDescriptor = primaryScale ? primaryScale.replace('-', ' Mode ') : 'Unknown Scale';
+
+    const selectedScaleTitle = document.createElement('div');
+    selectedScaleTitle.style.cssText = `
+        margin: 4px 0 10px 0;
+        color: #f0f0f0;
+        font-size: 12px;
+        font-weight: bold;
+        text-align: center;
+    `;
+    selectedScaleTitle.textContent = `${normalizedRoot} ${scaleDescriptor} | Intervals: ${intervalSummary}`;
+    container.appendChild(selectedScaleTitle);
+
+    const legend = document.createElement('div');
+    legend.style.cssText = `
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        justify-content: center;
+        align-items: center;
+        margin: 0 auto 10px auto;
+        max-width: 1100px;
+        color: #e0e0e0;
+        font-size: 10px;
+    `;
+    scaleIntervalEntries.forEach((entry) => {
+        const item = document.createElement('span');
+        item.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border: 1px solid #4f4f4f;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.2);
+        `;
+
+        const dot = document.createElement('span');
+        dot.style.cssText = `
+            width: 9px;
+            height: 9px;
+            border-radius: 50%;
+            background: ${getIntervalColor(entry.semitone)};
+            border: 1px solid rgba(0,0,0,0.5);
+            display: inline-block;
+        `;
+
+        const text = document.createElement('span');
+        text.textContent = scalePositionUseInstancedScale ? entry.note : entry.intervalLabel;
+
+        item.appendChild(dot);
+        item.appendChild(text);
+        legend.appendChild(item);
+    });
+    container.appendChild(legend);
+
+    const table = document.createElement('table');
+    table.style.cssText = `
+        border-collapse: collapse;
+        margin: 0 auto;
+        background: rgba(17, 17, 17, 0.45);
+        border: 1px solid #444;
+    `;
+
+    const headerRow = document.createElement('tr');
+    const cornerCell = document.createElement('th');
+    cornerCell.textContent = 'Pos';
+    cornerCell.style.cssText = `
+        border: 1px solid #444;
+        background: #2b2b2b;
+        color: #fff;
+        padding: 4px 6px;
+        font-size: 11px;
+        min-width: 48px;
+    `;
+    headerRow.appendChild(cornerCell);
+
+    const scaleHeader = document.createElement('th');
+    scaleHeader.textContent = 'Scale';
+    scaleHeader.style.cssText = `
+        border: 1px solid #444;
+        background: #2b2b2b;
+        color: #fff;
+        padding: 4px;
+        font-size: 11px;
+        min-width: ${Math.round(124 * scalePositionPatternScale)}px;
+        text-align: center;
+    `;
+    headerRow.appendChild(scaleHeader);
+
+    const chordSpan = currentChordType === 'sevenths' ? 4 : 3;
+
+    for (let col = 0; col < columnCount; col++) {
+        const colHeader = document.createElement('th');
+        const degreeIndexes = [];
+        for (let i = 0; i < chordSpan; i++) {
+            degreeIndexes.push((col + i * 2) % workingScale.length);
+        }
+        const degreeChordNotes = degreeIndexes.map(index => workingScale[index]);
+        const degreeChordRoot = workingScale[col % workingScale.length];
+        colHeader.textContent = buildDegreeHeaderLabel(
+            SCALE_POSITION_DEGREES[col] || String(col + 1),
+            degreeChordRoot,
+            degreeChordNotes
+        );
+        colHeader.style.cssText = `
+            border: 1px solid #444;
+            background: #2b2b2b;
+            color: #fff;
+            padding: 4px;
+            font-size: 11px;
+            min-width: ${Math.round(124 * scalePositionPatternScale)}px;
+            text-align: center;
+            white-space: pre-line;
+            line-height: 1.2;
+        `;
+        headerRow.appendChild(colHeader);
+    }
+    table.appendChild(headerRow);
+
+    for (let row = 0; row < SCALE_POSITION_ROW_STRINGS.length; row++) {
+        const rowString = SCALE_POSITION_ROW_STRINGS[row];
+        const tr = document.createElement('tr');
+
+        const rowHeader = document.createElement('td');
+        rowHeader.textContent = `Root ${rowString}`;
+        rowHeader.style.cssText = `
+            border: 1px solid #444;
+            background: #383838;
+            color: #fff;
+            font-weight: bold;
+            font-size: 11px;
+            text-align: center;
+            padding: 4px 6px;
+            white-space: nowrap;
+        `;
+        tr.appendChild(rowHeader);
+
+        const fullScaleCell = document.createElement('td');
+        fullScaleCell.style.cssText = `
+            border: 1px solid #444;
+            padding: 4px;
+            vertical-align: middle;
+            background: rgba(30,30,30,0.35);
+        `;
+        const fullScaleMini = createScalePositionMiniFretboard(
+            workingScale,
+            workingScale,
+            normalizedRoot,
+            rowString,
+            normalizedRoot,
+            false,
+            scalePositionPatternScale,
+            true,
+            scalePositionUseAbsoluteFretLabels
+        );
+        fullScaleCell.appendChild(fullScaleMini);
+        tr.appendChild(fullScaleCell);
+
+        for (let col = 0; col < columnCount; col++) {
+            const td = document.createElement('td');
+            td.style.cssText = `
+                border: 1px solid #444;
+                padding: 4px;
+                vertical-align: middle;
+                background: rgba(30,30,30,0.35);
+            `;
+
+            const chordIndexes = [];
+            for (let i = 0; i < chordSpan; i++) {
+                chordIndexes.push((col + i * 2) % workingScale.length);
+            }
+            const chordPatternNotes = chordIndexes.map(index => workingScale[index]);
+            const chordRoot = workingScale[col % workingScale.length];
+
+            const mini = createScalePositionMiniFretboard(
+                workingScale,
+                chordPatternNotes,
+                chordRoot,
+                rowString,
+                normalizedRoot,
+                true,
+                scalePositionPatternScale,
+                true,
+                scalePositionUseAbsoluteFretLabels
+            );
+            td.appendChild(mini);
+            tr.appendChild(td);
+        }
+
+        table.appendChild(tr);
+    }
+
+    container.appendChild(table);
+}
+
+/**
+ * Create the wrapper container for the scale position grid.
+ * @returns {HTMLElement}
+ */
+function createScalePositionGrid() {
+    const gridContainer = document.createElement('div');
+    gridContainer.id = 'scalePositionGridContainer';
+    gridContainer.style.cssText = `
+        margin: 16px auto 0 auto;
+        width: fit-content;
+        max-width: none;
+        background: hsla(0, 0%, 24%, 1);
+        border-radius: 8px;
+        padding: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        overflow-x: visible;
+    `;
+
+    renderScalePositionGrid();
+    return gridContainer;
+}
+
+/**
  * Update chord grid colors based on current scale
  */
 function updateChordGridColors() {
@@ -3420,6 +4299,7 @@ function refreshFretboardDisplay() {
             
             // Update chord grid colors first
             updateChordGridColors();
+            renderScalePositionGrid();
             
             // Then restore the appropriate fretboard display
             if (currentChordGridSelection) {
@@ -3515,11 +4395,16 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                     );
                     
                     const colorMap = ['#ff4444', '#ffcc44', '#44ff44', '#4444ff']; // Root, 3rd, 5th, 7th
+                    const chordIntervalLabels = Array.isArray(chordInfo.intervals)
+                        ? chordInfo.intervals
+                        : chordNotes.map(note => getIntervalLabelFromRoot(chordNotes[0], note));
                     
                     chordNotes.forEach((note, index) => {
                         const positions = fretboard.findNotePositions(note);
                         const isInScale = noteArrayContains(scaleNoteNames, note);
                         const isRoot = index === 0;
+                        const intervalLabel = normalizeIntervalLabel(chordIntervalLabels[index]) || getIntervalLabelFromRoot(chordNotes[0], note);
+                        const markerLabel = showMainFretboardIntervals && intervalLabel ? intervalLabel : note;
                         
                         positions.forEach(pos => {
                             fretboard.markFret(pos.string, pos.fret, {
@@ -3528,7 +4413,7 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                                 borderWidth: isRoot ? 4 : 3,
                                 textColor: '#333333',
                                 size: isRoot ? 30 : 26,
-                                label: note,
+                                label: markerLabel,
                                 isRoot: isRoot,
                                 useCustomStyle: true
                             });
@@ -3685,10 +4570,13 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
             updateChordInfoDisplay(chordName, chord);
             
             // Always start with traditional chord display to show full scale context
+            const chordIntervalLabels = chord.map(note => getIntervalLabelFromRoot(chord[0], note));
             fretboard.displayChord(chord, chordName, {
                 clearFirst: true,
                 showLines: false,
-                showScaleContext: true
+                showScaleContext: true,
+                showIntervals: showMainFretboardIntervals,
+                intervalLabels: chordIntervalLabels
             });
             
             // Then add chord pattern lines on top
@@ -3769,7 +4657,9 @@ function showScaleOnFretboard(isTemporary = false) {
         fretboard.clearMarkers();
         fretboard.clearChordLines();
         
-        fretboard.markScale(scaleNotes, rootNote);
+        fretboard.markScale(scaleNotes, rootNote, {
+            showIntervals: showMainFretboardIntervals
+        });
         
         if (!isTemporary) {
             // Add to scale tracking only if this is a permanent selection
@@ -3864,7 +4754,9 @@ function updateFretboardsForScaleChange(scaleData) {
         fretboardsShowingScale.forEach(containerId => {
             const fretboard = fretboardInstances.get(containerId);
             if (fretboard) {
-                fretboard.markScale(scaleNotes, rootNote);
+                fretboard.markScale(scaleNotes, rootNote, {
+                    showIntervals: showMainFretboardIntervals
+                });
             }
         });
         
@@ -3876,7 +4768,9 @@ function updateFretboardsForScaleChange(scaleData) {
                 if (isInHoverState) {
                     fretboard.clearMarkers();
                     fretboard.clearChordLines();
-                    fretboard.markScale(scaleNotes, rootNote);
+                    fretboard.markScale(scaleNotes, rootNote, {
+                        showIntervals: showMainFretboardIntervals
+                    });
                     return;
                 }
                 
@@ -3941,6 +4835,7 @@ window.addEventListener('scaleChanged', (event) => {
     
     updateFretboardsForScaleChange(event.detail);
     updateChordGridColors(); // Update chord grid colors when scale changes
+    renderScalePositionGrid(); // Keep scale position mini-fretboards in sync with current scale
     
     // If there's a current chord grid selection, re-apply it with the new scale context
     if (currentChordGridSelection) {
@@ -4285,6 +5180,7 @@ function initializeFretboardWithScale() {
                     console.log('Refreshing fretboard display with current scale');
                     showScaleOnFretboard();
                     updateChordGridColors();
+                    renderScalePositionGrid();
                 } else {
                     console.log('No primary scale selected, fretboard initialized without scale display');
                 }
