@@ -252,6 +252,7 @@ let staveKey = 'C'; // Global key signature for mini staves
 let staveTheoryMode = false; // Global toggle for theory mode (4th octave notes)
 let useSeventhChords = false; // Global toggle for triads vs seventh chords
 let showFretboardIntervals = false; // Global toggle for showing intervals instead of note names on mini fretboards
+let showArpeggiationNotes = false; // Global toggle for showing arpeggiation notes on mini fretboards
 
 // Caching system for performance optimization
 let parsedTokensCache = []; // Cache of parsed tokens from input
@@ -1133,7 +1134,99 @@ function getChordPatternMatches(chord) {
         return aMinFret - bMinFret;
     });
     
+    // Add arpeggiation notes for each pattern
+    if (patterns.length > 0) {
+        patterns.forEach((pattern, patternIndex) => {
+            pattern.arpeggiationNotes = collectArpeggiationNotes(pattern, chordNotes, chord.chordInfo.intervals);
+            console.log(`Pattern ${patternIndex} has ${pattern.arpeggiationNotes.length} arpeggiation notes:`, pattern.arpeggiationNotes);
+        });
+    }
+    
     return patterns;
+}
+
+/**
+ * Collect arpeggiation notes for a chord pattern
+ * @param {Object} pattern - Pattern object with positions
+ * @param {Array} chordNotes - Array of chord note names (without octaves)
+ * @param {Array} intervals - Array of interval names corresponding to chord notes
+ * @returns {Array} Array of arpeggiation note objects
+ */
+function collectArpeggiationNotes(pattern, chordNotes, intervals) {
+    if (!pattern || !pattern.positions || pattern.positions.length === 0) {
+        return [];
+    }
+    
+    // Standard guitar tuning (from string 1 to 6: E4, B3, G3, D3, A2, E2)
+    // Note: In the pattern positions, string numbers go from 1-6, where 1 is high E and 6 is low E
+    const stringTuning = ['E', 'A', 'D', 'G', 'B', 'E']; // Low to High (string 6 to 1)
+    
+    // Find the minimum fret of the pattern
+    const minFret = Math.min(...pattern.positions.map(p => p.fret));
+    const maxFret = minFret + 6; // Maximum 5 frets above minimum
+    
+    // Get all positions that are part of the pattern
+    const patternPositions = new Set();
+    pattern.positions.forEach(pos => {
+        patternPositions.add(`${pos.string}-${pos.fret}`);
+    });
+    
+    const arpeggiationNotes = [];
+    
+    // Check each string (1-6)
+    for (let string = 1; string <= 6; string++) {
+        // Convert string number to tuning array index (string 1 = index 5, string 6 = index 0)
+        const tuningIndex = 6 - string;
+        const openStringNote = stringTuning[tuningIndex];
+        
+        // Check each fret from minFret to maxFret
+        for (let fret = minFret; fret <= maxFret; fret++) {
+            const positionKey = `${string-1}-${fret}`;
+            // console.log(`Checking position: String ${string}, Fret ${fret} (${positionKey})`);
+            // console.log(`Pattern positions: ${Array.from(patternPositions).join(', ')}`);
+            // Skip if this position is already part of the pattern
+            if (patternPositions.has(positionKey)) {
+                continue;
+            }
+            
+            // Calculate what note is at this string and fret
+            const noteAtFret = getNote(openStringNote, fret);
+            const strippedNote = notationStripOctave(noteAtFret);
+            
+            // Check if this note is part of the chord notes
+            const chordNoteIndex = chordNotes.findIndex(note => 
+                notationStripOctave(note) === strippedNote
+            );
+            
+            if (chordNoteIndex !== -1) {
+                // This note is part of the chord but not part of the pattern
+                let intervalName = intervals && intervals[chordNoteIndex] ? intervals[chordNoteIndex] : '?';
+                
+                // Convert P1 to R for root note display consistency
+                if (intervalName === "P1") {
+                    intervalName = "R";
+                }
+                
+                arpeggiationNotes.push({
+                    string: string - 1,
+                    fret: fret,
+                    note: strippedNote,
+                    interval: intervalName,
+                    position: { string, fret } // Include position object for consistency
+                });
+            }
+        }
+    }
+    
+    // Sort arpeggiation notes by string (high to low) then by fret (low to high)
+    arpeggiationNotes.sort((a, b) => {
+        if (a.string !== b.string) {
+            return a.string - b.string; // Lower string number first (high E string = 1)
+        }
+        return a.fret - b.fret; // Lower fret first
+    });
+    
+    return arpeggiationNotes;
 }
 
 /**
@@ -1901,6 +1994,7 @@ function createProgressionControlsSection() {
     miniFretboardToggleCheckbox.addEventListener('change', (e) => {
         showMiniFretboards = e.target.checked;
         fretboardIntervalsToggleContainer.style.display = e.target.checked ? 'flex' : 'none';
+        arpeggiationToggleContainer.style.display = e.target.checked ? 'flex' : 'none';
         updateProgressionDisplay(); // Refresh the entire display to show/hide mini fretboards
     });
     
@@ -1952,6 +2046,42 @@ function createProgressionControlsSection() {
     
     fretboardIntervalsToggleContainer.appendChild(fretboardIntervalsToggleCheckbox);
     fretboardIntervalsToggleContainer.appendChild(fretboardIntervalsToggleLabel);
+    
+    // Arpeggiation notes toggle (only show when mini fretboards are enabled)
+    const arpeggiationToggleContainer = document.createElement('div');
+    arpeggiationToggleContainer.style.cssText = `
+        display: ${showMiniFretboards ? 'flex' : 'none'};
+        align-items: center;
+        gap: 8px;
+        margin-left: 16px;
+    `;
+    
+    const arpeggiationToggleCheckbox = document.createElement('input');
+    arpeggiationToggleCheckbox.type = 'checkbox';
+    arpeggiationToggleCheckbox.id = 'chord-progression-arpeggiation-toggle';
+    arpeggiationToggleCheckbox.checked = showArpeggiationNotes;
+    arpeggiationToggleCheckbox.style.cssText = `
+        transform: scale(1.2);
+    `;
+    
+    // Add change event listener to refresh display
+    arpeggiationToggleCheckbox.addEventListener('change', (e) => {
+        showArpeggiationNotes = e.target.checked;
+        updateProgressionDisplay(); // Refresh to show/hide arpeggiation notes
+    });
+    
+    const arpeggiationToggleLabel = document.createElement('label');
+    arpeggiationToggleLabel.htmlFor = 'chord-progression-arpeggiation-toggle';
+    arpeggiationToggleLabel.textContent = 'Show Arpeggiation';
+    arpeggiationToggleLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+    `;
+    
+    arpeggiationToggleContainer.appendChild(arpeggiationToggleCheckbox);
+    arpeggiationToggleContainer.appendChild(arpeggiationToggleLabel);
     
     // Mini piano toggle
     const miniPianoToggleContainer = document.createElement('div');
@@ -2708,6 +2838,7 @@ function createProgressionControlsSection() {
     section.appendChild(scaleToggleContainer);
     section.appendChild(miniFretboardToggleContainer);
     section.appendChild(fretboardIntervalsToggleContainer);
+    section.appendChild(arpeggiationToggleContainer);
     section.appendChild(miniPianoToggleContainer);
     section.appendChild(miniStavesToggleContainer);
     section.appendChild(staveKeyContainer);
@@ -3063,6 +3194,25 @@ function showNotification(message, type = 'info') {
 }
 
 /**
+ * Lighten a hex color by a specified amount
+ * @param {string} color - Hex color (e.g., '#ff0000')
+ * @param {number} amount - Amount to lighten (0-1, where 1 is white)
+ * @returns {string} Lightened hex color
+ */
+function lightenColor(color, amount) {
+    const usePound = color[0] === '#';
+    const col = usePound ? color.slice(1) : color;
+    const num = parseInt(col, 16);
+    let r = (num >> 16) + amount * (255 - (num >> 16));
+    let g = ((num >> 8) & 0x00FF) + amount * (255 - ((num >> 8) & 0x00FF));
+    let b = (num & 0x0000FF) + amount * (255 - (num & 0x0000FF));
+    r = Math.min(255, Math.max(0, Math.round(r)));
+    g = Math.min(255, Math.max(0, Math.round(g)));
+    b = Math.min(255, Math.max(0, Math.round(b)));
+    return (usePound ? '#' : '') + ((r << 16) | (g << 8) | b).toString(16).padStart(6, '0');
+}
+
+/**
  * Create a mini fretboard visualization for a chord pattern
  * This shows a 5-fret vertical section with chord notes highlighted,
  * fret numbers above, and note names or intervals below.
@@ -3077,8 +3227,23 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
     }
     
     // Tab20 color palette
+
+    
+// P1 m3 M3 d5 P5 m7 M7
+// 0 3 4 6 7 10 11
     const tab20Colors = [
-        '#fb8072', '#80b1d3', '#fdb462', '#8dd3c7', '#bc80bd', '#b3de69', '#ffed6f', '#bebada', '#d9d9d9', '#ffffb3', '#fccde5', '#ccebc5' 
+        '#ff3888', // P1 [ 0 Semitones] *
+        '#80b1d3', // m2 [ 1 Semitone ] *
+        '#fdb462', // M2 [ 2 Semitones] *
+        '#9049D4', // m3 [ 3 Semitones] *
+        '#C949BF', // M3 [ 4 Semitones] *
+        '#b3de69', // P4 [ 5 Semitones]
+        '#F28983', // d5 [ 6 Semitones] *
+        '#F6AA7E', // P5 [ 7 Semitones] *
+        '#d9d9d9', // A5 [ 8 Semitones]
+        '#ffffb3', // M6 [ 9 Semitones]
+        '#F8CA82', // m7 [10 Semitones] *
+        '#F0EA95'  // M7 [11 Semitones] *
     ];
     
     const config = MINI_FRETBOARD_CONFIG;
@@ -3282,6 +3447,98 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
             svg.appendChild(circle);
         }
     });
+    
+    // Draw arpeggiation notes if toggle is enabled
+    if (showArpeggiationNotes && pattern.arpeggiationNotes && pattern.arpeggiationNotes.length > 0) {
+        pattern.arpeggiationNotes.forEach(arpNote => {
+            const { string: stringNum, fret, note, interval } = arpNote;
+            
+            // Convert to display index: same logic as pattern notes
+            const stringIndex = config.stringCount - stringNum - 1;
+            
+            // Check if this fret is within our display range
+            if (fret >= startFret && fret <= endFret) {
+                const x = startX + stringIndex * stringSpacing;
+                let y;
+                
+                if (fret === 0) {
+                    // Open string - place marker on the nut
+                    y = startY;
+                } else {
+                    // Fretted note - place marker between frets
+                    let displayFret;
+                    if (startFret === 0) {
+                        displayFret = fret;
+                    } else {
+                        displayFret = fret - startFret + 1;
+                    }
+                    y = startY + (displayFret - 0.5) * fretHeight;
+                }
+                
+                // Calculate color for arpeggiation note (same logic as pattern notes but lightened)
+                let baseColor = '#4CAF50'; // Default color
+                
+                const isRootNote = chordNotes.length > 0 && note === chordNotes[0];
+                
+                if (isRootNote) {
+                    baseColor = tab20Colors[0];
+                } else if (interval && interval !== '?') {
+                    // Use interval to calculate color
+                    try {
+                        const semitones = intervalToSemitones(interval);
+                        const colorIndex = (semitones) % tab20Colors.length;
+                        baseColor = tab20Colors[colorIndex];
+                    } catch (error) {
+                        // Fallback to note-based calculation
+                        if (chordNotes.length > 0) {
+                            const rootNote = chordNotes[0];
+                            const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                            const rootIndex = chromaticNotes.indexOf(rootNote);
+                            const noteIndex = chromaticNotes.indexOf(note);
+                            if (rootIndex !== -1 && noteIndex !== -1) {
+                                const semitones = (noteIndex - rootIndex + 12) % 12;
+                                const colorIndex = (semitones) % tab20Colors.length;
+                                baseColor = tab20Colors[colorIndex];
+                            }
+                        }
+                    }
+                } else if (chordNotes.length > 0) {
+                    // Fallback: calculate from note names
+                    const rootNote = chordNotes[0];
+                    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+                    const rootIndex = chromaticNotes.indexOf(rootNote);
+                    const noteIndex = chromaticNotes.indexOf(note);
+                    if (rootIndex !== -1 && noteIndex !== -1) {
+                        const semitones = (noteIndex - rootIndex + 12) % 12;
+                        const colorIndex = (semitones) % tab20Colors.length;
+                        baseColor = tab20Colors[colorIndex];
+                    }
+                }
+                
+                // Lighten the color for arpeggiation notes
+                const arpeggiationColor = lightenColor(baseColor, 0.4);
+                
+                // Draw arpeggiation note circle (slightly smaller and with dashed border)
+                const arpCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                arpCircle.setAttribute('cx', x);
+                arpCircle.setAttribute('cy', y);
+                arpCircle.setAttribute('r', config.noteRadius * 0.8); // Slightly smaller
+                arpCircle.setAttribute('fill', arpeggiationColor);
+                arpCircle.setAttribute('stroke', '#fff');
+                arpCircle.setAttribute('stroke-width', '1');
+                arpCircle.setAttribute('stroke-dasharray', '2,2'); // Dashed border to distinguish from pattern notes
+                arpCircle.setAttribute('opacity', '0.8'); // Slightly transparent
+                svg.appendChild(arpCircle);
+                
+                // Store arpeggiation note for display below fretboard
+                // if (showFretboardIntervals && interval && interval !== '?') {
+                //     stringIntervals.set(stringIndex, interval);
+                // } else {
+                //     stringNotes.set(stringIndex, note);
+                // }
+            }
+        });
+    }
     
     // Draw note names or intervals below the fretboard
     for (let stringIndex = 0; stringIndex < config.stringCount; stringIndex++) {
@@ -4074,24 +4331,28 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
     
     // Display chord notes regardless of whether patterns exist
     const { chordNotes, patterns, displayName, hasPatterns } = patternData;
+    const chordIntervalLabels = chord.chordInfo && Array.isArray(chord.chordInfo.intervals)
+        ? chord.chordInfo.intervals
+        : [];
+    const chordDisplayOptions = {
+        clearFirst: false,
+        showLines: false,
+        showScaleContext: showScaleContext,
+        showIntervals: showFretboardIntervals,
+        intervalLabels: chordIntervalLabels
+    };
     
     // If no patterns are available, show chord notes with enhanced visibility when hovered
     if (!hasPatterns) {
         // Display the chord normally
-        fretboard.displayChord(chordNotes, displayName, {
-            clearFirst: false,
-            showLines: false,
-            showScaleContext: showScaleContext
-        });
+        fretboard.displayChord(chordNotes, displayName, chordDisplayOptions);
         
         // If highlighted (hovered), add a visual indicator by displaying again with different name
         if (isHighlighted) {
             // Add a special indicator to the chord name to show it's being highlighted
             const highlightedName = `🎯 ${displayName} (Notes Only)`;
             fretboard.displayChord(chordNotes, highlightedName, {
-                clearFirst: false,
-                showLines: false,
-                showScaleContext: showScaleContext,
+                ...chordDisplayOptions,
                 forceHighlight: true // If this option exists
             });
         }
@@ -4099,11 +4360,7 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
     }
     
     // Regular chord display for chords with patterns
-    fretboard.displayChord(chordNotes, displayName, {
-        clearFirst: false,
-        showLines: false,
-        showScaleContext: showScaleContext
-    });
+    fretboard.displayChord(chordNotes, displayName, chordDisplayOptions);
     
     const selectedPatternIndex = selectedPatternIndexes.get(index) || 0;
     if (selectedPatternIndex >= patterns.length) return;

@@ -1,0 +1,7 @@
+Major Triads: http://localhost:3000/uncaged?p=C-2+A-2+G-3+E-2+D-2&ui=fn
+Minor Traids: http://localhost:3000/uncaged?p=Cm-3+Am-2+Gm-2+Em-2+Dm-2&ui=fn
+Minor 7:      http://localhost:3000/uncaged?p=Cm7-2+Am7-2+Gm7-1+Em7-2+Dm7-2&ui=fn
+Major 7:      http://localhost:3000/uncaged?p=CM7-2+AM7-2+GM7-2+EM7-2+DM7-2&ui=fn
+Dom7:         http://localhost:3000/uncaged?p=C7-2+A7-2+G7-2+E7-2+D7-2&ui=fn
+m7b5:         http://localhost:3000/uncaged?p=Cm7b5-2+Am7b5-2+Gm7b5-2+Em7b5-2+Dm7b5-2&ui=fn
+dim:          http://localhost:3000/uncaged?p=Cdim-2+Adim-6+Gdim-2+Edim-4+Ddim-1&ui=fn
