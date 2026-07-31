@@ -178,6 +178,8 @@
         background-color: #f0f0f0;
       }
       
+      /* Mobile styles - Force landscape orientation and optimize layout */
+      @media screen and (max-width: 768px) {
         #scaleControlsContainer table,
         #placeholderContent table {
           width: 100% !important;
@@ -274,8 +276,6 @@
         }
 
 
-      /* Mobile styles - Force landscape orientation and optimize layout */
-      @media screen and (max-width: 768px) {
         /* Force landscape orientation */
         @media screen and (orientation: portrait) {
           html {

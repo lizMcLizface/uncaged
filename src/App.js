@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import './App.css';
 
 import { ThemeProvider } from 'styled-components';
@@ -10,8 +11,8 @@ import PolySynthWrapper from './components/PolySynthWrapper';
 
 function App() {
   const { theme, themes } = useTheme();
-  const [showPolySynth, setShowPolySynth] = useState(false);
   const [polySynthEnabled, setPolySynthEnabled] = useState(true);
+  const [synthTabContainer, setSynthTabContainer] = useState(null);
   const polySynthRef = useRef(null);
 
   // Make polySynth globally accessible for progression triggering
@@ -38,32 +39,30 @@ function App() {
   // Expose App functions globally for progression builder
   React.useEffect(() => {
     window.App = {
-      getShowPolySynth: () => showPolySynth,
-      toggleShowPolySynth: () => setShowPolySynth(!showPolySynth),
       getPolySynthEnabled: () => polySynthEnabled,
       setPolySynthEnabled: (enabled) => setPolySynthEnabled(enabled)
     };
-  }, [showPolySynth, polySynthEnabled]);
+  }, [polySynthEnabled]);
 
-  // Add escape key listener to close synth
+  // The Synthesizer tab's content container is built by the vanilla-JS
+  // fretboard UI (frets.js), which may not exist yet on first render - poll
+  // until it does, then portal the synth into it so it lives inside that
+  // tab instead of as a popup, while staying mounted continuously (audio
+  // state/refs aren't lost when switching tabs, since the tab system only
+  // toggles display, never unmounts).
   React.useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key === 'Escape' && showPolySynth) {
-        setShowPolySynth(false);
+    let cancelled = false;
+    const findContainer = () => {
+      const el = document.getElementById('synthesizerTabContent');
+      if (el) {
+        if (!cancelled) setSynthTabContainer(el);
+      } else if (!cancelled) {
+        setTimeout(findContainer, 100);
       }
     };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [showPolySynth]);
-
-  // Handle clicking outside synth to close it
-  const handleSynthOverlayClick = (event) => {
-    // Only close if clicking the overlay background, not the synth content
-    if (event.target === event.currentTarget) {
-      setShowPolySynth(false);
-    }
-  };
+    findContainer();
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <ThemeProvider theme={themes[theme]}>
@@ -73,59 +72,10 @@ function App() {
       <div style={{ position: 'absolute', top: '20px', right: '20px', zIndex: 1000 }}>
         <ThemeSelector />
       </div>
-      {/* Always render PolySynth overlay but control visibility */}
-      <div 
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: showPolySynth ? 'rgba(0, 0, 0, 0.5)' : 'transparent',
-          zIndex: showPolySynth ? 998 : -1,
-          display: showPolySynth ? 'flex' : 'none',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '20px',
-          pointerEvents: showPolySynth ? 'auto' : 'none'
-        }}
-        onClick={handleSynthOverlayClick}
-      >
-        <div style={{
-          width: '90%',
-          height: '90%',
-          backgroundColor: '#1e1e1e',
-          border: '1px solid #666',
-          borderRadius: '10px',
-          overflow: 'auto',
-          position: 'relative'
-        }}>
-          <div style={{ 
-            position: 'absolute', 
-            top: '10px', 
-            right: '10px', 
-            zIndex: 999,
-            color: 'white',
-            fontSize: '24px',
-            cursor: 'pointer',
-            background: 'rgba(0,0,0,0.5)',
-            borderRadius: '50%',
-            width: '30px',
-            height: '30px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowPolySynth(false);
-          }}
-          >
-            ×
-          </div>
-          <PolySynthWrapper ref={polySynthRef} />
-        </div>
-      </div>
+      {synthTabContainer && createPortal(
+        <PolySynthWrapper ref={polySynthRef} />,
+        synthTabContainer
+      )}
     </ThemeProvider>
   );
 }

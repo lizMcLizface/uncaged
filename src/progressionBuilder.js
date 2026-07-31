@@ -1258,17 +1258,6 @@ function createChordProgressionUI(fretboard) {
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     `;
     
-    // Create title
-    const title = document.createElement('h3');
-    title.textContent = 'unCAGED';
-    title.style.cssText = `
-        margin: 0 0 15px 0;
-        color: #fff;
-        font-size: 18px;
-        font-weight: bold;
-    `;
-    progressionContainer.appendChild(title);
-    
     // Create input section
     const inputSection = createInputSection();
     progressionContainer.appendChild(inputSection);
@@ -1588,163 +1577,6 @@ function createInputSection() {
         gap: 16px;
         flex-wrap: wrap;
     `;
-    
-    // Create root controls container
-    const rootControlsContainer = document.createElement('div');
-    rootControlsContainer.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    `;
-    
-    // Create root label
-    const rootLabel = document.createElement('span');
-    rootLabel.textContent = 'Root:';
-    rootLabel.style.cssText = `
-        color: #fff;
-        font-weight: bold;
-        font-size: 14px;
-    `;
-    rootControlsContainer.appendChild(rootLabel);
-    
-    // Create previous root button
-    const prevRootBtn = document.createElement('button');
-    prevRootBtn.id = 'prevRootBtn';
-    prevRootBtn.textContent = '‹';
-    prevRootBtn.title = 'Previous Root (, key)';
-    prevRootBtn.style.cssText = `
-        background: linear-gradient(145deg, #555, #333);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        cursor: pointer;
-        font-size: 18px;
-        font-weight: bold;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        transition: all 0.2s ease;
-    `;
-    rootControlsContainer.appendChild(prevRootBtn);
-    
-    // Create current root display
-    const currentRootNode = document.createElement('div');
-    currentRootNode.id = 'currentRootNode';
-    currentRootNode.textContent = 'C';
-    currentRootNode.style.cssText = `
-        display: inline-block;
-        font-weight: bold;
-        min-width: 40px;
-        text-align: center;
-        color: #fff;
-        background: rgba(0,0,0,0.3);
-        padding: 6px 12px;
-        border-radius: 6px;
-        border: 1px solid #666;
-    `;
-    rootControlsContainer.appendChild(currentRootNode);
-    
-    // Create next root button
-    const nextRootBtn = document.createElement('button');
-    nextRootBtn.id = 'nextRootBtn';
-    nextRootBtn.textContent = '›';
-    nextRootBtn.title = 'Next Root (. key)';
-    nextRootBtn.style.cssText = `
-        background: linear-gradient(145deg, #555, #333);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        cursor: pointer;
-        font-size: 18px;
-        font-weight: bold;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        transition: all 0.2s ease;
-    `;
-    rootControlsContainer.appendChild(nextRootBtn);
-    
-    controlsContainer.appendChild(rootControlsContainer);
-    
-    // Create scale controls container
-    const scaleControlsContainer = document.createElement('div');
-    scaleControlsContainer.style.cssText = `
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        padding: 8px 12px;
-        background: rgba(255,255,255,0.05);
-        border-radius: 8px;
-    `;
-    
-    // Create scale label
-    const scaleLabel = document.createElement('span');
-    scaleLabel.textContent = 'Scale:';
-    scaleLabel.style.cssText = `
-        color: #fff;
-        font-weight: bold;
-        font-size: 14px;
-    `;
-    scaleControlsContainer.appendChild(scaleLabel);
-    
-    // Create previous scale button
-    const prevScaleBtn = document.createElement('button');
-    prevScaleBtn.id = 'prevScaleBtn';
-    prevScaleBtn.textContent = '‹';
-    prevScaleBtn.title = 'Previous Scale (N key)';
-    prevScaleBtn.style.cssText = `
-        background: linear-gradient(145deg, #555, #333);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        cursor: pointer;
-        font-size: 18px;
-        font-weight: bold;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        transition: all 0.2s ease;
-    `;
-    scaleControlsContainer.appendChild(prevScaleBtn);
-    
-    // Create current scale display
-    const currentScaleNode = document.createElement('div');
-    currentScaleNode.id = 'currentScaleNode';
-    currentScaleNode.textContent = 'C Major';
-    currentScaleNode.style.cssText = `
-        display: inline-block;
-        font-weight: bold;
-        min-width: 100px;
-        text-align: center;
-        color: #fff;
-        background: rgba(0,0,0,0.3);
-        padding: 6px 12px;
-        border-radius: 6px;
-        border: 1px solid #666;
-    `;
-    scaleControlsContainer.appendChild(currentScaleNode);
-    
-    // Create next scale button
-    const nextScaleBtn = document.createElement('button');
-    nextScaleBtn.id = 'nextScaleBtn';
-    nextScaleBtn.textContent = '›';
-    nextScaleBtn.title = 'Next Scale (M key)';
-    nextScaleBtn.style.cssText = `
-        background: linear-gradient(145deg, #555, #333);
-        color: white;
-        border: none;
-        border-radius: 50%;
-        width: 32px;
-        height: 32px;
-        cursor: pointer;
-        font-size: 18px;
-        font-weight: bold;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-        transition: all 0.2s ease;
-    `;
-    scaleControlsContainer.appendChild(nextScaleBtn);
-    
-    controlsContainer.appendChild(scaleControlsContainer);
     
     // Create scale notes display container
     const scaleNotesContainer = document.createElement('div');
@@ -2549,36 +2381,6 @@ function createProgressionControlsSection() {
         flex-wrap: wrap;
     `;
 
-    // Show Synth Button
-    const showSynthButton = document.createElement('button');
-    showSynthButton.textContent = 'Show Synth';
-    showSynthButton.style.cssText = `
-        padding: 8px 15px;
-        background: #333;
-        color: white;
-        border: 1px solid #666;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 14px;
-        transition: background-color 0.3s;
-    `;
-
-    let showSynthState = false;
-    const updateSynthButtonState = () => {
-        if (window.App && window.App.getShowPolySynth) {
-            showSynthState = window.App.getShowPolySynth();
-            showSynthButton.textContent = showSynthState ? 'Hide Synth' : 'Show Synth';
-            showSynthButton.style.background = showSynthState ? '#4CAF50' : '#333';
-        }
-    };
-
-    showSynthButton.addEventListener('click', () => {
-        if (window.App && window.App.toggleShowPolySynth) {
-            window.App.toggleShowPolySynth();
-            setTimeout(updateSynthButtonState, 50);
-        }
-    });
-
     // Rate Control
     const rateLabel = document.createElement('label');
     rateLabel.textContent = 'Rate: ';
@@ -2818,7 +2620,6 @@ function createProgressionControlsSection() {
     chordTriggeringLabel.appendChild(chordTriggeringText);
 
     // Add elements to synth controls container
-    synthControlsContainer.appendChild(showSynthButton);
     synthControlsContainer.appendChild(rateLabel);
     synthControlsContainer.appendChild(rateSelect);
     synthControlsContainer.appendChild(durationLabel);
@@ -2826,7 +2627,6 @@ function createProgressionControlsSection() {
     synthControlsContainer.appendChild(chordTriggeringLabel);
 
     // Update states periodically (less frequent for rate/duration to avoid overriding user input)
-    setInterval(updateSynthButtonState, 500);
     setInterval(updateChordTriggeringState, 500);
     
     // Initial sync for rate/duration controls, then only when progression state changes

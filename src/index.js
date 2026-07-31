@@ -7,7 +7,7 @@ import $ from 'jquery';
 // import { metronome, reset } from './metronome';
 // import {processChord} from './intervals';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
-import {createHeptatonicScaleTable, selectedRootNote, selectedScales, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote} from './scaleGenerator';
+import {createHeptatonicScaleTable, selectedRootNote, selectedScales, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, exclusiveMode, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive} from './scaleGenerator';
 // import {chords, processedChords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes, createChordButtonGrid} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
 // import {createScaleChordCrossReference, updateCrossReferenceDisplay} from './cross';
@@ -2260,30 +2260,54 @@ function onKeyPress(event, up) {
         if(baseOctave > 8) baseOctave = 8;
     }
 
-    // Scale navigation with n and m keys
+    // Scale/root navigation hotkeys. In exclusive mode (single selection),
+    // ,/. move the root, n/m move the mode within the current scale family,
+    // v/b move the scale family itself, and </> (shift+,/shift+.) step
+    // sequentially through every family x mode combination. Outside exclusive
+    // mode, the keys fall back to cycling through whatever's in the
+    // multi-select arrays (the original behavior).
     if (event.type == 'keydown' && event.code == 'KeyN'){
-        if (navigateToPreviousScale()) {
-            console.log('Navigated to previous scale');
+        if (exclusiveMode ? navigateModeDownExclusive() : navigateToPreviousScale()) {
+            console.log('Navigated mode down');
         }
         return; // Don't process as a musical note
     }
     if (event.type == 'keydown' && event.code == 'KeyM'){
-        if (navigateToNextScale()) {
-            console.log('Navigated to next scale');
+        if (exclusiveMode ? navigateModeUpExclusive() : navigateToNextScale()) {
+            console.log('Navigated mode up');
+        }
+        return; // Don't process as a musical note
+    }
+    if (event.type == 'keydown' && event.code == 'KeyV' && exclusiveMode){
+        if (navigateScaleFamilyDownExclusive()) {
+            console.log('Navigated scale family down');
+        }
+        return; // Don't process as a musical note
+    }
+    if (event.type == 'keydown' && event.code == 'KeyB' && exclusiveMode){
+        if (navigateScaleFamilyUpExclusive()) {
+            console.log('Navigated scale family up');
         }
         return; // Don't process as a musical note
     }
 
-    // Root note navigation with comma and period keys
     if (event.type == 'keydown' && event.code == 'Comma'){
-        if (navigateToPreviousRootNote()) {
-            console.log('Navigated to previous root note');
+        if (event.shiftKey && exclusiveMode) {
+            if (navigateSequentialDownExclusive()) {
+                console.log('Navigated sequentially down');
+            }
+        } else if (exclusiveMode ? navigateRootDownExclusive() : navigateToPreviousRootNote()) {
+            console.log('Navigated root down');
         }
         return; // Don't process as a musical note
     }
     if (event.type == 'keydown' && event.code == 'Period'){
-        if (navigateToNextRootNote()) {
-            console.log('Navigated to next root note');
+        if (event.shiftKey && exclusiveMode) {
+            if (navigateSequentialUpExclusive()) {
+                console.log('Navigated sequentially up');
+            }
+        } else if (exclusiveMode ? navigateRootUpExclusive() : navigateToNextRootNote()) {
+            console.log('Navigated root up');
         }
         return; // Don't process as a musical note
     }
