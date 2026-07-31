@@ -7,6 +7,12 @@ import {
 } from './notation';
 import { createChordPiano, createMixedPiano } from './components/MiniPiano/MiniPiano';
 import { createChordStave, createMixedStave } from './components/MiniStave/MiniStave';
+import {
+    getActiveConfig as getActiveInstrumentConfig,
+    subscribe as subscribeToInstrumentChanges,
+    getNoteAtStringFret
+} from './tuning';
+import { selectGripFromPositions } from './chordFingering';
 
 /**
  * Process a chord to get the actual notes based on selected pattern
@@ -32,38 +38,17 @@ function getProcessedChordNotes(chord, index) {
         const selectedPattern = patterns[selectedPatternIndex];
         
         if (selectedPattern.positions && selectedPattern.positions.length > 0) {
-            // Use guitar string tuning (standard tuning from low to high)
-            const stringTuning = ['E', 'A', 'D', 'G', 'B', 'E']; // Low to High
-            
-            // Calculate specific notes from fret positions
+            // Calculate specific notes from fret positions against the active
+            // instrument tuning (pos.string is 0-based, 0 = highest string).
             chordNotes = selectedPattern.positions.map(pos => {
-                // Use direct indexing since pattern data is 0-based (0=low E, 5=high E)
-                const tuningIndex = 5 - pos.string;
+                const noteAtFret = getNoteAtStringFret(pos.string, pos.fret);
 
-                if (tuningIndex < 0 || tuningIndex >= stringTuning.length) {
-                    console.warn(`⚠️ Invalid string number ${pos.string} - expected 0-${stringTuning.length - 1}`);
-                    return null;
-                }
-                
-                const stringNote = stringTuning[tuningIndex];
-                
-                if (!stringNote) {
-                    console.warn(`⚠️ Could not find tuning for string ${pos.string} at index ${tuningIndex}`);
-                    return null;
-                }
-                
-                const noteAtFret = getNote(stringNote, pos.fret);
-                
-                // Check if getNote returned a valid result
                 if (!noteAtFret) {
-                    console.warn(`⚠️ getNote returned undefined for string ${pos.string} (${stringNote}) fret ${pos.fret}`);
+                    console.warn(`⚠️ Could not resolve note for string ${pos.string} fret ${pos.fret}`);
                     return null;
                 }
-                
-                // Add octave information based on string and fret  
-                const octave = getOctaveForStringAndFret(5 - pos.string, pos.fret);
-                const convertedNote = convertNoteForPolySynth(noteAtFret, octave);
-                return convertedNote;
+
+                return convertNoteForPolySynth(noteAtFret.letter, noteAtFret.octave);
             }).filter(note => note !== null); // Remove any failed conversions
         }
     }
@@ -277,13 +262,22 @@ const MINI_FRETBOARD_CONFIG = {
     width: 100,
     height: 120,
     fretCount: 5,
-    stringCount: 6,
+    stringCount: getActiveInstrumentConfig().stringCount,
     fretHeight: 20,
     stringSpacing: 14,
     noteRadius: 4,
     fretNumberSize: 10,
     noteNameSize: 9
 };
+
+// Keep mini fretboards and cached pattern data in sync with the active
+// instrument/tuning (changed via the picker in frets.js's top bar).
+subscribeToInstrumentChanges((config) => {
+    MINI_FRETBOARD_CONFIG.stringCount = config.stringCount;
+    precomputedPatternData.clear();
+    selectedPatternIndexes.clear();
+    updateProgressionDisplay();
+});
 
 /**
  * Clear all caches and reset state
@@ -1087,9 +1081,34 @@ function getChordPatternMatches(chord) {
     console.log('Chord notes: ', chord.chordInfo.notes);
     const chordNotes = chord.chordInfo.notes.map(note => notationStripOctave(note));
     const rootNote = chordNotes[0];
-    
-    const patterns = fretboard.findChordPatternMatches(chordNotes, rootNote);
-    
+
+    let patterns = fretboard.findChordPatternMatches(chordNotes, rootNote);
+
+    // The canned chordPatterns.js shape library only covers standard 6-string
+    // guitar tuning (see Fretboard.findChordPatternMatches), so it always
+    // returns no matches for any other tuning/string count. Synthesize a
+    // single best-effort grip from the actual note positions on the active
+    // fretboard so the mini fretboards / pattern selector / playback still
+    // have something to show, instead of going blank.
+    if (patterns.length === 0) {
+        const allPositions = [];
+        chordNotes.forEach(note => {
+            fretboard.findNotePositions(note).forEach(pos => {
+                allPositions.push({ string: pos.string, fret: pos.fret, note });
+            });
+        });
+        const grip = selectGripFromPositions(allPositions, 0);
+        if (grip.length > 0) {
+            patterns = [{
+                patternName: null,
+                pattern: { name: 'Best Effort' },
+                rootPosition: { string: grip[0].string, fret: grip[0].fret },
+                positions: grip.map(p => ({ string: p.string, fret: p.fret })),
+                patternNotes: grip.map(p => p.note)
+            }];
+        }
+    }
+
     // Add interval information to each pattern
     if (chord.chordInfo.intervals && patterns.length > 0) {
         patterns.forEach(pattern => {
@@ -1157,62 +1176,56 @@ function collectArpeggiationNotes(pattern, chordNotes, intervals) {
         return [];
     }
     
-    // Standard guitar tuning (from string 1 to 6: E4, B3, G3, D3, A2, E2)
-    // Note: In the pattern positions, string numbers go from 1-6, where 1 is high E and 6 is low E
-    const stringTuning = ['E', 'A', 'D', 'G', 'B', 'E']; // Low to High (string 6 to 1)
-    
+    const stringCount = getActiveInstrumentConfig().stringCount;
+
     // Find the minimum fret of the pattern
     const minFret = Math.min(...pattern.positions.map(p => p.fret));
     const maxFret = minFret + 6; // Maximum 5 frets above minimum
-    
+
     // Get all positions that are part of the pattern
     const patternPositions = new Set();
     pattern.positions.forEach(pos => {
         patternPositions.add(`${pos.string}-${pos.fret}`);
     });
-    
+
     const arpeggiationNotes = [];
-    
-    // Check each string (1-6)
-    for (let string = 1; string <= 6; string++) {
-        // Convert string number to tuning array index (string 1 = index 5, string 6 = index 0)
-        const tuningIndex = 6 - string;
-        const openStringNote = stringTuning[tuningIndex];
-        
+
+    // Check each string (0-based, 0 = highest string)
+    for (let stringIndex = 0; stringIndex < stringCount; stringIndex++) {
         // Check each fret from minFret to maxFret
         for (let fret = minFret; fret <= maxFret; fret++) {
-            const positionKey = `${string-1}-${fret}`;
-            // console.log(`Checking position: String ${string}, Fret ${fret} (${positionKey})`);
-            // console.log(`Pattern positions: ${Array.from(patternPositions).join(', ')}`);
+            const positionKey = `${stringIndex}-${fret}`;
             // Skip if this position is already part of the pattern
             if (patternPositions.has(positionKey)) {
                 continue;
             }
-            
+
             // Calculate what note is at this string and fret
-            const noteAtFret = getNote(openStringNote, fret);
-            const strippedNote = notationStripOctave(noteAtFret);
-            
+            const noteAtFret = getNoteAtStringFret(stringIndex, fret);
+            if (!noteAtFret) {
+                continue;
+            }
+            const strippedNote = noteAtFret.letter;
+
             // Check if this note is part of the chord notes
-            const chordNoteIndex = chordNotes.findIndex(note => 
+            const chordNoteIndex = chordNotes.findIndex(note =>
                 notationStripOctave(note) === strippedNote
             );
-            
+
             if (chordNoteIndex !== -1) {
                 // This note is part of the chord but not part of the pattern
                 let intervalName = intervals && intervals[chordNoteIndex] ? intervals[chordNoteIndex] : '?';
-                
+
                 // Convert P1 to R for root note display consistency
                 if (intervalName === "P1") {
                     intervalName = "R";
                 }
-                
+
                 arpeggiationNotes.push({
-                    string: string - 1,
+                    string: stringIndex,
                     fret: fret,
                     note: strippedNote,
-                    interval: intervalName,
-                    position: { string, fret } // Include position object for consistency
+                    interval: intervalName
                 });
             }
         }
@@ -3099,9 +3112,6 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
         svg.appendChild(line);
     }
     
-    // Standard guitar tuning (from left to right: low E to high E, matching tab convention)
-    const stringTuning = ['E', 'A', 'D', 'G', 'B', 'E'];
-    
     // Draw fret numbers to the left of the fretboard
     for (let fret = 1; fret <= config.fretCount; fret++) {
         // Calculate the actual fret number this position represents
@@ -3137,9 +3147,9 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
     // Draw chord notes on the fretboard
     positions.forEach(position => {
         const { string: stringNum, fret } = position;
-        
-        // Convert to display index: 1st string (high E) on the right, 6th string (low E) on the left
-        // stringNum is 1-based (1=high E, 6=low E), so reverse the display order and make 0-based
+
+        // Convert to display index: highest string on the right, lowest on the left.
+        // stringNum is 0-based (0=highest string), so reverse the display order.
         const stringIndex = config.stringCount - stringNum - 1;
         
         // Check if this fret is within our display range
@@ -3177,9 +3187,8 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
             }
             
             // Calculate the note name for this position
-            const openStringNote = stringTuning[stringIndex];
-            const noteAtFret = getNote(openStringNote, fret);
-            const strippedNote = notationStripOctave(noteAtFret);
+            const noteAtFret = getNoteAtStringFret(stringNum, fret);
+            const strippedNote = noteAtFret ? noteAtFret.letter : '';
 
             
             // Store note for this string
@@ -3448,72 +3457,6 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
     wrapper.appendChild(copyButton);
     
     return wrapper;
-}
-
-/**
- * Helper function to get note name at a specific fret
- * @param {string} openString - Open string note (e.g., 'E', 'A', 'D', 'G', 'B', 'E')
- * @param {number} fret - Fret number
- * @returns {string} Note name at that fret
- */
-function getNote(openString, fret) {
-    const chromaticScale = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    
-    // Find the starting note index
-    let startIndex = chromaticScale.indexOf(openString);
-    if (startIndex === -1) {
-        // Handle flat notes
-        const flatToSharp = { 'Db': 'C#', 'Eb': 'D#', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#' };
-        startIndex = chromaticScale.indexOf(flatToSharp[openString] || openString);
-    }
-    
-    if (startIndex === -1) {
-        return openString; // Fallback if note not found
-    }
-    
-    // Calculate the note at the given fret
-    const noteIndex = (startIndex + fret) % 12;
-    return chromaticScale[noteIndex];
-}
-
-/**
- * Helper function to calculate octave based on guitar string and fret position
- * @param {number} stringNumber - Guitar string (0=low E, 5=high E)
- * @param {number} fret - Fret number
- * @returns {number} Octave number for synthesis
- */
-function getOctaveForStringAndFret(stringNumber, fret) {
-    // Standard guitar tuning with base octaves and chromatic positions:
-    // String 0 (low E): E2,  String 1 (A): A2,  String 2 (D): D3
-    // String 3 (G): G3,      String 4 (B): B3,  String 5 (high E): E4
-    let baseOctave;
-    let openStringChromaticPosition;
-    
-    if (stringNumber >= 0 && stringNumber <= 5) {
-        // 0-based: 0=low E, 5=high E
-        const baseOctaves = [2, 2, 3, 3, 3, 4]; // Index matches string number directly
-        // Chromatic positions (0=C, 1=C#, 2=D, 3=D#, 4=E, 5=F, 6=F#, 7=G, 8=G#, 9=A, 10=A#, 11=B)
-        const openStringPositions = [4, 9, 2, 7, 11, 4]; // E, A, D, G, B, E
-        
-        baseOctave = baseOctaves[stringNumber];
-        openStringChromaticPosition = openStringPositions[stringNumber];
-    } else {
-        console.warn(`⚠️ Invalid string number ${stringNumber} in getOctaveForStringAndFret - expected 0-5`);
-        baseOctave = 3; // Default fallback
-        openStringChromaticPosition = 0; // Default to C
-    }
-    
-    // Calculate the total semitones from the open string
-    const totalSemitones = fret;
-    
-    // Calculate the final chromatic position
-    const finalChromaticPosition = (openStringChromaticPosition + totalSemitones) % 12;
-    
-    // Calculate how many complete octaves we've moved up
-    // We need to account for wrapping around the chromatic scale
-    const additionalOctaves = Math.floor((openStringChromaticPosition + totalSemitones) / 12);
-    
-    return baseOctave + additionalOctaves;
 }
 
 /**

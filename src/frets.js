@@ -17,8 +17,16 @@ import {
 import { createChordProgressionUI, loadSharedStateFromURL } from './progressionBuilder';
 import {getChordPatterns, getPatternsByChordType} from './chordPatterns';
 import {assignFingers, selectGripFromPositions, classifyFingeringSource} from './chordFingering';
+import {
+    getPresets as getInstrumentPresets,
+    getActiveConfig as getActiveInstrumentConfig,
+    setActiveConfig as setActiveInstrumentConfig,
+    subscribe as subscribeToInstrumentChanges,
+    isStandardGuitarTuning,
+    toSlashFormat as tuningToSlashFormat
+} from './tuning';
 
-// Standard guitar tuning (lowest to highest strings) - displayed from top to bottom
+// Fallback tuning used only if no active instrument config is available yet.
 const GUITAR_TUNING = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'];
 const FRET_COUNT = 21; // Number of frets to display
 
@@ -70,14 +78,52 @@ const DEFAULT_COLORS = {
     text: '#ffffff'
 };
 
-const SCALE_POSITION_ROW_STRINGS = ['B', 'A', 'G', 'E', 'D'];
+// Row anchors for the Scale Position Grid: string indices (into the active
+// tuning) used as row anchors, plus their display letters. Both are derived
+// from the active instrument tuning by refreshScalePositionTuning() - every
+// string except the highest-pitched one becomes a row, matching what the
+// original hardcoded ['B','A','G','E','D'] (indices 1-5 of standard tuning)
+// already did for 6-string guitar.
+let SCALE_POSITION_ROW_STRINGS = [1, 2, 3, 4, 5];
+let SCALE_POSITION_ROW_LABELS = ['B', 'A', 'G', 'E', 'D'];
+let MINI_SCALE_STRING_TUNING = ['E/4', 'B/3', 'G/3', 'D/3', 'A/2', 'E/2'];
 const SCALE_POSITION_DEGREES = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 const MINI_SCALE_FRET_COUNT = 6;
-const MINI_SCALE_STRING_TUNING = ['E/4', 'B/3', 'G/3', 'D/3', 'A/2', 'E/2'];
 const SCALE_POSITION_PATTERN_SCALE = 2.0;
 const GENERIC_VISIBLE_FRET_START = 1;
 const GENERIC_ROOT_DISPLAY_COLUMN = 1;
 const SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET = 0;
+
+/**
+ * Recompute the Scale Position Grid's row anchors/labels and mini-fretboard
+ * tuning from a given tuning (defaults to the active instrument config).
+ * Called on load and whenever the active instrument/tuning changes.
+ */
+function refreshScalePositionTuning(tuning) {
+    const activeTuning = tuning || getActiveInstrumentConfig().tuning;
+    MINI_SCALE_STRING_TUNING = tuningToSlashFormat(activeTuning);
+
+    // One row per *unique* string pitch class, scanning from the lowest
+    // string upward and keeping the lowest occurrence of each letter - e.g.
+    // standard EADGBE collapses to E-A-D-G-B (high E dropped as a duplicate
+    // of low E), DADGAD collapses to D-A-G, standard 4-string bass EADG has
+    // no duplicates so all four remain.
+    const seenLetters = new Set();
+    const rowIndices = [];
+    for (let index = MINI_SCALE_STRING_TUNING.length - 1; index >= 0; index--) {
+        const letter = notationStripOctave(MINI_SCALE_STRING_TUNING[index]);
+        if (!seenLetters.has(letter)) {
+            seenLetters.add(letter);
+            rowIndices.push(index);
+        }
+    }
+
+    SCALE_POSITION_ROW_STRINGS = rowIndices;
+    SCALE_POSITION_ROW_LABELS = rowIndices.map(
+        index => notationStripOctave(MINI_SCALE_STRING_TUNING[index])
+    );
+}
+refreshScalePositionTuning();
 
 let scalePositionPatternScale = SCALE_POSITION_PATTERN_SCALE;
 let scalePositionUseAbsoluteFretLabels = false;
@@ -156,12 +202,29 @@ class Fretboard {
      */
     init() {
         this.container.innerHTML = '';
-        
+        this.fretboardElement = null;
+        this.buildFretboardElement();
+    }
+
+    /**
+     * Build (or rebuild) this.fretboardElement from this.tuning. Split out
+     * of init() so setTuning() can rebuild the fretboard's contents in place
+     * - reusing the same DOM node at the same position in this.container -
+     * instead of removing/re-appending it, which would either lose its
+     * position among siblings (top bar, tabs) or, if that bookkeeping is
+     * ever wrong, leave a stray duplicate node behind.
+     */
+    buildFretboardElement() {
         // Calculate fret positions first
         this.fretPositions = calculateFretPositions(this.fretCount);
-        
-        // Create main fretboard container
-        this.fretboardElement = document.createElement('div');
+
+        // Create the fretboard's own node once; every later rebuild reuses
+        // it in place rather than re-inserting into this.container.
+        if (!this.fretboardElement) {
+            this.fretboardElement = document.createElement('div');
+            this.container.appendChild(this.fretboardElement);
+        }
+        this.fretboardElement.innerHTML = '';
         this.fretboardElement.className = 'fretboard';
         this.fretboardElement.style.cssText = `
             position: relative;
@@ -172,7 +235,7 @@ class Fretboard {
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             overflow: visible; /* Allow content to extend beyond bounds for labels */
         `;
-        
+
         // Add mobile-specific styles
         if (window.innerWidth <= 768) {
             const isLandscape = window.innerWidth > window.innerHeight;
@@ -183,29 +246,41 @@ class Fretboard {
                 box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
             `;
         }
-        
+
         // Add CSS animations and styles for subscale features
         this.addSubscaleStyles();
-        
+
         // Add fret numbers if enabled
         if (this.showFretNumbers) {
             this.addFretNumbers();
         }
-        
+
         // Add string names if enabled
         if (this.showStringNames) {
             this.addStringNames();
         }
-        
+
         // Create the neck structure
         this.createNeckStructure();
-        
+
         // Create fret grid
         this.createFretGrid();
-        
-        this.container.appendChild(this.fretboardElement);
     }
-    
+
+    /**
+     * Change the active tuning (and implicitly string count) and rebuild
+     * the fretboard's own visual structure in place - unlike init(), this
+     * does not clear this.container, since by the time tuning can be
+     * changed the container also holds the top bar, tabs, etc.
+     */
+    setTuning(newTuning) {
+        this.tuning = newTuning;
+        this.markers.clear();
+        this.subscaleBoxes.clear();
+        this.chordLines.clear();
+        this.buildFretboardElement();
+    }
+
     /**
      * Add CSS styles for subscale boxes and animations
      */
@@ -1845,6 +1920,14 @@ class Fretboard {
      * @returns {Array} Array of matching pattern results
      */
     findChordPatternMatches(chordNotes, rootNote, patternNames = null) {
+        // The canned chordPatterns.js shape library only encodes standard
+        // 6-string guitar tuning - for any other tuning/string count, skip
+        // straight to the dynamic best-effort grip fallback in the callers
+        // below rather than matching (and mis-fretting) the wrong shapes.
+        if (!isStandardGuitarTuning(this.tuning)) {
+            return [];
+        }
+
         const patterns = getChordPatterns();
         const matches = [];
         
@@ -2126,22 +2209,36 @@ function getFretboard(containerId) {
 function initializeFretboard() {
     const mainFretboard = createFretboard('fretNotPlaceholder', {
         showFretNumbers: true,
-        showStringNames: false
+        showStringNames: false,
+        tuning: getActiveInstrumentConfig().tuning
     });
     
     // Create control panel
     createFretboardControls(mainFretboard);
-    
+
     // Set the scale button as active by default and show the scale
     currentDisplayedChord = 0; // Scale button is index 0
     showScaleOnFretboard();
     updateChordButtonStyles();
-    
+
     // Initialize scales in the new container after a short delay to ensure DOM is ready
     setTimeout(() => {
         initializeScalesInFretboard();
     }, 100);
-    
+
+    // Keep the fretboard, Scale Position Grid and chord-fingering UI in sync
+    // whenever the active instrument/tuning changes (e.g. via the picker in
+    // the top bar).
+    subscribeToInstrumentChanges((config) => {
+        mainFretboard.setTuning(config.tuning);
+        refreshScalePositionTuning(config.tuning);
+        clearFingeringTabs();
+        currentDisplayedChord = 0;
+        showScaleOnFretboard();
+        updateChordButtonStyles();
+        renderScalePositionGrid();
+    });
+
     return mainFretboard;
 }
 
@@ -2240,6 +2337,183 @@ function createTabbedPanel(tabs, defaultActiveIndex = 0) {
  * changes. Sits above the fretboard so both are always visible regardless of tab.
  * @returns {HTMLElement}
  */
+/**
+ * Build the instrument/tuning picker: a preset dropdown (grouped by family)
+ * plus a "Custom Tuning" mode that reveals a per-string note editor. Applying
+ * either just calls setActiveInstrumentConfig() - actually rebuilding the
+ * fretboard/grid/progression builder happens via the subscription each of
+ * those wires up separately (see initializeFretboard / progressionBuilder.js).
+ */
+function createInstrumentTuningPicker() {
+    const presets = getInstrumentPresets();
+    const activeConfig = getActiveInstrumentConfig();
+
+    const wrapper = document.createElement('div');
+    wrapper.id = 'instrumentTuningControls';
+    wrapper.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    `;
+
+    const label = document.createElement('span');
+    label.textContent = 'Instrument:';
+    label.style.cssText = `color: #ccc; font-size: 13px; font-weight: 500;`;
+    wrapper.appendChild(label);
+
+    const select = document.createElement('select');
+    select.id = 'instrumentTuningSelect';
+    select.style.cssText = `
+        padding: 6px 8px;
+        border-radius: 6px;
+        border: 1px solid #555;
+        background: #333;
+        color: #fff;
+        font-size: 13px;
+    `;
+
+    const familyLabels = { guitar: 'Guitar', bass: 'Bass' };
+    Object.entries(familyLabels).forEach(([familyKey, familyLabel]) => {
+        const optgroup = document.createElement('optgroup');
+        optgroup.label = familyLabel;
+        Object.entries(presets)
+            .filter(([, preset]) => preset.family === familyKey)
+            .forEach(([presetId, preset]) => {
+                const option = document.createElement('option');
+                option.value = presetId;
+                option.textContent = preset.label;
+                optgroup.appendChild(option);
+            });
+        select.appendChild(optgroup);
+    });
+
+    const customOption = document.createElement('option');
+    customOption.value = 'custom';
+    customOption.textContent = 'Custom Tuning…';
+    select.appendChild(customOption);
+
+    select.value = presets[activeConfig.presetId] ? activeConfig.presetId : 'custom';
+    wrapper.appendChild(select);
+
+    // Custom tuning editor: string count + one note field per string.
+    const customPanel = document.createElement('div');
+    customPanel.id = 'customTuningPanel';
+    customPanel.style.cssText = `
+        display: none;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        background: rgba(255, 255, 255, 0.08);
+        padding: 6px 8px;
+        border-radius: 6px;
+    `;
+
+    const fieldStyle = `
+        width: 46px;
+        padding: 4px;
+        border-radius: 4px;
+        border: 1px solid #555;
+        background: #222;
+        color: #fff;
+        font-size: 12px;
+        text-align: center;
+    `;
+
+    const stringCountLabel = document.createElement('span');
+    stringCountLabel.textContent = 'Strings:';
+    stringCountLabel.style.cssText = `color: #ccc; font-size: 12px;`;
+    customPanel.appendChild(stringCountLabel);
+
+    const stringCountInput = document.createElement('input');
+    stringCountInput.type = 'number';
+    stringCountInput.min = '4';
+    stringCountInput.max = '8';
+    stringCountInput.style.cssText = fieldStyle;
+    customPanel.appendChild(stringCountInput);
+
+    const stringInputsContainer = document.createElement('div');
+    stringInputsContainer.style.cssText = `display: flex; gap: 4px; flex-wrap: wrap;`;
+    customPanel.appendChild(stringInputsContainer);
+
+    function renderStringInputs(tuning) {
+        stringInputsContainer.innerHTML = '';
+        tuning.forEach((note, index) => {
+            const input = document.createElement('input');
+            input.type = 'text';
+            input.value = note;
+            input.title = `String ${index + 1} (${index === 0 ? 'highest' : index === tuning.length - 1 ? 'lowest' : 'e.g. E4, F#1, Bb2'})`;
+            input.style.cssText = fieldStyle;
+            stringInputsContainer.appendChild(input);
+        });
+    }
+
+    stringCountInput.value = String(activeConfig.stringCount);
+    renderStringInputs(activeConfig.tuning);
+
+    stringCountInput.addEventListener('change', () => {
+        let count = parseInt(stringCountInput.value, 10);
+        if (!Number.isFinite(count)) count = stringInputsContainer.children.length;
+        count = Math.max(4, Math.min(8, count));
+        stringCountInput.value = String(count);
+
+        const existing = Array.from(stringInputsContainer.children).map(el => el.value);
+        const fallbackTuning = presets.guitar8.tuning;
+        const newTuning = existing.slice(0, count);
+        while (newTuning.length < count) {
+            newTuning.push(fallbackTuning[newTuning.length] || existing[existing.length - 1] || 'E2');
+        }
+        renderStringInputs(newTuning);
+    });
+
+    const applyButton = document.createElement('button');
+    applyButton.textContent = 'Apply';
+    applyButton.style.cssText = `
+        padding: 5px 10px;
+        border-radius: 5px;
+        border: none;
+        background: linear-gradient(to bottom, #4a4a4a, #333);
+        color: #fff;
+        cursor: pointer;
+        font-size: 12px;
+    `;
+    addInteractiveEvent(applyButton, 'click', () => {
+        const tuning = Array.from(stringInputsContainer.children)
+            .map(el => el.value.trim())
+            .filter(Boolean);
+        if (tuning.length < 4) {
+            window.alert('Please provide at least 4 strings.');
+            return;
+        }
+        setActiveInstrumentConfig({ presetId: 'custom', family: activeConfig.family, tuning });
+    });
+    customPanel.appendChild(applyButton);
+
+    wrapper.appendChild(customPanel);
+
+    function syncCustomPanelVisibility() {
+        customPanel.style.display = select.value === 'custom' ? 'flex' : 'none';
+    }
+    syncCustomPanelVisibility();
+
+    select.addEventListener('change', () => {
+        syncCustomPanelVisibility();
+        if (select.value === 'custom') {
+            // Seed the editor from whatever tuning is active right now.
+            const currentConfig = getActiveInstrumentConfig();
+            stringCountInput.value = String(currentConfig.stringCount);
+            renderStringInputs(currentConfig.tuning);
+            return;
+        }
+        const preset = presets[select.value];
+        if (preset) {
+            setActiveInstrumentConfig({ presetId: select.value, family: preset.family, tuning: preset.tuning });
+        }
+    });
+
+    return wrapper;
+}
+
 function createTopBar() {
     const topBar = document.createElement('div');
     topBar.style.cssText = `
@@ -2265,6 +2539,7 @@ function createTopBar() {
         flex: 0 0 auto;
     `;
     topBar.appendChild(title);
+    topBar.appendChild(createInstrumentTuningPicker());
 
     const quickScaleControls = document.createElement('div');
     quickScaleControls.id = 'quickScaleControls';
@@ -3978,30 +4253,14 @@ function createNoteShapeMarker(x, y, radius, shapeType, fill, stroke, strokeWidt
 }
 
 /**
- * Resolve which string in the mini tuning is used as the row anchor.
- * @param {string} rowString - One of B, A, G, E, D
- * @returns {number} String index in MINI_SCALE_STRING_TUNING
- */
-function getRowAnchorStringIndex(rowString) {
-    switch (rowString) {
-        case 'B': return 1;
-        case 'A': return 4;
-        case 'G': return 2;
-        case 'D': return 3;
-        case 'E': return 5;
-        default: return 5;
-    }
-}
-
-/**
  * Find the first matching fret at or above a minimum fret for a row root note.
- * @param {string} rowString - One of B, A, G, E, D
+ * @param {number} rowStringIndex - String index (into MINI_SCALE_STRING_TUNING) used as the row anchor
  * @param {string} rowScaleRootNote - Scale root note used to anchor the row
  * @param {number} minFret - Minimum target fret
  * @returns {number|null} Absolute fret number or null if not found in range
  */
-function findRowRootAbsoluteFret(rowString, rowScaleRootNote, minFret = SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET) {
-    const anchorIndex = getRowAnchorStringIndex(rowString);
+function findRowRootAbsoluteFret(rowStringIndex, rowScaleRootNote, minFret = SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET) {
+    const anchorIndex = rowStringIndex;
     const anchorOpenMidi = notationNoteToMidi(MINI_SCALE_STRING_TUNING[anchorIndex]);
     const rootPitchClass = ((notationNoteToMidi(`${normalizeNote(rowScaleRootNote)}/4`) % 12) + 12) % 12;
 
@@ -4037,7 +4296,7 @@ function getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn) {
  * @param {Array<string>} scaleNoteNames - Full active scale notes
  * @param {Array<string>} displayedNotes - Notes shown in this specific cell
  * @param {string} referenceRootNote - Reference root used for interval coloring
- * @param {string} rowRootString - Target row string label (B, A, G, E, D)
+ * @param {number} rowStringIndex - Target row's string index (into MINI_SCALE_STRING_TUNING)
  * @param {string} rowScaleRootNote - Scale root used to anchor row-generic fret layout
  * @param {boolean} showOnlyDisplayedNotes - If true, only notes from displayedNotes are rendered
  * @param {boolean} showRelativeFretLabels - If true, show R/-1/+1 labels under fret columns
@@ -4082,7 +4341,7 @@ function createScalePositionMiniFretboard(
     scaleNoteNames,
     displayedNotes,
     referenceRootNote,
-    rowRootString,
+    rowStringIndex,
     rowScaleRootNote,
     showOnlyDisplayedNotes = false,
     patternScale = scalePositionPatternScale,
@@ -4138,7 +4397,7 @@ function createScalePositionMiniFretboard(
 
     const scaleArray = Array.isArray(scaleNoteNames) ? scaleNoteNames : [];
     const displayedArray = Array.isArray(displayedNotes) ? displayedNotes : [];
-    const rowRootAbsoluteFret = findRowRootAbsoluteFret(rowRootString, rowScaleRootNote, SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET);
+    const rowRootAbsoluteFret = findRowRootAbsoluteFret(rowStringIndex, rowScaleRootNote, SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET);
     const colorReferenceRoot = scalePositionKeepColorConstant ? rowScaleRootNote : referenceRootNote;
     const shapeReferenceRoot = scalePositionKeepShapeConstant ? rowScaleRootNote : referenceRootNote;
 
@@ -4151,7 +4410,6 @@ function createScalePositionMiniFretboard(
 
     for (let stringIndex = 0; stringIndex < MINI_SCALE_STRING_TUNING.length; stringIndex++) {
         const openMidi = notationNoteToMidi(MINI_SCALE_STRING_TUNING[stringIndex]);
-        const stringName = notationStripOctave(MINI_SCALE_STRING_TUNING[stringIndex]);
 
         for (let displayColumn = 0; displayColumn <= MINI_SCALE_FRET_COUNT; displayColumn++) {
             const absoluteFret = getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn);
@@ -4175,7 +4433,7 @@ function createScalePositionMiniFretboard(
             const x = startX + displayColumn * fretGap;
             const y = startY + stringIndex * stringGap;
             const isRoot = areEnharmonicEquivalent(noteName, referenceRootNote);
-            const isTargetRootString = stringName === rowRootString;
+            const isTargetRootString = stringIndex === rowStringIndex;
             const colorSemitone = getSemitoneFromReference(colorReferenceRoot, noteName);
             const shapeSemitone = getSemitoneFromReference(shapeReferenceRoot, noteName);
             let intervalColor = getIntervalColor(colorSemitone);
@@ -4517,11 +4775,11 @@ function buildScalePositionFocusMatrix(columnCount) {
 
     for (let row = 0; row < rowCount; row++) {
         const tr = document.createElement('tr');
-        const rowString = SCALE_POSITION_ROW_STRINGS[row];
+        const rowLabel = SCALE_POSITION_ROW_LABELS[row];
 
         const rowHeader = document.createElement('th');
-        rowHeader.textContent = rowString;
-        rowHeader.title = `Toggle all chords for Root ${rowString}`;
+        rowHeader.textContent = rowLabel;
+        rowHeader.title = `Toggle all chords for Root ${rowLabel}`;
         styleScalePositionFocusCell(rowHeader, isScalePositionRowFullyVisible(row, columnCount), true);
         rowHeader.addEventListener('click', () => {
             toggleScalePositionRow(row, columnCount);
@@ -4530,7 +4788,7 @@ function buildScalePositionFocusMatrix(columnCount) {
         tr.appendChild(rowHeader);
 
         const scaleCell = document.createElement('td');
-        scaleCell.title = `Toggle full-scale reference for Root ${rowString}`;
+        scaleCell.title = `Toggle full-scale reference for Root ${rowLabel}`;
         styleScalePositionFocusCell(scaleCell, isScalePositionCellVisible(row, -1), false);
         scaleCell.addEventListener('click', () => {
             toggleScalePositionCell(row, -1);
@@ -4541,7 +4799,7 @@ function buildScalePositionFocusMatrix(columnCount) {
         for (let col = 0; col < columnCount; col++) {
             const colLabel = SCALE_POSITION_DEGREES[col] || String(col + 1);
             const td = document.createElement('td');
-            td.title = `Toggle ${colLabel} for Root ${rowString}`;
+            td.title = `Toggle ${colLabel} for Root ${rowLabel}`;
             styleScalePositionFocusCell(td, isScalePositionCellVisible(row, col), false);
             td.addEventListener('click', () => {
                 toggleScalePositionCell(row, col);
@@ -5163,11 +5421,12 @@ function renderScalePositionGrid() {
             continue;
         }
 
-        const rowString = SCALE_POSITION_ROW_STRINGS[row];
+        const rowStringIndex = SCALE_POSITION_ROW_STRINGS[row];
+        const rowLabel = SCALE_POSITION_ROW_LABELS[row];
         const tr = document.createElement('tr');
 
         const rowHeader = document.createElement('td');
-        rowHeader.textContent = `Root ${rowString}`;
+        rowHeader.textContent = `Root ${rowLabel}`;
         rowHeader.style.cssText = `
             border: 1px solid #444;
             background: #383838;
@@ -5193,7 +5452,7 @@ function renderScalePositionGrid() {
                     workingScale,
                     workingScale,
                     normalizedRoot,
-                    rowString,
+                    rowStringIndex,
                     normalizedRoot,
                     false,
                     scalePositionPatternScale,
@@ -5231,7 +5490,7 @@ function renderScalePositionGrid() {
                     workingScale,
                     chordPatternNotes,
                     chordRoot,
-                    rowString,
+                    rowStringIndex,
                     normalizedRoot,
                     true,
                     scalePositionPatternScale,
