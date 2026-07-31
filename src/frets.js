@@ -16,6 +16,7 @@ import {
 } from './notation';
 import { createChordProgressionUI, loadSharedStateFromURL } from './progressionBuilder';
 import {getChordPatterns, getPatternsByChordType} from './chordPatterns';
+import {assignFingers, selectGripFromPositions, classifyFingeringSource} from './chordFingering';
 
 // Standard guitar tuning (lowest to highest strings) - displayed from top to bottom
 const GUITAR_TUNING = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'];
@@ -89,6 +90,9 @@ let scalePositionKeepShapeConstant = false;
 let scalePositionDarkDuplicate = true;
 let scalePositionStackType = 'triad';
 let scalePositionHiddenCells = new Set();
+let scalePositionLabelMode = 'none'; // 'none' | 'note' | 'interval' | 'finger' - text label on chord grip dots
+let scalePositionAllLabelsMode = 'none'; // 'none' | 'note' | 'interval' - text label on every dot (chord cells and the full scale column)
+let scalePositionShowGripLines = false; // Draw a connecting line between the picked grip's dots
 
 const SCALE_POSITION_STACK_SIZES = { dyad: 2, triad: 3, tetrad: 4 };
 
@@ -707,6 +711,7 @@ class Fretboard {
             backgroundColor = '#ffffff',
             borderColor = '#ff4444',
             borderWidth = 3,
+            borderStyle = 'solid',
             size = 26,
             disableAnimation = false
         } = options;
@@ -758,7 +763,7 @@ class Fretboard {
                 justify-content: center;
                 font-size: ${fontSize}px;
                 font-weight: bold;
-                border: ${borderWidthPx}px solid ${borderColor};
+                border: ${borderWidthPx}px ${borderStyle} ${borderColor};
                 box-shadow: 0 ${Math.floor(markerSize * 0.15)}px ${Math.floor(markerSize * 0.3)}px rgba(0,0,0,0.4);
                 z-index: 15;
                 ${(isRoot && !disableAnimation) ? 'animation: rootPulse 2s infinite ease-in-out;' : ''}
@@ -2048,24 +2053,12 @@ let fretboardsShowingChords = new Set();
 let currentChordType = 'triads'; // 'triads' or 'sevenths'
 let currentDisplayedChord = null; // Currently displayed chord index (0-6)
 let isInHoverState = false; // Track if we're currently in a temporary hover state
-let showMainFretboardIntervals = false; // Show interval labels instead of note names for chord displays
+let mainFretboardLabelMode = 'note'; // 'note' | 'interval' | 'finger' - marker label mode for chord/scale displays
 
 // Track chord grid state
 let currentChordGridSelection = null; // Track permanent chord grid selections {note, chordType}
-
-// Color cycle for chord pattern lines (based on lowest fret position)
-const CHORD_LINE_COLORS = [
-    '#ff6b35', // Orange
-    '#4ecdc4', // Teal
-    '#45b7d1', // Blue
-    '#f9ca24', // Yellow
-    '#f0932b', // Dark orange
-    '#eb4d4b', // Red
-    '#6c5ce7', // Purple
-    '#a55eea', // Light purple
-    '#26de81', // Green
-    '#fd79a8'  // Pink
-];
+let chordFingeringShapes = []; // Playable shapes found for the currently displayed chord
+let selectedFingeringTabIndex = 0; // Which shape/tab is currently rendered
 
 const SEMITONE_TO_INTERVAL_LABEL = {
     0: 'R',
@@ -2222,6 +2215,7 @@ function createFretboardControls(fretboard) {
         fretboardsShowingChords.delete(fretboard.containerId);
         currentDisplayedChord = null;
         currentChordGridSelection = null; // Clear chord grid selection
+        clearFingeringTabs();
         // Clear chord info display
         updateChordInfoDisplay();
         // Update chord button styles
@@ -2240,6 +2234,7 @@ function createFretboardControls(fretboard) {
     });
     addInteractiveEvent(showAllButton, 'click', () => {
         fretboard.markAllNotes();
+        clearFingeringTabs();
         // Remove this fretboard from the scale tracking set since it's now showing all notes
         fretboardsShowingScale.delete(fretboard.containerId);
     });
@@ -2280,9 +2275,9 @@ function createFretboardControls(fretboard) {
             const scaleNotes = getScaleNotes(rootNote, intervals);
             
             fretboard.markScale(scaleNotes, rootNote, {
-                showIntervals: showMainFretboardIntervals
+                showIntervals: mainFretboardLabelMode === 'interval'
             });
-            
+
             // Track that this fretboard is showing the current scale
             fretboardsShowingScale.add(fretboard.containerId);
             
@@ -2807,18 +2802,9 @@ function createFretboardControls(fretboard) {
         margin-right: 10px;
     `;
 
-    const intervalsToggleCheckbox = document.createElement('input');
-    intervalsToggleCheckbox.type = 'checkbox';
-    intervalsToggleCheckbox.id = 'main-fretboard-intervals-toggle';
-    intervalsToggleCheckbox.checked = showMainFretboardIntervals;
-    intervalsToggleCheckbox.style.cssText = `
-        transform: scale(1.1);
-        cursor: pointer;
-    `;
-
     const intervalsToggleLabel = document.createElement('label');
-    intervalsToggleLabel.htmlFor = 'main-fretboard-intervals-toggle';
-    intervalsToggleLabel.textContent = 'Show Intervals';
+    intervalsToggleLabel.htmlFor = 'main-fretboard-label-mode';
+    intervalsToggleLabel.textContent = 'Labels';
     intervalsToggleLabel.style.cssText = `
         font-size: 12px;
         color: #fff;
@@ -2827,8 +2813,24 @@ function createFretboardControls(fretboard) {
         white-space: nowrap;
     `;
 
-    intervalsToggleCheckbox.addEventListener('change', (e) => {
-        showMainFretboardIntervals = e.target.checked;
+    const intervalsToggleSelect = document.createElement('select');
+    intervalsToggleSelect.id = 'main-fretboard-label-mode';
+    intervalsToggleSelect.innerHTML = `
+        <option value="note">Note Name</option>
+        <option value="interval">Interval</option>
+        <option value="finger">Finger Number</option>
+    `;
+    intervalsToggleSelect.value = mainFretboardLabelMode;
+    intervalsToggleSelect.style.cssText = `
+        padding: 2px 4px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+    `;
+
+    intervalsToggleSelect.addEventListener('change', (e) => {
+        mainFretboardLabelMode = e.target.value;
 
         if (currentChordGridSelection) {
             showChordPatternOnFretboard(currentChordGridSelection.note, currentChordGridSelection.chordType, false);
@@ -2839,8 +2841,8 @@ function createFretboardControls(fretboard) {
         }
     });
 
-    intervalsToggleContainer.appendChild(intervalsToggleCheckbox);
     intervalsToggleContainer.appendChild(intervalsToggleLabel);
+    intervalsToggleContainer.appendChild(intervalsToggleSelect);
     
     // Roman numeral chord buttons + Scale button
     const romanNumerals = ['Scale', 'I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
@@ -2971,15 +2973,31 @@ function createFretboardControls(fretboard) {
     
     chordInfoContainer.appendChild(chordNameDisplay);
     chordInfoContainer.appendChild(chordNotesDisplay);
-    
+
+    // Create the chord fingering position picker (tabs for alternate playable shapes)
+    const fingeringTabsContainer = document.createElement('div');
+    fingeringTabsContainer.id = 'chord-fingering-tabs';
+    fingeringTabsContainer.style.cssText = `
+        margin: 10px 0 0 0;
+        padding: 8px 12px;
+        background: rgba(0,0,0,0.15);
+        border-radius: 8px;
+        border: 1px solid #4a4a4a;
+        display: none;
+        gap: 6px;
+        flex-wrap: wrap;
+        align-items: center;
+    `;
+
     noteInputContainer.appendChild(noteInput);
     noteInputContainer.appendChild(markNoteButton);
-    
+
     controlsContainer.appendChild(clearButton);
     controlsContainer.appendChild(showAllButton);
     // controlsContainer.appendChild(showScaleButton);
     controlsContainer.appendChild(chordControlsContainer);
     controlsContainer.appendChild(chordInfoContainer);
+    controlsContainer.appendChild(fingeringTabsContainer);
     
     // Create chord pattern demo controls
     const patternDemoContainer = document.createElement('div');
@@ -3655,7 +3673,7 @@ function getSemitoneFromReference(referenceRootNote, targetNote) {
  * @param {string|number} strokeWidth
  * @returns {SVGElement}
  */
-function createNoteShapeMarker(x, y, radius, shapeType, fill, stroke, strokeWidth) {
+function createNoteShapeMarker(x, y, radius, shapeType, fill, stroke, strokeWidth, dashed = false) {
     const ns = 'http://www.w3.org/2000/svg';
     let marker;
 
@@ -3792,6 +3810,12 @@ function createNoteShapeMarker(x, y, radius, shapeType, fill, stroke, strokeWidt
                 marker.appendChild(outline2);
             }
 
+            if (dashed) {
+                const dashPattern = `${Math.max(1, radius * 0.4)},${Math.max(1, radius * 0.3)}`;
+                l1.setAttribute('stroke-dasharray', dashPattern);
+                l2.setAttribute('stroke-dasharray', dashPattern);
+            }
+
             marker.appendChild(l1);
             marker.appendChild(l2);
             return marker;
@@ -3809,6 +3833,9 @@ function createNoteShapeMarker(x, y, radius, shapeType, fill, stroke, strokeWidt
     marker.setAttribute('fill', fill);
     marker.setAttribute('stroke', stroke);
     marker.setAttribute('stroke-width', String(strokeWidth));
+    if (dashed) {
+        marker.setAttribute('stroke-dasharray', `${Math.max(1, radius * 0.4)},${Math.max(1, radius * 0.3)}`);
+    }
     return marker;
 }
 
@@ -3896,6 +3923,23 @@ function shadeColor(color, percent) {
     return newColor;
 }
 
+/**
+ * Pick black or white text so it stays legible against a given background
+ * color (e.g. white text on a bright green/yellow interval dot is unreadable).
+ * @param {string} hexColor - '#rrggbb'
+ * @returns {'#000000'|'#ffffff'}
+ */
+function getContrastTextColor(hexColor) {
+    if (typeof hexColor !== 'string' || hexColor.length < 7) {
+        return '#ffffff';
+    }
+    const r = parseInt(hexColor.substring(1, 3), 16);
+    const g = parseInt(hexColor.substring(3, 5), 16);
+    const b = parseInt(hexColor.substring(5, 7), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.6 ? '#000000' : '#ffffff';
+}
+
 function createScalePositionMiniFretboard(
     scaleNoteNames,
     displayedNotes,
@@ -3965,6 +4009,8 @@ function createScalePositionMiniFretboard(
         return wrapper;
     }
 
+    const candidates = [];
+
     for (let stringIndex = 0; stringIndex < MINI_SCALE_STRING_TUNING.length; stringIndex++) {
         const openMidi = notationNoteToMidi(MINI_SCALE_STRING_TUNING[stringIndex]);
         const stringName = notationStripOctave(MINI_SCALE_STRING_TUNING[stringIndex]);
@@ -4013,19 +4059,96 @@ function createScalePositionMiniFretboard(
             const shapeType = scalePositionUseNoteShapes
                 ? NOTE_SHAPE_TYPES[shapeSemitone % NOTE_SHAPE_TYPES.length]
                 : 'circle';
-            const marker = createNoteShapeMarker(
+
+            candidates.push({
+                string: stringIndex,
+                fret: absoluteFret,
                 x,
                 y,
                 radius,
                 shapeType,
+                noteName,
+                note: noteName,
+                isRoot,
+                isTargetRootString,
                 intervalColor,
-                isRoot && isTargetRootString ? '#ffffff' : 'rgba(0,0,0,0.5)',
-                isRoot && isTargetRootString ? 1 : 0.5
-            );
-
-            svg.appendChild(marker);
+                intervalLabel: SEMITONE_TO_SCALE_INTERVAL_LABEL[getSemitoneFromReference(referenceRootNote, noteName)]
+            });
         }
     }
+
+    // For chord cells (not the full-scale reference), pick one playable grip
+    // (one dot per string, nearest to the row's root column) and give it a
+    // finger number / label, distinguishing it from other same-chord dots
+    // that fall in this window but aren't part of that specific grip.
+    let gripMembers = null;
+    if (showOnlyDisplayedNotes && candidates.length > 0) {
+        const grip = selectGripFromPositions(candidates, rowRootAbsoluteFret);
+        assignFingers(grip);
+        gripMembers = new Set(grip);
+
+        if (scalePositionShowGripLines && grip.length > 1) {
+            const orderedGrip = grip.slice().sort((a, b) => a.string - b.string);
+            const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+            polyline.setAttribute('points', orderedGrip.map(c => `${c.x},${c.y}`).join(' '));
+            polyline.setAttribute('fill', 'none');
+            polyline.setAttribute('stroke', 'rgba(255,255,255,0.65)');
+            polyline.setAttribute('stroke-width', String(Math.max(1, 1.4 * scalePositionDotScale)));
+            polyline.setAttribute('stroke-linecap', 'round');
+            polyline.setAttribute('stroke-linejoin', 'round');
+            svg.appendChild(polyline);
+        }
+    }
+
+    candidates.forEach(candidate => {
+        const isGripMember = gripMembers ? gripMembers.has(candidate) : false;
+        const marker = createNoteShapeMarker(
+            candidate.x,
+            candidate.y,
+            candidate.radius,
+            candidate.shapeType,
+            candidate.intervalColor,
+            candidate.isRoot && candidate.isTargetRootString ? '#ffffff' : 'rgba(0,0,0,0.5)',
+            candidate.isRoot && candidate.isTargetRootString ? 1 : 0.5,
+            isGripMember
+        );
+        svg.appendChild(marker);
+
+        if (scalePositionAllLabelsMode !== 'none') {
+            // Show a single label (note name or interval) on every rendered
+            // dot - chord cells and the full scale reference column alike -
+            // independent of the picked grip.
+            const allLabelText = scalePositionAllLabelsMode === 'interval' ? candidate.intervalLabel : candidate.noteName;
+            if (allLabelText) {
+                const allLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                allLabel.setAttribute('x', String(candidate.x));
+                allLabel.setAttribute('y', String(candidate.y));
+                allLabel.setAttribute('text-anchor', 'middle');
+                allLabel.setAttribute('dominant-baseline', 'central');
+                allLabel.setAttribute('fill', getContrastTextColor(candidate.intervalColor));
+                allLabel.setAttribute('font-size', String(Math.max(6, Math.round(candidate.radius * 1.1))));
+                allLabel.setAttribute('font-family', 'monospace');
+                allLabel.setAttribute('font-weight', 'bold');
+                allLabel.textContent = allLabelText;
+                svg.appendChild(allLabel);
+            }
+        } else if (isGripMember && scalePositionLabelMode !== 'none') {
+            const labelText = getFingeringMarkerLabel(candidate, scalePositionLabelMode);
+            if (labelText) {
+                const gripLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                gripLabel.setAttribute('x', String(candidate.x));
+                gripLabel.setAttribute('y', String(candidate.y));
+                gripLabel.setAttribute('text-anchor', 'middle');
+                gripLabel.setAttribute('dominant-baseline', 'central');
+                gripLabel.setAttribute('fill', getContrastTextColor(candidate.intervalColor));
+                gripLabel.setAttribute('font-size', String(Math.max(6, Math.round(candidate.radius * 1.1))));
+                gripLabel.setAttribute('font-family', 'monospace');
+                gripLabel.setAttribute('font-weight', 'bold');
+                gripLabel.textContent = labelText;
+                svg.appendChild(gripLabel);
+            }
+        }
+    });
 
     if (showRelativeFretLabels) {
         const labelY = startY + (MINI_SCALE_STRING_TUNING.length - 1) * stringGap + (12 * patternScale);
@@ -4495,6 +4618,97 @@ function renderScalePositionGrid() {
     stackControl.appendChild(stackLabel);
     stackControl.appendChild(stackSelect);
 
+    const gripLabelControl = document.createElement('label');
+    gripLabelControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const gripLabelLabel = document.createElement('span');
+    gripLabelLabel.textContent = 'Grip Labels';
+    const gripLabelSelect = document.createElement('select');
+    gripLabelSelect.innerHTML = `
+        <option value="none">Off</option>
+        <option value="note">Note Name</option>
+        <option value="interval">Interval</option>
+        <option value="finger">Finger Number</option>
+    `;
+    gripLabelSelect.value = scalePositionLabelMode;
+    gripLabelSelect.style.cssText = `
+        padding: 2px 4px;
+        border: 1px solid #666;
+        border-radius: 4px;
+        font-size: 11px;
+        background: #222;
+        color: #e3e3e3;
+    `;
+    gripLabelSelect.addEventListener('change', (event) => {
+        scalePositionLabelMode = event.target.value;
+        renderScalePositionGrid();
+    });
+    gripLabelControl.appendChild(gripLabelLabel);
+    gripLabelControl.appendChild(gripLabelSelect);
+
+    const allLabelsControl = document.createElement('label');
+    allLabelsControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const allLabelsLabel = document.createElement('span');
+    allLabelsLabel.textContent = 'All Note Labels';
+    const allLabelsSelect = document.createElement('select');
+    allLabelsSelect.innerHTML = `
+        <option value="none">Off</option>
+        <option value="note">Note Name</option>
+        <option value="interval">Interval</option>
+    `;
+    allLabelsSelect.value = scalePositionAllLabelsMode;
+    allLabelsSelect.style.cssText = `
+        padding: 2px 4px;
+        border: 1px solid #666;
+        border-radius: 4px;
+        font-size: 11px;
+        background: #222;
+        color: #e3e3e3;
+    `;
+    allLabelsSelect.addEventListener('change', (event) => {
+        scalePositionAllLabelsMode = event.target.value;
+        renderScalePositionGrid();
+    });
+    allLabelsControl.appendChild(allLabelsLabel);
+    allLabelsControl.appendChild(allLabelsSelect);
+
+    const gripLinesControl = document.createElement('label');
+    gripLinesControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const gripLinesToggle = document.createElement('input');
+    gripLinesToggle.type = 'checkbox';
+    gripLinesToggle.checked = scalePositionShowGripLines;
+    const gripLinesLabel = document.createElement('span');
+    gripLinesLabel.textContent = 'Connect Fingered Notes';
+    gripLinesToggle.addEventListener('change', (event) => {
+        scalePositionShowGripLines = event.target.checked;
+        renderScalePositionGrid();
+    });
+    gripLinesControl.appendChild(gripLinesToggle);
+    gripLinesControl.appendChild(gripLinesLabel);
+
     const chordHeaderControl = document.createElement('label');
     chordHeaderControl.style.cssText = `
         display: inline-flex;
@@ -4633,6 +4847,9 @@ function renderScalePositionGrid() {
     controls.appendChild(dotControl);
     controls.appendChild(modeControl);
     controls.appendChild(stackControl);
+    controls.appendChild(gripLabelControl);
+    controls.appendChild(allLabelsControl);
+    controls.appendChild(gripLinesControl);
     controls.appendChild(chordHeaderControl);
     controls.appendChild(instancedScaleControl);
     controls.appendChild(shapeControl);
@@ -4710,6 +4927,21 @@ function renderScalePositionGrid() {
         item.appendChild(text);
         legend.appendChild(item);
     });
+
+    {
+        const gripItem = document.createElement('span');
+        gripItem.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border: 1px dashed #999;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.2);
+        `;
+        gripItem.textContent = 'Dashed = suggested fingering grip';
+        legend.appendChild(gripItem);
+    }
     container.appendChild(legend);
 
     container.appendChild(buildScalePositionFocusMatrix(columnCount));
@@ -4994,6 +5226,223 @@ function refreshFretboardDisplay() {
 }
 
 /**
+ * Build the note-name -> interval-label map used to label best-effort grip positions.
+ * @param {Fretboard} fretboard
+ * @param {Array<string>} chordNotes
+ * @param {Array<string>} intervalLabels
+ * @returns {Object}
+ */
+function buildIntervalLabelMap(fretboard, chordNotes, intervalLabels) {
+    const map = {};
+    chordNotes.forEach((note, index) => {
+        const noteName = fretboard.extractNoteName(note);
+        map[noteName] = normalizeIntervalLabel(intervalLabels[index]);
+    });
+    return map;
+}
+
+/**
+ * Find playable shapes for a chord: known chordPatterns.js shapes first
+ * (sorted by lowest fret, "predefined"), falling back to one generated
+ * shape ("best-effort") when no known pattern matches.
+ * @param {Fretboard} fretboard
+ * @param {Array<string>} chordNotes
+ * @param {string} rootNote
+ * @param {Object} intervalLabelMap - noteName -> interval label
+ * @param {Array<string>|null} specificPatterns
+ * @returns {Array} shapes: {source, label, patternName, positions}
+ */
+function buildFingeringShapes(fretboard, chordNotes, rootNote, intervalLabelMap, specificPatterns) {
+    const rootNoteName = fretboard.extractNoteName(rootNote);
+    const matches = fretboard.findChordPatternMatches(chordNotes, rootNote, specificPatterns || null);
+    const sortedMatches = matches.slice().sort((a, b) => {
+        const minFretA = Math.min(...a.positions.map(pos => pos.fret));
+        const minFretB = Math.min(...b.positions.map(pos => pos.fret));
+        return minFretA - minFretB;
+    });
+
+    const shapes = sortedMatches.map(match => {
+        const minFret = Math.min(...match.positions.map(pos => pos.fret));
+        const positions = match.positions.map((pos, index) => ({
+            string: pos.string,
+            fret: pos.fret,
+            note: match.patternNotes[index],
+            intervalLabel: pos.label,
+            isRoot: pos.label === 'R' || areEnharmonicEquivalent(match.patternNotes[index], rootNoteName)
+        }));
+        assignFingers(positions);
+        return {
+            source: classifyFingeringSource(match),
+            label: minFret === 0 ? 'Open' : `Pos ${minFret}`,
+            patternName: match.patternName,
+            positions
+        };
+    });
+
+    if (shapes.length === 0) {
+        const allPositions = [];
+        chordNotes.forEach(note => {
+            const noteName = fretboard.extractNoteName(note);
+            fretboard.findNotePositions(noteName).forEach(pos => {
+                allPositions.push({
+                    string: pos.string,
+                    fret: pos.fret,
+                    note: noteName,
+                    intervalLabel: (intervalLabelMap && intervalLabelMap[noteName]) || '',
+                    isRoot: areEnharmonicEquivalent(noteName, rootNoteName)
+                });
+            });
+        });
+
+        const grip = selectGripFromPositions(allPositions, 0);
+        if (grip.length > 0) {
+            assignFingers(grip);
+            shapes.push({
+                source: classifyFingeringSource(null),
+                label: 'Best Effort',
+                patternName: null,
+                positions: grip
+            });
+        }
+    }
+
+    return shapes;
+}
+
+/**
+ * Compute the text label to show on a fingering marker for the given label mode.
+ * @param {Object} position
+ * @param {'note'|'interval'|'finger'} labelMode
+ * @returns {string}
+ */
+function getFingeringMarkerLabel(position, labelMode) {
+    if (labelMode === 'finger') {
+        if (position.finger === null || position.finger === undefined) {
+            return '?';
+        }
+        return position.finger === 0 ? 'O' : String(position.finger);
+    }
+    if (labelMode === 'interval' && position.intervalLabel) {
+        return position.intervalLabel;
+    }
+    return position.note || position.intervalLabel || '';
+}
+
+/**
+ * Render a single chord shape's positions on the fretboard, styled to
+ * distinguish predefined (known chordPatterns.js) shapes from best-effort
+ * generated ones (solid vs. dashed marker border).
+ * @param {Fretboard} fretboard
+ * @param {Object} shape
+ * @param {'note'|'interval'|'finger'} labelMode
+ */
+function renderFingeringShape(fretboard, shape, labelMode) {
+    fretboard.clearMarkers();
+    fretboard.clearChordLines();
+
+    if (!shape || !Array.isArray(shape.positions)) {
+        return;
+    }
+
+    const isPredefined = shape.source === 'predefined';
+    const colorMap = ['#ff4444', '#ffcc44', '#44ff44', '#4444ff'];
+
+    shape.positions.forEach((position, index) => {
+        fretboard.markFret(position.string, position.fret, {
+            backgroundColor: '#ffffff',
+            borderColor: colorMap[index % colorMap.length],
+            borderWidth: position.isRoot ? 4 : 3,
+            borderStyle: isPredefined ? 'solid' : 'dashed',
+            textColor: '#333333',
+            size: position.isRoot ? 30 : 26,
+            label: getFingeringMarkerLabel(position, labelMode),
+            isRoot: position.isRoot,
+            useCustomStyle: true,
+            disableAnimation: true
+        });
+    });
+}
+
+/**
+ * Clear the fingering shape state and hide the position-picker tab bar,
+ * used whenever the fretboard stops showing a specific chord (scale view, clear).
+ */
+function clearFingeringTabs() {
+    chordFingeringShapes = [];
+    selectedFingeringTabIndex = 0;
+    const container = document.getElementById('chord-fingering-tabs');
+    if (container) {
+        container.innerHTML = '';
+        container.style.display = 'none';
+    }
+}
+
+/**
+ * Build/update the position-picker tab bar for the currently displayed chord.
+ * @param {Fretboard} fretboard
+ * @param {'note'|'interval'|'finger'} labelMode
+ */
+function renderFingeringTabs(fretboard, labelMode) {
+    const container = document.getElementById('chord-fingering-tabs');
+    if (!container) {
+        return;
+    }
+
+    container.innerHTML = '';
+
+    if (!chordFingeringShapes.length) {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'flex';
+
+    const legendLabel = document.createElement('span');
+    legendLabel.style.cssText = `
+        font-size: 10px;
+        color: #ccc;
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        margin-right: 4px;
+    `;
+    legendLabel.innerHTML = `
+        <span style="display:inline-flex;align-items:center;gap:3px;">
+            <span style="width:8px;height:8px;border-radius:50%;border:1px solid #ccc;display:inline-block;"></span>
+            Known shape
+        </span>
+        <span style="display:inline-flex;align-items:center;gap:3px;">
+            <span style="width:8px;height:8px;border-radius:50%;border:1px dashed #ccc;display:inline-block;"></span>
+            Best effort
+        </span>
+    `;
+    container.appendChild(legendLabel);
+
+    chordFingeringShapes.forEach((shape, index) => {
+        const tab = document.createElement('button');
+        tab.type = 'button';
+        tab.textContent = shape.label;
+        tab.title = shape.source === 'predefined' ? `Known shape (${shape.patternName})` : 'Best-effort generated shape';
+        const isActive = index === selectedFingeringTabIndex;
+        tab.style.cssText = `
+            padding: 4px 10px;
+            font-size: 11px;
+            border-radius: 4px;
+            cursor: pointer;
+            border: 1px ${shape.source === 'predefined' ? 'solid' : 'dashed'} ${isActive ? '#ffffff' : '#777'};
+            background: ${isActive ? '#0056b3' : 'rgba(255,255,255,0.08)'};
+            color: #fff;
+        `;
+        tab.addEventListener('click', () => {
+            selectedFingeringTabIndex = index;
+            renderFingeringShape(fretboard, chordFingeringShapes[index], labelMode);
+            renderFingeringTabs(fretboard, labelMode);
+        });
+        container.appendChild(tab);
+    });
+}
+
+/**
  * Show chord pattern on fretboard with scale context (local version)
  */
 function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
@@ -5011,86 +5460,33 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
         const scaleRootNote = getPrimaryRootNote();
         
         if (primaryScale && scaleRootNote) {
-            const [family, mode] = primaryScale.split('-');
+            const [family] = primaryScale.split('-');
             // Guard against accessing HeptatonicScales before it's initialized
             if (!HeptatonicScales || !HeptatonicScales[family]) {
                 console.warn('HeptatonicScales not yet initialized');
                 return;
             }
-            const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
-            const scaleNotes = getScaleNotes(scaleRootNote, intervals);
-            
             // Process the chord to get its notes
             const chordName = rootNote + chordType;
             const chordInfo = processChord(chordName);
-            
+
             if (chordInfo && chordInfo.notes) {
                 // Translate chord notes to match current scale context
                 const translatedChordNotes = notationTranslateNotes(chordInfo.notes);
-                
+
                 // Get the fretboard instance
                 const fretboard = getFretboard('fretNotPlaceholder');
                 if (fretboard) {
-                    // Clear previous markers and lines
-                    fretboard.clearMarkers();
-                    fretboard.clearChordLines();
-                    
-                    // First, mark all scale notes in grey
-                    scaleNotes.forEach(note => {
-                        const noteName = typeof note === 'string' && note.includes('/') ? note.split('/')[0] : note;
-                        const positions = fretboard.findNotePositions(noteName);
-                        
-                        positions.forEach(pos => {
-                            fretboard.markFret(pos.string, pos.fret, {
-                                backgroundColor: '#e0e0e0',
-                                borderColor: '#999999',
-                                borderWidth: 1,
-                                textColor: '#666666',
-                                size: 20,
-                                label: noteName,
-                                isRoot: false,
-                                useCustomStyle: true
-                            });
-                        });
-                    });
-                    
-                    // Then, mark chord notes with their usual colorings
-                    const chordNotes = translatedChordNotes.map(note => 
+                    const chordNotes = translatedChordNotes.map(note =>
                         typeof note === 'string' && note.includes('/') ? note.split('/')[0] : note
                     );
-                    
-                    // Remove scale notes octave info for comparison
-                    const scaleNoteNames = scaleNotes.map(note => 
-                        typeof note === 'string' && note.includes('/') ? note.split('/')[0] : note
-                    );
-                    
-                    const colorMap = ['#ff4444', '#ffcc44', '#44ff44', '#4444ff']; // Root, 3rd, 5th, 7th
+
                     const chordIntervalLabels = Array.isArray(chordInfo.intervals)
                         ? chordInfo.intervals
                         : chordNotes.map(note => getIntervalLabelFromRoot(chordNotes[0], note));
-                    
-                    chordNotes.forEach((note, index) => {
-                        const positions = fretboard.findNotePositions(note);
-                        const isInScale = noteArrayContains(scaleNoteNames, note);
-                        const isRoot = index === 0;
-                        const intervalLabel = normalizeIntervalLabel(chordIntervalLabels[index]) || getIntervalLabelFromRoot(chordNotes[0], note);
-                        const markerLabel = showMainFretboardIntervals && intervalLabel ? intervalLabel : note;
-                        
-                        positions.forEach(pos => {
-                            fretboard.markFret(pos.string, pos.fret, {
-                                backgroundColor: '#ffffff',
-                                borderColor: isInScale ? colorMap[index % colorMap.length] : '#000000ff', // Distinct color for out-of-scale notes
-                                borderWidth: isRoot ? 4 : 3,
-                                textColor: '#333333',
-                                size: isRoot ? 30 : 26,
-                                label: markerLabel,
-                                isRoot: isRoot,
-                                useCustomStyle: true
-                            });
-                        });
-                    });
-                    
-                    // Add chord pattern lines - map chord types to pattern types
+                    const intervalLabelMap = buildIntervalLabelMap(fretboard, chordNotes, chordIntervalLabels);
+
+                    // Map chord types to pattern types for known-shape lookup
                     const chordTypeMapping = {
                         'Major': 'major',
                         'Minor': 'minor',
@@ -5105,57 +5501,25 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                         '5': 'power',
                         'm7b5': 'm7b5'
                     };
-                    
                     const patternType = chordTypeMapping[chordType];
-                    if (patternType) {
-                        // Get patterns only for this specific chord type to optimize performance
-                        const specificPatterns = getPatternsByChordType(patternType);
-                        const chordMatches = fretboard.findChordPatternMatches(chordNotes, chordNotes[0], specificPatterns);
-                        
-                        if (chordMatches.length > 0) {
-                            // Sort matches by lowest fret position for color assignment
-                            const sortedMatches = chordMatches.sort((a, b) => {
-                                const minFretA = Math.min(...a.positions.map(pos => pos.fret));
-                                const minFretB = Math.min(...b.positions.map(pos => pos.fret));
-                                return minFretA - minFretB;
-                            });
-                            
-                            // Color cycle for chord pattern lines
-                            const CHORD_LINE_COLORS = [
-                                '#ff6b35', '#4ecdc4', '#d145caff', '#f9ca24', '#f0932b',
-                                '#eb4d4b', '#6c5ce7', '#15a1e7ff', '#26de81', '#fd79a8'
-                            ];
-                            
-                            // Add chord pattern lines on top of the traditional markers
-                            sortedMatches.forEach((match, matchIndex) => {
-                                const lineColor = CHORD_LINE_COLORS[matchIndex % CHORD_LINE_COLORS.length];
-                                const linePoints = match.positions.map(pos => ({
-                                    string: pos.string,
-                                    fret: pos.fret
-                                }));
-                                
-                                // Only draw lines if we have at least 2 points
-                                if (linePoints.length >= 2) {
-                                    fretboard.drawChordLine(`${chordName}-pattern-${matchIndex}`, linePoints, {
-                                        color: lineColor,
-                                        lineWidth: 60,
-                                        style: 'solid',
-                                        opacity: 0.7,
-                                    });
-                                }
-                            });
-                            
-                            console.log(`Displaying ${chordName} with ${sortedMatches.length} chord pattern lines ${isTemporary ? 'temporarily' : 'persistently'}`);
-                        } else {
-                            console.log(`Displaying ${chordName} (no chord patterns found for type: ${patternType})`);
-                        }
+                    const specificPatterns = patternType ? getPatternsByChordType(patternType) : null;
+
+                    // Find playable shapes (predefined first, best-effort fallback) and
+                    // render the first one, with a position picker for the rest.
+                    chordFingeringShapes = buildFingeringShapes(fretboard, chordNotes, chordNotes[0], intervalLabelMap, specificPatterns);
+                    selectedFingeringTabIndex = 0;
+
+                    const labelMode = mainFretboardLabelMode;
+                    if (chordFingeringShapes.length > 0) {
+                        renderFingeringShape(fretboard, chordFingeringShapes[0], labelMode);
+                        console.log(`Displaying ${chordName} with ${chordFingeringShapes.length} playable shape(s) ${isTemporary ? 'temporarily' : 'persistently'}`);
                     } else {
-                        console.log(`Displaying ${chordName} (no pattern mapping for chord type: ${chordType})`);
+                        fretboard.clearMarkers();
+                        fretboard.clearChordLines();
+                        console.log(`Displaying ${chordName} (no playable shape found)`);
                     }
-                    
-                    console.log(`Scale: ${scaleRootNote} ${family} (${scaleNoteNames.join(', ')})`);
-                    console.log(`Chord: ${chordNotes.join(', ')}`);
-                    
+                    renderFingeringTabs(fretboard, labelMode);
+
                     // Update chord info display for chord grid selections (both hover and click)
                     const chordDisplayName = `${rootNote} ${chordType}`;
                     updateChordInfoDisplay(chordDisplayName, chordNotes);
@@ -5191,6 +5555,7 @@ function restoreFretboardState() {
             fretboard.clearMarkers();
             fretboard.clearChordLines();
         }
+        clearFingeringTabs();
         updateChordInfoDisplay(); // Clear chord info display
     } else if (currentDisplayedChord === 0) {
         // Show scale
@@ -5238,56 +5603,26 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
             
             // Update chord info display
             updateChordInfoDisplay(chordName, chord);
-            
-            // Always start with traditional chord display to show full scale context
+
+            // Find playable shapes (predefined chordPatterns.js shapes first, sorted by
+            // lowest fret, best-effort fallback if none match) and render the first one,
+            // with a position picker for the rest.
             const chordIntervalLabels = chord.map(note => getIntervalLabelFromRoot(chord[0], note));
-            fretboard.displayChord(chord, chordName, {
-                clearFirst: true,
-                showLines: false,
-                showScaleContext: true,
-                showIntervals: showMainFretboardIntervals,
-                intervalLabels: chordIntervalLabels
-            });
-            
-            // Then add chord pattern lines on top
-            const chordMatches = fretboard.findChordPatternMatches(chord, chord[0]);
-            
-            if (chordMatches.length > 0) {
-                // Sort matches by lowest fret position for color assignment
-                const sortedMatches = chordMatches.sort((a, b) => {
-                    const minFretA = Math.min(...a.positions.map(pos => pos.fret));
-                    const minFretB = Math.min(...b.positions.map(pos => pos.fret));
-                    return minFretA - minFretB;
-                });
-                
-                // Add chord pattern lines on top of the traditional markers
-                sortedMatches.forEach((match, matchIndex) => {
-                    const colorIndex = matchIndex % CHORD_LINE_COLORS.length;
-                    const lineColor = CHORD_LINE_COLORS[colorIndex];
-                    const patternId = `roman-${chordIndex}-${match.patternName}-${match.rootPosition.fret}`;
-                    
-                    // Draw connecting lines with thick lines and no labels
-                    if (match.positions.length > 1) {
-                        const linePoints = match.positions.map(pos => ({
-                            string: pos.string,
-                            fret: pos.fret
-                        }));
-                        
-                        fretboard.drawChordLine(patternId, linePoints, {
-                            color: lineColor,
-                            lineWidth: 40, // Thicker lines for chord patterns
-                            style: 'solid',
-                            opacity: 0.8,
-                            label: '', // No text labels as requested
-                            labelPosition: 'middle'
-                        });
-                    }
-                });
-                
-                console.log(`Displaying traditional chord markers with ${sortedMatches.length} chord pattern lines for ${chordName}`);
+            const intervalLabelMap = buildIntervalLabelMap(fretboard, chord, chordIntervalLabels);
+
+            chordFingeringShapes = buildFingeringShapes(fretboard, chord, chord[0], intervalLabelMap, null);
+            selectedFingeringTabIndex = 0;
+
+            const labelMode = mainFretboardLabelMode;
+            if (chordFingeringShapes.length > 0) {
+                renderFingeringShape(fretboard, chordFingeringShapes[0], labelMode);
+                console.log(`Displaying ${chordName} with ${chordFingeringShapes.length} playable shape(s)`);
             } else {
-                console.log(`Displaying traditional chord markers for ${chordName} (no chord patterns found)`);
+                fretboard.clearMarkers();
+                fretboard.clearChordLines();
+                console.log(`Displaying ${chordName} (no playable shape found)`);
             }
+            renderFingeringTabs(fretboard, labelMode);
         }
     } catch (error) {
         console.warn('Could not generate chord:', error);
@@ -5326,11 +5661,12 @@ function showScaleOnFretboard(isTemporary = false) {
         // Clear markers and lines first to prevent overlap
         fretboard.clearMarkers();
         fretboard.clearChordLines();
-        
+        clearFingeringTabs();
+
         fretboard.markScale(scaleNotes, rootNote, {
-            showIntervals: showMainFretboardIntervals
+            showIntervals: mainFretboardLabelMode === 'interval'
         });
-        
+
         if (!isTemporary) {
             // Add to scale tracking only if this is a permanent selection
             fretboardsShowingScale.add(fretboard.containerId);
@@ -5425,7 +5761,7 @@ function updateFretboardsForScaleChange(scaleData) {
             const fretboard = fretboardInstances.get(containerId);
             if (fretboard) {
                 fretboard.markScale(scaleNotes, rootNote, {
-                    showIntervals: showMainFretboardIntervals
+                    showIntervals: mainFretboardLabelMode === 'interval'
                 });
             }
         });
@@ -5439,7 +5775,7 @@ function updateFretboardsForScaleChange(scaleData) {
                     fretboard.clearMarkers();
                     fretboard.clearChordLines();
                     fretboard.markScale(scaleNotes, rootNote, {
-                        showIntervals: showMainFretboardIntervals
+                        showIntervals: mainFretboardLabelMode === 'interval'
                     });
                     return;
                 }
