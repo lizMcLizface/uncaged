@@ -17,6 +17,16 @@ try {
 // Global array to store selected scales
 let selectedScales = ['Major-1']; // Default to first scale
 let exclusiveMode = false; // Toggle between exclusive and multiple selection modes
+let showScalePositionGrid = true; // Toggle visibility of the scale position grid display
+let scalePositionDarkDuplicate = true; // Toggle for dark duplicate functionality
+
+function applyScalePositionGridVisibility() {
+    const scalePositionGrid = document.getElementById('scalePositionGridContainer');
+    if (!scalePositionGrid) {
+        return;
+    }
+    scalePositionGrid.style.display = showScalePositionGrid ? '' : 'none';
+}
 
 /**
  * Smart tooltip positioning function that keeps tooltips within viewport bounds
@@ -1193,6 +1203,31 @@ function createHeptatonicScaleTable() {
     toggleLabel.textContent = exclusiveMode ? 'Exclusive Selection' : 'Multiple Selection';
     toggleLabel.style.fontWeight = 'bold';
     toggleLabel.style.fontSize = '14px';
+
+    let gridToggleContainer = document.createElement('label');
+    gridToggleContainer.style.display = 'inline-flex';
+    gridToggleContainer.style.alignItems = 'center';
+    gridToggleContainer.style.gap = '6px';
+    gridToggleContainer.style.marginLeft = '8px';
+    gridToggleContainer.style.cursor = 'pointer';
+
+    let gridToggleInput = document.createElement('input');
+    gridToggleInput.type = 'checkbox';
+    gridToggleInput.checked = showScalePositionGrid;
+    gridToggleInput.style.cursor = 'pointer';
+
+    let gridToggleLabel = document.createElement('span');
+    gridToggleLabel.textContent = 'Show Scale Position Grid';
+    gridToggleLabel.style.fontWeight = 'bold';
+    gridToggleLabel.style.fontSize = '13px';
+
+    gridToggleInput.addEventListener('change', function(event) {
+        showScalePositionGrid = event.target.checked;
+        applyScalePositionGridVisibility();
+    });
+
+    gridToggleContainer.appendChild(gridToggleInput);
+    gridToggleContainer.appendChild(gridToggleLabel);
     
     // Add clear button
     let clearButton = document.createElement('button');
@@ -1224,7 +1259,10 @@ function createHeptatonicScaleTable() {
     toggleContainer.appendChild(toggleSwitch);
     toggleContainer.appendChild(toggleLabel);
     toggleContainer.appendChild(clearButton);
+    toggleContainer.appendChild(gridToggleContainer);
     currentPlaceholder.appendChild(toggleContainer);
+
+    applyScalePositionGridVisibility();
 
     // Add root note selection table
     let rootNoteTable = createRootNoteTable();
