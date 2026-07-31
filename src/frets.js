@@ -73,18 +73,28 @@ const SCALE_POSITION_ROW_STRINGS = ['B', 'A', 'G', 'E', 'D'];
 const SCALE_POSITION_DEGREES = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 const MINI_SCALE_FRET_COUNT = 6;
 const MINI_SCALE_STRING_TUNING = ['E/4', 'B/3', 'G/3', 'D/3', 'A/2', 'E/2'];
-const SCALE_POSITION_PATTERN_SCALE = 1.28;
+const SCALE_POSITION_PATTERN_SCALE = 2.0;
 const GENERIC_VISIBLE_FRET_START = 1;
 const GENERIC_ROOT_DISPLAY_COLUMN = 1;
 const SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET = 0;
 
 let scalePositionPatternScale = SCALE_POSITION_PATTERN_SCALE;
 let scalePositionUseAbsoluteFretLabels = false;
-let scalePositionDotScale = 1;
+let scalePositionDotScale = 1.75;
 let scalePositionShowChordNames = false;
 let scalePositionUseInstancedScale = false;
+let scalePositionUseNoteShapes = false;
+let scalePositionKeepColorConstant = false;
+let scalePositionKeepShapeConstant = false;
+let scalePositionDarkDuplicate = true;
+let scalePositionStackType = 'triad';
+let scalePositionHiddenCells = new Set();
+
+const SCALE_POSITION_STACK_SIZES = { dyad: 2, triad: 3, tetrad: 4 };
 
 const SEMITONE_TO_SCALE_INTERVAL_LABEL = ['R', 'm2', 'M2', 'm3', 'M3', 'A3', 'd5', 'P5', 'm6', 'M6', 'm7', 'M7'];
+const NOTE_SHAPE_TYPES = ['circle', 'square', 'diamond', 'triangle-up', 'triangle-down', 'pentagon', 'hexagon', 'star', 'cross', 'plus', 'triangle-right', 'triangle-left'];
+const MODE_DISPLAY_NAMES = ['Ionian', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian', 'Aeolian', 'Locrian'];
 
 /**
  * Utility function to add both mouse and touch event listeners for better mobile support
@@ -3602,6 +3612,27 @@ function buildDegreeHeaderLabel(roman, chordRoot, chordNotes) {
 }
 
 /**
+ * Build a readable scale descriptor from primary scale key.
+ * @param {string|null} primaryScaleKey
+ * @returns {string}
+ */
+function getScaleDescriptor(primaryScaleKey) {
+    if (!primaryScaleKey || typeof primaryScaleKey !== 'string') {
+        return 'Unknown Scale';
+    }
+
+    const [familyRaw, modeRaw] = primaryScaleKey.split('-');
+    const family = familyRaw || 'Unknown';
+    const modeNumber = parseInt(modeRaw, 10);
+
+    if (!Number.isFinite(modeNumber) || modeNumber < 1 || modeNumber > MODE_DISPLAY_NAMES.length) {
+        return family;
+    }
+
+    return `${family} ${MODE_DISPLAY_NAMES[modeNumber - 1]}`;
+}
+
+/**
  * Get chromatic interval distance from a reference root.
  * @param {string} referenceRootNote - Root note name without octave
  * @param {string} targetNote - Target note name without octave
@@ -3611,6 +3642,174 @@ function getSemitoneFromReference(referenceRootNote, targetNote) {
     const referenceMidi = notationNoteToMidi(`${normalizeNote(referenceRootNote)}/4`);
     const targetMidi = notationNoteToMidi(`${normalizeNote(targetNote)}/4`);
     return ((targetMidi - referenceMidi) % 12 + 12) % 12;
+}
+
+/**
+ * Create an SVG marker shape for a note.
+ * @param {number} x
+ * @param {number} y
+ * @param {number} radius
+ * @param {string} shapeType
+ * @param {string} fill
+ * @param {string} stroke
+ * @param {string|number} strokeWidth
+ * @returns {SVGElement}
+ */
+function createNoteShapeMarker(x, y, radius, shapeType, fill, stroke, strokeWidth) {
+    const ns = 'http://www.w3.org/2000/svg';
+    let marker;
+
+    switch (shapeType) {
+        case 'square': {
+            marker = document.createElementNS(ns, 'rect');
+            marker.setAttribute('x', String(x - radius));
+            marker.setAttribute('y', String(y - radius));
+            marker.setAttribute('width', String(radius * 2));
+            marker.setAttribute('height', String(radius * 2));
+            break;
+        }
+        case 'diamond': {
+            marker = document.createElementNS(ns, 'polygon');
+            marker.setAttribute('points', `${x},${y - radius} ${x + radius},${y} ${x},${y + radius} ${x - radius},${y}`);
+            break;
+        }
+        case 'triangle-up': {
+            marker = document.createElementNS(ns, 'polygon');
+            marker.setAttribute('points', `${x},${y - radius} ${x + radius},${y + radius} ${x - radius},${y + radius}`);
+            break;
+        }
+        case 'triangle-down': {
+            marker = document.createElementNS(ns, 'polygon');
+            marker.setAttribute('points', `${x - radius},${y - radius} ${x + radius},${y - radius} ${x},${y + radius}`);
+            break;
+        }
+        case 'triangle-right': {
+            marker = document.createElementNS(ns, 'polygon');
+            marker.setAttribute('points', `${x - radius},${y - radius} ${x - radius},${y + radius} ${x + radius},${y}`);
+            break;
+        }
+        case 'triangle-left': {
+            marker = document.createElementNS(ns, 'polygon');
+            marker.setAttribute('points', `${x + radius},${y - radius} ${x + radius},${y + radius} ${x - radius},${y}`);
+            break;
+        }
+        case 'pentagon': {
+            marker = document.createElementNS(ns, 'polygon');
+            const points = [];
+            for (let i = 0; i < 5; i++) {
+                const a = (-Math.PI / 2) + (i * (2 * Math.PI / 5));
+                points.push(`${x + radius * Math.cos(a)},${y + radius * Math.sin(a)}`);
+            }
+            marker.setAttribute('points', points.join(' '));
+            break;
+        }
+        case 'hexagon': {
+            marker = document.createElementNS(ns, 'polygon');
+            const points = [];
+            for (let i = 0; i < 6; i++) {
+                const a = (Math.PI / 6) + (i * (2 * Math.PI / 6));
+                points.push(`${x + radius * Math.cos(a)},${y + radius * Math.sin(a)}`);
+            }
+            marker.setAttribute('points', points.join(' '));
+            break;
+        }
+        case 'star': {
+            marker = document.createElementNS(ns, 'polygon');
+            const points = [];
+            const inner = radius * 0.45;
+            for (let i = 0; i < 10; i++) {
+                const r = i % 2 === 0 ? radius : inner;
+                const a = (-Math.PI / 2) + (i * (Math.PI / 5));
+                points.push(`${x + r * Math.cos(a)},${y + r * Math.sin(a)}`);
+            }
+            marker.setAttribute('points', points.join(' '));
+            break;
+        }
+        case 'plus':
+        case 'cross': {
+            marker = document.createElementNS(ns, 'g');
+            const l1 = document.createElementNS(ns, 'line');
+            const l2 = document.createElementNS(ns, 'line');
+            const outline1 = document.createElementNS(ns, 'line');
+            const outline2 = document.createElementNS(ns, 'line');
+            if (shapeType === 'plus') {
+                l1.setAttribute('x1', String(x - radius));
+                l1.setAttribute('y1', String(y));
+                l1.setAttribute('x2', String(x + radius));
+                l1.setAttribute('y2', String(y));
+                l2.setAttribute('x1', String(x));
+                l2.setAttribute('y1', String(y - radius));
+                l2.setAttribute('x2', String(x));
+                l2.setAttribute('y2', String(y + radius));
+
+                outline1.setAttribute('x1', String(x - radius));
+                outline1.setAttribute('y1', String(y));
+                outline1.setAttribute('x2', String(x + radius));
+                outline1.setAttribute('y2', String(y));
+                outline2.setAttribute('x1', String(x));
+                outline2.setAttribute('y1', String(y - radius));
+                outline2.setAttribute('x2', String(x));
+                outline2.setAttribute('y2', String(y + radius));
+            } else {
+                l1.setAttribute('x1', String(x - radius));
+                l1.setAttribute('y1', String(y - radius));
+                l1.setAttribute('x2', String(x + radius));
+                l1.setAttribute('y2', String(y + radius));
+                l2.setAttribute('x1', String(x - radius));
+                l2.setAttribute('y1', String(y + radius));
+                l2.setAttribute('x2', String(x + radius));
+                l2.setAttribute('y2', String(y - radius));
+
+                outline1.setAttribute('x1', String(x - radius));
+                outline1.setAttribute('y1', String(y - radius));
+                outline1.setAttribute('x2', String(x + radius));
+                outline1.setAttribute('y2', String(y + radius));
+                outline2.setAttribute('x1', String(x - radius));
+                outline2.setAttribute('y1', String(y + radius));
+                outline2.setAttribute('x2', String(x + radius));
+                outline2.setAttribute('y2', String(y - radius));
+            }
+
+            const mainWidth = Math.max(1, radius * 0.55);
+            const outlineWidth = mainWidth + Math.max(0, Number(strokeWidth) || 0) * 1.2;
+
+            // For line-only shapes, keep the note color as the primary stroke.
+            l1.setAttribute('stroke', fill);
+            l2.setAttribute('stroke', fill);
+            l1.setAttribute('stroke-width', String(mainWidth));
+            l2.setAttribute('stroke-width', String(mainWidth));
+            l1.setAttribute('stroke-linecap', 'round');
+            l2.setAttribute('stroke-linecap', 'round');
+
+            if (stroke && stroke !== fill) {
+                outline1.setAttribute('stroke', stroke);
+                outline2.setAttribute('stroke', stroke);
+                outline1.setAttribute('stroke-width', String(outlineWidth));
+                outline2.setAttribute('stroke-width', String(outlineWidth));
+                outline1.setAttribute('stroke-linecap', 'round');
+                outline2.setAttribute('stroke-linecap', 'round');
+                marker.appendChild(outline1);
+                marker.appendChild(outline2);
+            }
+
+            marker.appendChild(l1);
+            marker.appendChild(l2);
+            return marker;
+        }
+        case 'circle':
+        default: {
+            marker = document.createElementNS(ns, 'circle');
+            marker.setAttribute('cx', String(x));
+            marker.setAttribute('cy', String(y));
+            marker.setAttribute('r', String(radius));
+            break;
+        }
+    }
+
+    marker.setAttribute('fill', fill);
+    marker.setAttribute('stroke', stroke);
+    marker.setAttribute('stroke-width', String(strokeWidth));
+    return marker;
 }
 
 /**
@@ -3679,6 +3878,24 @@ function getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn) {
  * @param {boolean} showRelativeFretLabels - If true, show R/-1/+1 labels under fret columns
  * @returns {HTMLElement} Mini fretboard element
  */
+function shadeColor(color, percent) {
+    let R = parseInt(color.substring(1, 3), 16);
+    let G = parseInt(color.substring(3, 5), 16);
+    let B = parseInt(color.substring(5, 7), 16);
+
+    R = Math.min(255, Math.max(0, R + (R * percent / 100)));
+    G = Math.min(255, Math.max(0, G + (G * percent / 100)));
+    B = Math.min(255, Math.max(0, B + (B * percent / 100)));
+    R = Math.round(R);
+    G = Math.round(G);
+    B = Math.round(B);
+
+    // console.log(`Shading color ${color} by ${percent}% results in R:${R}, G:${G}, B:${B}`);
+
+    const newColor = `#${R.toString(16).padStart(2, '0')}${G.toString(16).padStart(2, '0')}${B.toString(16).padStart(2, '0')}`;
+    return newColor;
+}
+
 function createScalePositionMiniFretboard(
     scaleNoteNames,
     displayedNotes,
@@ -3698,7 +3915,7 @@ function createScalePositionMiniFretboard(
     `;
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    const width = Math.round(122 * patternScale);
+    const width = Math.round(128 * patternScale);
     const height = Math.round(104 * patternScale);
     const startX = Math.round(10 * patternScale);
     const startY = Math.round(10 * patternScale);
@@ -3740,6 +3957,8 @@ function createScalePositionMiniFretboard(
     const scaleArray = Array.isArray(scaleNoteNames) ? scaleNoteNames : [];
     const displayedArray = Array.isArray(displayedNotes) ? displayedNotes : [];
     const rowRootAbsoluteFret = findRowRootAbsoluteFret(rowRootString, rowScaleRootNote, SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET);
+    const colorReferenceRoot = scalePositionKeepColorConstant ? rowScaleRootNote : referenceRootNote;
+    const shapeReferenceRoot = scalePositionKeepShapeConstant ? rowScaleRootNote : referenceRootNote;
 
     if (rowRootAbsoluteFret === null) {
         wrapper.appendChild(svg);
@@ -3773,23 +3992,36 @@ function createScalePositionMiniFretboard(
             const y = startY + stringIndex * stringGap;
             const isRoot = areEnharmonicEquivalent(noteName, referenceRootNote);
             const isTargetRootString = stringName === rowRootString;
-            const semitone = getSemitoneFromReference(referenceRootNote, noteName);
-            const intervalColor = getIntervalColor(semitone);
-
-            const marker = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-            marker.setAttribute('cx', String(x));
-            marker.setAttribute('cy', String(y));
-            const baseRadius = isRoot ? 3.4 : 2.9;
-            marker.setAttribute('r', String(baseRadius * scalePositionDotScale));
-            marker.setAttribute('fill', intervalColor);
-
-            if (isRoot && isTargetRootString) {
-                marker.setAttribute('stroke', '#ffffff');
-                marker.setAttribute('stroke-width', '1');
-            } else {
-                marker.setAttribute('stroke', 'rgba(0,0,0,0.5)');
-                marker.setAttribute('stroke-width', '0.5');
+            const colorSemitone = getSemitoneFromReference(colorReferenceRoot, noteName);
+            const shapeSemitone = getSemitoneFromReference(shapeReferenceRoot, noteName);
+            let intervalColor = getIntervalColor(colorSemitone);
+            if(scalePositionDarkDuplicate){
+                // If the note is on an x-position of 4 or higher, darken the color to indicate it's a duplicate note in the scale position grid.
+                if(displayColumn >= 6 && stringIndex != 2){
+                    intervalColor = shadeColor(intervalColor, -70);
+                }
+                else if(displayColumn >= 5 && stringIndex == 2){
+                    intervalColor = shadeColor(intervalColor, -70);
+                }
+                if(displayColumn == 0){
+                    intervalColor = shadeColor(intervalColor, -70);
+                }
             }
+
+            const baseRadius = isRoot ? 3.4 : 2.9;
+            const radius = baseRadius * scalePositionDotScale;
+            const shapeType = scalePositionUseNoteShapes
+                ? NOTE_SHAPE_TYPES[shapeSemitone % NOTE_SHAPE_TYPES.length]
+                : 'circle';
+            const marker = createNoteShapeMarker(
+                x,
+                y,
+                radius,
+                shapeType,
+                intervalColor,
+                isRoot && isTargetRootString ? '#ffffff' : 'rgba(0,0,0,0.5)',
+                isRoot && isTargetRootString ? 1 : 0.5
+            );
 
             svg.appendChild(marker);
         }
@@ -3822,6 +4054,271 @@ function createScalePositionMiniFretboard(
 
     wrapper.appendChild(svg);
     return wrapper;
+}
+
+/**
+ * Build the key used to track visibility of a scale position grid cell.
+ * colIndex is -1 for the full-scale reference column, 0..N-1 for chord/degree columns.
+ * @param {number} rowIndex
+ * @param {number} colIndex
+ * @returns {string}
+ */
+function scalePositionCellKey(rowIndex, colIndex) {
+    return `${rowIndex}:${colIndex}`;
+}
+
+function isScalePositionCellVisible(rowIndex, colIndex) {
+    return !scalePositionHiddenCells.has(scalePositionCellKey(rowIndex, colIndex));
+}
+
+function setScalePositionCellVisible(rowIndex, colIndex, visible) {
+    const key = scalePositionCellKey(rowIndex, colIndex);
+    if (visible) {
+        scalePositionHiddenCells.delete(key);
+    } else {
+        scalePositionHiddenCells.add(key);
+    }
+}
+
+function toggleScalePositionCell(rowIndex, colIndex) {
+    setScalePositionCellVisible(rowIndex, colIndex, !isScalePositionCellVisible(rowIndex, colIndex));
+}
+
+function isScalePositionRowFullyVisible(rowIndex, columnCount) {
+    for (let col = -1; col < columnCount; col++) {
+        if (!isScalePositionCellVisible(rowIndex, col)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function isScalePositionRowFullyHidden(rowIndex, columnCount) {
+    for (let col = -1; col < columnCount; col++) {
+        if (isScalePositionCellVisible(rowIndex, col)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function isScalePositionColumnFullyVisible(colIndex, rowCount) {
+    for (let row = 0; row < rowCount; row++) {
+        if (!isScalePositionCellVisible(row, colIndex)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function isScalePositionColumnFullyHidden(colIndex, rowCount) {
+    for (let row = 0; row < rowCount; row++) {
+        if (isScalePositionCellVisible(row, colIndex)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+function toggleScalePositionRow(rowIndex, columnCount) {
+    const makeVisible = !isScalePositionRowFullyVisible(rowIndex, columnCount);
+    for (let col = -1; col < columnCount; col++) {
+        setScalePositionCellVisible(rowIndex, col, makeVisible);
+    }
+}
+
+function toggleScalePositionColumn(colIndex, rowCount) {
+    const makeVisible = !isScalePositionColumnFullyVisible(colIndex, rowCount);
+    for (let row = 0; row < rowCount; row++) {
+        setScalePositionCellVisible(row, colIndex, makeVisible);
+    }
+}
+
+function toggleScalePositionAllCells(rowCount, columnCount) {
+    let allVisible = true;
+    outer:
+    for (let row = 0; row < rowCount; row++) {
+        for (let col = -1; col < columnCount; col++) {
+            if (!isScalePositionCellVisible(row, col)) {
+                allVisible = false;
+                break outer;
+            }
+        }
+    }
+    const makeVisible = !allVisible;
+    for (let row = 0; row < rowCount; row++) {
+        for (let col = -1; col < columnCount; col++) {
+            setScalePositionCellVisible(row, col, makeVisible);
+        }
+    }
+}
+
+/**
+ * Style a single cell of the compact focus-selector matrix.
+ * @param {HTMLElement} el
+ * @param {boolean} visible
+ * @param {boolean} isHeader
+ */
+function styleScalePositionFocusCell(el, visible, isHeader) {
+    el.style.cssText = `
+        border: 1px solid #444;
+        width: 22px;
+        height: 22px;
+        min-width: 22px;
+        font-size: 9px;
+        text-align: center;
+        cursor: pointer;
+        user-select: none;
+        padding: 0;
+        color: ${visible ? '#fff' : '#888'};
+        background: ${isHeader ? (visible ? '#454545' : '#242424') : (visible ? '#3f8f5f' : '#2a2a2a')};
+        font-weight: ${isHeader ? 'bold' : 'normal'};
+    `;
+}
+
+/**
+ * Build the compact matrix that lets the user pick which (root, chord) cells
+ * of the scale position grid should be shown, to reduce visual clutter.
+ * @param {number} columnCount
+ * @returns {HTMLElement}
+ */
+function buildScalePositionFocusMatrix(columnCount) {
+    const rowCount = SCALE_POSITION_ROW_STRINGS.length;
+
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = `
+        margin: 0 auto 12px auto;
+        width: fit-content;
+        text-align: center;
+    `;
+
+    const title = document.createElement('div');
+    title.textContent = 'Focus Selector';
+    title.style.cssText = `
+        color: #f0f0f0;
+        font-size: 11px;
+        font-weight: bold;
+        margin-bottom: 2px;
+    `;
+    wrapper.appendChild(title);
+
+    const hint = document.createElement('div');
+    hint.textContent = 'Click a header to toggle its whole row/column, the corner to toggle everything, or a cell to toggle it alone.';
+    hint.style.cssText = `
+        color: #a8a8a8;
+        font-size: 9px;
+        margin-bottom: 4px;
+        max-width: 320px;
+    `;
+    wrapper.appendChild(hint);
+
+    const focusTable = document.createElement('table');
+    focusTable.style.cssText = `
+        border-collapse: collapse;
+        margin: 0 auto;
+    `;
+
+    const headerRow = document.createElement('tr');
+
+    const corner = document.createElement('th');
+    corner.textContent = 'All';
+    corner.title = 'Toggle all rows and columns';
+    styleScalePositionFocusCell(corner, true, true);
+    corner.addEventListener('click', () => {
+        toggleScalePositionAllCells(rowCount, columnCount);
+        renderScalePositionGrid();
+    });
+    headerRow.appendChild(corner);
+
+    const scaleColHeader = document.createElement('th');
+    scaleColHeader.textContent = 'Sc';
+    scaleColHeader.title = 'Toggle the full-scale reference column';
+    styleScalePositionFocusCell(scaleColHeader, isScalePositionColumnFullyVisible(-1, rowCount), true);
+    scaleColHeader.addEventListener('click', () => {
+        toggleScalePositionColumn(-1, rowCount);
+        renderScalePositionGrid();
+    });
+    headerRow.appendChild(scaleColHeader);
+
+    for (let col = 0; col < columnCount; col++) {
+        const colLabel = SCALE_POSITION_DEGREES[col] || String(col + 1);
+        const th = document.createElement('th');
+        th.textContent = colLabel;
+        th.title = `Toggle column ${colLabel} for all roots`;
+        styleScalePositionFocusCell(th, isScalePositionColumnFullyVisible(col, rowCount), true);
+        th.addEventListener('click', () => {
+            toggleScalePositionColumn(col, rowCount);
+            renderScalePositionGrid();
+        });
+        headerRow.appendChild(th);
+    }
+    focusTable.appendChild(headerRow);
+
+    for (let row = 0; row < rowCount; row++) {
+        const tr = document.createElement('tr');
+        const rowString = SCALE_POSITION_ROW_STRINGS[row];
+
+        const rowHeader = document.createElement('th');
+        rowHeader.textContent = rowString;
+        rowHeader.title = `Toggle all chords for Root ${rowString}`;
+        styleScalePositionFocusCell(rowHeader, isScalePositionRowFullyVisible(row, columnCount), true);
+        rowHeader.addEventListener('click', () => {
+            toggleScalePositionRow(row, columnCount);
+            renderScalePositionGrid();
+        });
+        tr.appendChild(rowHeader);
+
+        const scaleCell = document.createElement('td');
+        scaleCell.title = `Toggle full-scale reference for Root ${rowString}`;
+        styleScalePositionFocusCell(scaleCell, isScalePositionCellVisible(row, -1), false);
+        scaleCell.addEventListener('click', () => {
+            toggleScalePositionCell(row, -1);
+            renderScalePositionGrid();
+        });
+        tr.appendChild(scaleCell);
+
+        for (let col = 0; col < columnCount; col++) {
+            const colLabel = SCALE_POSITION_DEGREES[col] || String(col + 1);
+            const td = document.createElement('td');
+            td.title = `Toggle ${colLabel} for Root ${rowString}`;
+            styleScalePositionFocusCell(td, isScalePositionCellVisible(row, col), false);
+            td.addEventListener('click', () => {
+                toggleScalePositionCell(row, col);
+                renderScalePositionGrid();
+            });
+            tr.appendChild(td);
+        }
+
+        focusTable.appendChild(tr);
+    }
+
+    wrapper.appendChild(focusTable);
+    return wrapper;
+}
+
+/**
+ * Create a dimmed placeholder shown in place of a hidden scale position cell.
+ * @param {() => void} onRestore
+ * @returns {HTMLElement}
+ */
+function createScalePositionPlaceholderCell(onRestore) {
+    const placeholder = document.createElement('div');
+    placeholder.textContent = '···';
+    placeholder.title = 'Hidden — click to show';
+    placeholder.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 40px;
+        color: #666;
+        font-size: 11px;
+        cursor: pointer;
+        border: 1px dashed #444;
+        border-radius: 4px;
+        background: rgba(0,0,0,0.15);
+    `;
+    placeholder.addEventListener('click', onRestore);
+    return placeholder;
 }
 
 /**
@@ -3964,6 +4461,40 @@ function renderScalePositionGrid() {
     modeControl.appendChild(modeToggle);
     modeControl.appendChild(modeLabel);
 
+    const stackControl = document.createElement('label');
+    stackControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const stackLabel = document.createElement('span');
+    stackLabel.textContent = 'Stacking';
+    const stackSelect = document.createElement('select');
+    stackSelect.innerHTML = `
+        <option value="dyad">Dyad</option>
+        <option value="triad">Triad</option>
+        <option value="tetrad">Tetrad</option>
+    `;
+    stackSelect.value = scalePositionStackType;
+    stackSelect.style.cssText = `
+        padding: 2px 4px;
+        border: 1px solid #666;
+        border-radius: 4px;
+        font-size: 11px;
+        background: #222;
+        color: #e3e3e3;
+    `;
+    stackSelect.addEventListener('change', (event) => {
+        scalePositionStackType = event.target.value;
+        renderScalePositionGrid();
+    });
+    stackControl.appendChild(stackLabel);
+    stackControl.appendChild(stackSelect);
+
     const chordHeaderControl = document.createElement('label');
     chordHeaderControl.style.cssText = `
         display: inline-flex;
@@ -4008,18 +4539,114 @@ function renderScalePositionGrid() {
     instancedScaleControl.appendChild(instancedScaleToggle);
     instancedScaleControl.appendChild(instancedScaleLabel);
 
+    const shapeControl = document.createElement('label');
+    shapeControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const shapeToggle = document.createElement('input');
+    shapeToggle.type = 'checkbox';
+    shapeToggle.checked = scalePositionUseNoteShapes;
+    const shapeLabel = document.createElement('span');
+    shapeLabel.textContent = 'Use Note Shapes';
+    shapeToggle.addEventListener('change', (event) => {
+        scalePositionUseNoteShapes = event.target.checked;
+        renderScalePositionGrid();
+    });
+    shapeControl.appendChild(shapeToggle);
+    shapeControl.appendChild(shapeLabel);
+
+    const keepColorControl = document.createElement('label');
+    keepColorControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const keepColorToggle = document.createElement('input');
+    keepColorToggle.type = 'checkbox';
+    keepColorToggle.checked = scalePositionKeepColorConstant;
+    const keepColorLabel = document.createElement('span');
+    keepColorLabel.textContent = 'Keep Color Constant';
+    keepColorToggle.addEventListener('change', (event) => {
+        scalePositionKeepColorConstant = event.target.checked;
+        renderScalePositionGrid();
+    });
+    keepColorControl.appendChild(keepColorToggle);
+    keepColorControl.appendChild(keepColorLabel);
+
+    const keepShapeControl = document.createElement('label');
+    keepShapeControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+    const keepShapeToggle = document.createElement('input');
+    keepShapeToggle.type = 'checkbox';
+    keepShapeToggle.checked = scalePositionKeepShapeConstant;
+    const keepShapeLabel = document.createElement('span');
+    keepShapeLabel.textContent = 'Keep Shape Constant';
+    keepShapeToggle.addEventListener('change', (event) => {
+        scalePositionKeepShapeConstant = event.target.checked;
+        renderScalePositionGrid();
+    });
+    keepShapeControl.appendChild(keepShapeToggle);
+    keepShapeControl.appendChild(keepShapeLabel);
+
+    const darkDuplicateControl = document.createElement('label');
+    darkDuplicateControl.style.cssText = `
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0,0,0,0.2);
+        border: 1px solid #4a4a4a;
+        border-radius: 6px;
+        padding: 4px 8px;
+    `;
+
+    const darkDuplicate = document.createElement('input');
+    darkDuplicate.type = 'checkbox';
+    darkDuplicate.checked = scalePositionDarkDuplicate;
+    const darkDuplicateLabel = document.createElement('span');
+    darkDuplicateLabel.textContent = 'Dark Duplicate';
+    darkDuplicate.addEventListener('change', (event) => {
+        scalePositionDarkDuplicate = event.target.checked;
+        renderScalePositionGrid();
+    });
+    darkDuplicateControl.appendChild(darkDuplicate);
+    darkDuplicateControl.appendChild(darkDuplicateLabel);
+
+
     controls.appendChild(scaleControl);
     controls.appendChild(dotControl);
     controls.appendChild(modeControl);
+    controls.appendChild(stackControl);
     controls.appendChild(chordHeaderControl);
     controls.appendChild(instancedScaleControl);
+    controls.appendChild(shapeControl);
+    controls.appendChild(keepColorControl);
+    controls.appendChild(keepShapeControl);
+    controls.appendChild(darkDuplicateControl);
     container.appendChild(controls);
 
     const fallbackScale = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
     const workingScale = scaleNoteNames.length > 0 ? scaleNoteNames : fallbackScale;
     const scaleIntervalEntries = getScaleIntervalEntries(workingScale, normalizedRoot);
     const intervalSummary = `${scaleIntervalEntries.map(entry => entry.intervalLabel).join(' - ')} - O`;
-    const scaleDescriptor = primaryScale ? primaryScale.replace('-', ' Mode ') : 'Unknown Scale';
+    const noteSummary = scalePositionUseInstancedScale ? ` | Notes: ${workingScale.join(' - ')}` : '';
+    const scaleDescriptor = getScaleDescriptor(primaryScale);
 
     const selectedScaleTitle = document.createElement('div');
     selectedScaleTitle.style.cssText = `
@@ -4029,7 +4656,8 @@ function renderScalePositionGrid() {
         font-weight: bold;
         text-align: center;
     `;
-    selectedScaleTitle.textContent = `${normalizedRoot} ${scaleDescriptor} | Intervals: ${intervalSummary}`;
+    const titlePrefix = scalePositionUseInstancedScale ? `${normalizedRoot} ` : '';
+    selectedScaleTitle.textContent = `${titlePrefix}${scaleDescriptor} | Intervals: ${intervalSummary} ${noteSummary}`;
     container.appendChild(selectedScaleTitle);
 
     const legend = document.createElement('div');
@@ -4056,24 +4684,44 @@ function renderScalePositionGrid() {
             background: rgba(0,0,0,0.2);
         `;
 
-        const dot = document.createElement('span');
-        dot.style.cssText = `
-            width: 9px;
-            height: 9px;
-            border-radius: 50%;
-            background: ${getIntervalColor(entry.semitone)};
-            border: 1px solid rgba(0,0,0,0.5);
-            display: inline-block;
-        `;
+        const iconSvg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        iconSvg.setAttribute('width', '12');
+        iconSvg.setAttribute('height', '12');
+        iconSvg.style.cssText = 'display:inline-block;';
+
+        const legendShapeType = scalePositionUseNoteShapes
+            ? NOTE_SHAPE_TYPES[entry.semitone % NOTE_SHAPE_TYPES.length]
+            : 'circle';
+        const legendShape = createNoteShapeMarker(
+            6,
+            6,
+            4,
+            legendShapeType,
+            getIntervalColor(entry.semitone),
+            'rgba(0,0,0,0.5)',
+            0.7
+        );
+        iconSvg.appendChild(legendShape);
 
         const text = document.createElement('span');
         text.textContent = scalePositionUseInstancedScale ? entry.note : entry.intervalLabel;
 
-        item.appendChild(dot);
+        item.appendChild(iconSvg);
         item.appendChild(text);
         legend.appendChild(item);
     });
     container.appendChild(legend);
+
+    container.appendChild(buildScalePositionFocusMatrix(columnCount));
+
+    const rowCount = SCALE_POSITION_ROW_STRINGS.length;
+    const showScaleColumn = !isScalePositionColumnFullyHidden(-1, rowCount);
+    const visibleDegreeCols = [];
+    for (let col = 0; col < columnCount; col++) {
+        if (!isScalePositionColumnFullyHidden(col, rowCount)) {
+            visibleDegreeCols.push(col);
+        }
+    }
 
     const table = document.createElement('table');
     table.style.cssText = `
@@ -4096,22 +4744,24 @@ function renderScalePositionGrid() {
     `;
     headerRow.appendChild(cornerCell);
 
-    const scaleHeader = document.createElement('th');
-    scaleHeader.textContent = 'Scale';
-    scaleHeader.style.cssText = `
-        border: 1px solid #444;
-        background: #2b2b2b;
-        color: #fff;
-        padding: 4px;
-        font-size: 11px;
-        min-width: ${Math.round(124 * scalePositionPatternScale)}px;
-        text-align: center;
-    `;
-    headerRow.appendChild(scaleHeader);
+    if (showScaleColumn) {
+        const scaleHeader = document.createElement('th');
+        scaleHeader.textContent = 'Scale';
+        scaleHeader.style.cssText = `
+            border: 1px solid #444;
+            background: #2b2b2b;
+            color: #fff;
+            padding: 4px;
+            font-size: 11px;
+            min-width: ${Math.round(130 * scalePositionPatternScale)}px;
+            text-align: center;
+        `;
+        headerRow.appendChild(scaleHeader);
+    }
 
-    const chordSpan = currentChordType === 'sevenths' ? 4 : 3;
+    const chordSpan = SCALE_POSITION_STACK_SIZES[scalePositionStackType] || 3;
 
-    for (let col = 0; col < columnCount; col++) {
+    for (const col of visibleDegreeCols) {
         const colHeader = document.createElement('th');
         const degreeIndexes = [];
         for (let i = 0; i < chordSpan; i++) {
@@ -4130,7 +4780,7 @@ function renderScalePositionGrid() {
             color: #fff;
             padding: 4px;
             font-size: 11px;
-            min-width: ${Math.round(124 * scalePositionPatternScale)}px;
+            min-width: ${Math.round(130 * scalePositionPatternScale)}px;
             text-align: center;
             white-space: pre-line;
             line-height: 1.2;
@@ -4139,7 +4789,11 @@ function renderScalePositionGrid() {
     }
     table.appendChild(headerRow);
 
-    for (let row = 0; row < SCALE_POSITION_ROW_STRINGS.length; row++) {
+    for (let row = 0; row < rowCount; row++) {
+        if (isScalePositionRowFullyHidden(row, columnCount)) {
+            continue;
+        }
+
         const rowString = SCALE_POSITION_ROW_STRINGS[row];
         const tr = document.createElement('tr');
 
@@ -4157,28 +4811,37 @@ function renderScalePositionGrid() {
         `;
         tr.appendChild(rowHeader);
 
-        const fullScaleCell = document.createElement('td');
-        fullScaleCell.style.cssText = `
-            border: 1px solid #444;
-            padding: 4px;
-            vertical-align: middle;
-            background: rgba(30,30,30,0.35);
-        `;
-        const fullScaleMini = createScalePositionMiniFretboard(
-            workingScale,
-            workingScale,
-            normalizedRoot,
-            rowString,
-            normalizedRoot,
-            false,
-            scalePositionPatternScale,
-            true,
-            scalePositionUseAbsoluteFretLabels
-        );
-        fullScaleCell.appendChild(fullScaleMini);
-        tr.appendChild(fullScaleCell);
+        if (showScaleColumn) {
+            const fullScaleCell = document.createElement('td');
+            fullScaleCell.style.cssText = `
+                border: 1px solid #444;
+                padding: 4px;
+                vertical-align: middle;
+                background: rgba(30,30,30,0.35);
+            `;
+            if (isScalePositionCellVisible(row, -1)) {
+                const fullScaleMini = createScalePositionMiniFretboard(
+                    workingScale,
+                    workingScale,
+                    normalizedRoot,
+                    rowString,
+                    normalizedRoot,
+                    false,
+                    scalePositionPatternScale,
+                    true,
+                    scalePositionUseAbsoluteFretLabels
+                );
+                fullScaleCell.appendChild(fullScaleMini);
+            } else {
+                fullScaleCell.appendChild(createScalePositionPlaceholderCell(() => {
+                    setScalePositionCellVisible(row, -1, true);
+                    renderScalePositionGrid();
+                }));
+            }
+            tr.appendChild(fullScaleCell);
+        }
 
-        for (let col = 0; col < columnCount; col++) {
+        for (const col of visibleDegreeCols) {
             const td = document.createElement('td');
             td.style.cssText = `
                 border: 1px solid #444;
@@ -4187,25 +4850,32 @@ function renderScalePositionGrid() {
                 background: rgba(30,30,30,0.35);
             `;
 
-            const chordIndexes = [];
-            for (let i = 0; i < chordSpan; i++) {
-                chordIndexes.push((col + i * 2) % workingScale.length);
-            }
-            const chordPatternNotes = chordIndexes.map(index => workingScale[index]);
-            const chordRoot = workingScale[col % workingScale.length];
+            if (isScalePositionCellVisible(row, col)) {
+                const chordIndexes = [];
+                for (let i = 0; i < chordSpan; i++) {
+                    chordIndexes.push((col + i * 2) % workingScale.length);
+                }
+                const chordPatternNotes = chordIndexes.map(index => workingScale[index]);
+                const chordRoot = workingScale[col % workingScale.length];
 
-            const mini = createScalePositionMiniFretboard(
-                workingScale,
-                chordPatternNotes,
-                chordRoot,
-                rowString,
-                normalizedRoot,
-                true,
-                scalePositionPatternScale,
-                true,
-                scalePositionUseAbsoluteFretLabels
-            );
-            td.appendChild(mini);
+                const mini = createScalePositionMiniFretboard(
+                    workingScale,
+                    chordPatternNotes,
+                    chordRoot,
+                    rowString,
+                    normalizedRoot,
+                    true,
+                    scalePositionPatternScale,
+                    true,
+                    scalePositionUseAbsoluteFretLabels
+                );
+                td.appendChild(mini);
+            } else {
+                td.appendChild(createScalePositionPlaceholderCell(() => {
+                    setScalePositionCellVisible(row, col, true);
+                    renderScalePositionGrid();
+                }));
+            }
             tr.appendChild(td);
         }
 
