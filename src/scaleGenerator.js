@@ -15,18 +15,9 @@ try {
 }
 
 // Global array to store selected scales
-let selectedScales = ['Major-1']; // Default to first scale
-let exclusiveMode = false; // Toggle between exclusive and multiple selection modes
-let showScalePositionGrid = true; // Toggle visibility of the scale position grid display
+let selectedScales = ['Major-6']; // Default to Aeolian (mode 6 of Major)
+let exclusiveMode = true; // Toggle between exclusive and multiple selection modes
 let scalePositionDarkDuplicate = true; // Toggle for dark duplicate functionality
-
-function applyScalePositionGridVisibility() {
-    const scalePositionGrid = document.getElementById('scalePositionGridContainer');
-    if (!scalePositionGrid) {
-        return;
-    }
-    scalePositionGrid.style.display = showScalePositionGrid ? '' : 'none';
-}
 
 /**
  * Smart tooltip positioning function that keeps tooltips within viewport bounds
@@ -71,7 +62,7 @@ function positionTooltipSmart(tooltip, e) {
 let primaryScaleIndex = 0;
 
 // Global variable to store selected root notes (can be array or single string)
-let selectedRootNote = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B']; // Default to C
+let selectedRootNote = ['E']; // Default to E (all other roots deselected)
 
 // Primary root note index for navigation through multiple selected root notes
 let primaryRootNoteIndex = 0;
@@ -228,6 +219,128 @@ function navigateToPreviousRootNote() {
     return true;
 }
 
+// --- Exclusive-mode navigation ---
+// In exclusive mode there's always exactly one selected root/scale, so the
+// functions above (which cycle through whatever happens to be in the
+// selection array) are no-ops. These instead step through the FULL domain
+// (all 12 roots / all modes of the current family / all families / the full
+// family x mode sequence) and always replace the selection wholesale.
+
+const EXCLUSIVE_NAV_CHROMATIC_NOTES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+
+/**
+ * Apply a new primary root and/or scale, refresh the display, and keep the
+ * detailed browser tables' highlighting in sync.
+ * @param {{rootNote?: string, family?: string, modeNum?: number}} selection
+ */
+function applyExclusiveSelection(selection) {
+    if (selection.rootNote !== undefined) {
+        selectedRootNote = [selection.rootNote];
+        primaryRootNoteIndex = 0;
+    }
+    if (selection.family !== undefined && selection.modeNum !== undefined) {
+        selectedScales = [`${selection.family}-${selection.modeNum}`];
+        primaryScaleIndex = 0;
+    }
+    updateCurrentScaleDisplay();
+    createHeptatonicScaleTable();
+}
+
+function navigateRootUpExclusive() {
+    const currentIndex = getChromaticPosition(getPrimaryRootNote());
+    const startIndex = currentIndex === -1 ? 0 : currentIndex;
+    const nextNote = EXCLUSIVE_NAV_CHROMATIC_NOTES[(startIndex + 1) % EXCLUSIVE_NAV_CHROMATIC_NOTES.length];
+    applyExclusiveSelection({ rootNote: nextNote });
+    return true;
+}
+
+function navigateRootDownExclusive() {
+    const currentIndex = getChromaticPosition(getPrimaryRootNote());
+    const startIndex = currentIndex === -1 ? 0 : currentIndex;
+    const prevNote = EXCLUSIVE_NAV_CHROMATIC_NOTES[(startIndex - 1 + EXCLUSIVE_NAV_CHROMATIC_NOTES.length) % EXCLUSIVE_NAV_CHROMATIC_NOTES.length];
+    applyExclusiveSelection({ rootNote: prevNote });
+    return true;
+}
+
+function navigateModeUpExclusive() {
+    const primaryScale = getPrimaryScale();
+    if (!primaryScale) return false;
+    const [family, modeStr] = primaryScale.split('-');
+    const modeCount = HeptatonicScales[family].length;
+    const nextMode = (parseInt(modeStr, 10) % modeCount) + 1;
+    applyExclusiveSelection({ family, modeNum: nextMode });
+    return true;
+}
+
+function navigateModeDownExclusive() {
+    const primaryScale = getPrimaryScale();
+    if (!primaryScale) return false;
+    const [family, modeStr] = primaryScale.split('-');
+    const modeCount = HeptatonicScales[family].length;
+    const prevMode = ((parseInt(modeStr, 10) - 2 + modeCount) % modeCount) + 1;
+    applyExclusiveSelection({ family, modeNum: prevMode });
+    return true;
+}
+
+function navigateScaleFamilyUpExclusive() {
+    const primaryScale = getPrimaryScale();
+    if (!primaryScale) return false;
+    const [family, modeStr] = primaryScale.split('-');
+    const families = Object.keys(HeptatonicScales);
+    const familyIndex = families.indexOf(family);
+    const nextFamily = families[(familyIndex + 1) % families.length];
+    const modeNum = Math.min(parseInt(modeStr, 10), HeptatonicScales[nextFamily].length);
+    applyExclusiveSelection({ family: nextFamily, modeNum });
+    return true;
+}
+
+function navigateScaleFamilyDownExclusive() {
+    const primaryScale = getPrimaryScale();
+    if (!primaryScale) return false;
+    const [family, modeStr] = primaryScale.split('-');
+    const families = Object.keys(HeptatonicScales);
+    const familyIndex = families.indexOf(family);
+    const prevFamily = families[(familyIndex - 1 + families.length) % families.length];
+    const modeNum = Math.min(parseInt(modeStr, 10), HeptatonicScales[prevFamily].length);
+    applyExclusiveSelection({ family: prevFamily, modeNum });
+    return true;
+}
+
+// Steps sequentially through every family x mode combination as one flat
+// list (all 7 modes of the first family, then all 7 of the next, etc.)
+function navigateSequentialUpExclusive() {
+    const primaryScale = getPrimaryScale();
+    if (!primaryScale) return false;
+    const [family, modeStr] = primaryScale.split('-');
+    const families = Object.keys(HeptatonicScales);
+    const familyIndex = families.indexOf(family);
+    const modeCount = HeptatonicScales[family].length;
+    let nextFamilyIndex = familyIndex;
+    let nextMode = parseInt(modeStr, 10) + 1;
+    if (nextMode > modeCount) {
+        nextMode = 1;
+        nextFamilyIndex = (familyIndex + 1) % families.length;
+    }
+    applyExclusiveSelection({ family: families[nextFamilyIndex], modeNum: nextMode });
+    return true;
+}
+
+function navigateSequentialDownExclusive() {
+    const primaryScale = getPrimaryScale();
+    if (!primaryScale) return false;
+    const [family, modeStr] = primaryScale.split('-');
+    const families = Object.keys(HeptatonicScales);
+    const familyIndex = families.indexOf(family);
+    let prevMode = parseInt(modeStr, 10) - 1;
+    let prevFamilyIndex = familyIndex;
+    if (prevMode < 1) {
+        prevFamilyIndex = (familyIndex - 1 + families.length) % families.length;
+        prevMode = HeptatonicScales[families[prevFamilyIndex]].length;
+    }
+    applyExclusiveSelection({ family: families[prevFamilyIndex], modeNum: prevMode });
+    return true;
+}
+
 
 var currentScaleHighlight = []
 function highlightScaleNotes(noteArray){
@@ -278,7 +391,19 @@ function updateCurrentScaleDisplay() {
     if (currentRootNode) {
         currentRootNode.textContent = rootNote;
     }
-    
+
+    // Keep the top-bar quick-picker selects in sync when a change originated
+    // elsewhere (e.g. clicking the detailed scale-family/root tables)
+    const quickRootSelect = document.getElementById('quickRootSelect');
+    if (quickRootSelect) quickRootSelect.value = rootNote;
+    const quickScaleFamilySelect = document.getElementById('quickScaleFamilySelect');
+    if (quickScaleFamilySelect) quickScaleFamilySelect.value = family;
+    const quickScaleModeSelect = document.getElementById('quickScaleModeSelect');
+    if (quickScaleModeSelect) quickScaleModeSelect.value = mode;
+
+    // Refresh the persistent "Scale Information" panel for the new scale
+    updateScaleInfoPanel();
+
     // Show navigation indicators
     // let indicators = [];
     // if (selectedScales.length > 1) {
@@ -1127,8 +1252,204 @@ function createRootNoteTable() {
     rootTable.appendChild(row);
     rootTableContainer.appendChild(rootTableLabel);
     rootTableContainer.appendChild(rootTable);
-    
+
     return rootTableContainer;
+}
+
+/**
+ * Render a permanent info panel for the currently selected scale (name,
+ * interval pattern, alternative names, a mini piano, and identified
+ * triads/sevenths per degree) into #scaleInfoPanel. This is the same
+ * information the scale-family table's hover tooltip shows, just made
+ * persistent for the "Scale Information" tab instead of hover-only.
+ * Called from updateCurrentScaleDisplay so it refreshes on every scale change.
+ */
+function updateScaleInfoPanel() {
+    const container = document.getElementById('scaleInfoPanel');
+    if (!container) return;
+
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+
+    const primaryScale = getPrimaryScale();
+    const rootNote = getPrimaryRootNote();
+    if (!primaryScale || !rootNote) return;
+
+    const [family, modeStr] = primaryScale.split('-');
+    const modeNum = parseInt(modeStr, 10);
+    const scaleData = HeptatonicScales[family] && HeptatonicScales[family][modeNum - 1];
+    if (!scaleData) return;
+
+    const panel = document.createElement('div');
+    panel.style.cssText = `
+        background: hsla(0, 0%, 24%, 1.00);
+        border-radius: 8px;
+        padding: 16px;
+        color: #fff;
+        margin-bottom: 16px;
+    `;
+
+    const heading = document.createElement('h3');
+    heading.textContent = `${rootNote} ${scaleData.name}`;
+    heading.style.cssText = `margin: 0 0 8px 0; font-size: 20px;`;
+    panel.appendChild(heading);
+
+    const intervalLine = document.createElement('div');
+    intervalLine.innerHTML = `<strong>Interval:</strong> ${scaleData.intervals.join(' ')}`;
+    intervalLine.style.cssText = `margin-bottom: 6px; font-size: 13px;`;
+    panel.appendChild(intervalLine);
+
+    if (scaleData.alternativeNames && scaleData.alternativeNames.length > 0) {
+        const altDiv = document.createElement('div');
+        altDiv.style.cssText = `margin-bottom: 10px; font-size: 13px;`;
+        altDiv.innerHTML = `<strong>Alternative Names:</strong><br>${scaleData.alternativeNames.map(name => `• ${name}`).join('<br>')}`;
+        panel.appendChild(altDiv);
+    }
+
+    const scaleNotes = getScaleNotes(rootNote, scaleData.intervals);
+
+    try {
+        const pianoContainer = document.createElement('div');
+        pianoContainer.style.cssText = `
+            margin: 10px 0;
+            padding: 8px;
+            background: rgba(255,255,255,0.08);
+            border-radius: 4px;
+            display: inline-block;
+        `;
+        const pianoSvg = createScalePiano(scaleNotes, rootNote);
+        if (pianoSvg) {
+            pianoContainer.appendChild(pianoSvg);
+            panel.appendChild(pianoContainer);
+        }
+    } catch (e) {
+        console.warn('Error creating scale info piano:', e);
+    }
+
+    if (scaleData.intervals.length === 7) {
+        const chordsDiv = document.createElement('div');
+        chordsDiv.style.cssText = `margin-top: 10px; font-size: 13px;`;
+        let chordsHtml = '<strong>Identified Chords:</strong><br>';
+        const identifiedChords3 = identifySyntheticChords(scaleData, 3);
+        const identifiedChords4 = identifySyntheticChords(scaleData, 4);
+        for (let degree = 0; degree < identifiedChords3.length; degree++) {
+            chordsHtml += `${intToRoman(degree + 1)}: Triad - ${identifiedChords3[degree].matches}, Seventh - ${identifiedChords4[degree].matches}<br>`;
+        }
+        chordsDiv.innerHTML = chordsHtml;
+        panel.appendChild(chordsDiv);
+    }
+
+    container.appendChild(panel);
+}
+
+/**
+ * Build the compact top-bar quick-picker: three selects (root, scale family,
+ * mode) plus a combined "C Aeolian"-style name display. This is separate from
+ * (and stays in sync with) the detailed root-note/scale-family tables built
+ * by createHeptatonicScaleTable, which remain available for browsing.
+ * Reuses the #currentRootNode/#currentScaleNode ids so updateCurrentScaleDisplay
+ * keeps the name display current without any changes to that function's core logic.
+ */
+function createQuickScalePicker() {
+    const container = document.getElementById('quickScaleControls');
+    if (!container) {
+        setTimeout(createQuickScalePicker, 200);
+        return;
+    }
+
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+
+    const chromaticNotes = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+    const scaleFamilies = Object.keys(HeptatonicScales);
+
+    const primaryScale = getPrimaryScale() || `${scaleFamilies[0]}-1`;
+    const [initialFamily, initialModeStr] = primaryScale.split('-');
+    const initialMode = parseInt(initialModeStr, 10) || 1;
+    const initialRoot = getPrimaryRootNote() || chromaticNotes[0];
+
+    const selectStyle = `
+        padding: 5px 8px;
+        border: 1px solid #666;
+        border-radius: 4px;
+        font-size: 13px;
+        background: #222;
+        color: #e3e3e3;
+        cursor: pointer;
+    `;
+
+    // Combined "C Aeolian" name display, to the left of the selects
+    const nameDisplay = document.createElement('div');
+    nameDisplay.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        font-weight: bold;
+        font-size: 16px;
+        color: #fff;
+        min-width: 130px;
+    `;
+    const rootSpan = document.createElement('span');
+    rootSpan.id = 'currentRootNode';
+    rootSpan.textContent = initialRoot;
+    const scaleSpan = document.createElement('span');
+    scaleSpan.id = 'currentScaleNode';
+    scaleSpan.textContent = HeptatonicScales[initialFamily][initialMode - 1].name;
+    nameDisplay.appendChild(rootSpan);
+    nameDisplay.appendChild(scaleSpan);
+    container.appendChild(nameDisplay);
+
+    const rootSelect = document.createElement('select');
+    rootSelect.id = 'quickRootSelect';
+    rootSelect.style.cssText = selectStyle;
+    chromaticNotes.forEach(note => {
+        const option = document.createElement('option');
+        option.value = note;
+        option.textContent = note;
+        if (note === initialRoot) option.selected = true;
+        rootSelect.appendChild(option);
+    });
+    container.appendChild(rootSelect);
+
+    const familySelect = document.createElement('select');
+    familySelect.id = 'quickScaleFamilySelect';
+    familySelect.style.cssText = selectStyle;
+    scaleFamilies.forEach(family => {
+        const option = document.createElement('option');
+        option.value = family;
+        option.textContent = family;
+        if (family === initialFamily) option.selected = true;
+        familySelect.appendChild(option);
+    });
+    container.appendChild(familySelect);
+
+    const modeSelect = document.createElement('select');
+    modeSelect.id = 'quickScaleModeSelect';
+    modeSelect.style.cssText = selectStyle;
+    for (let modeNum = 1; modeNum <= 7; modeNum++) {
+        const option = document.createElement('option');
+        option.value = String(modeNum);
+        option.textContent = intToRoman(modeNum);
+        if (modeNum === initialMode) option.selected = true;
+        modeSelect.appendChild(option);
+    }
+    container.appendChild(modeSelect);
+
+    function applySelection() {
+        selectedRootNote = [rootSelect.value];
+        primaryRootNoteIndex = 0;
+        selectedScales = [`${familySelect.value}-${modeSelect.value}`];
+        primaryScaleIndex = 0;
+        updateCurrentScaleDisplay();
+        // Keep the detailed browser tables' highlighting in sync
+        createHeptatonicScaleTable();
+    }
+
+    rootSelect.addEventListener('change', applySelection);
+    familySelect.addEventListener('change', applySelection);
+    modeSelect.addEventListener('change', applySelection);
 }
 
 // Create a table for the 7 heptatonic base scales and their scale degrees
@@ -1204,31 +1525,6 @@ function createHeptatonicScaleTable() {
     toggleLabel.style.fontWeight = 'bold';
     toggleLabel.style.fontSize = '14px';
 
-    let gridToggleContainer = document.createElement('label');
-    gridToggleContainer.style.display = 'inline-flex';
-    gridToggleContainer.style.alignItems = 'center';
-    gridToggleContainer.style.gap = '6px';
-    gridToggleContainer.style.marginLeft = '8px';
-    gridToggleContainer.style.cursor = 'pointer';
-
-    let gridToggleInput = document.createElement('input');
-    gridToggleInput.type = 'checkbox';
-    gridToggleInput.checked = showScalePositionGrid;
-    gridToggleInput.style.cursor = 'pointer';
-
-    let gridToggleLabel = document.createElement('span');
-    gridToggleLabel.textContent = 'Show Scale Position Grid';
-    gridToggleLabel.style.fontWeight = 'bold';
-    gridToggleLabel.style.fontSize = '13px';
-
-    gridToggleInput.addEventListener('change', function(event) {
-        showScalePositionGrid = event.target.checked;
-        applyScalePositionGridVisibility();
-    });
-
-    gridToggleContainer.appendChild(gridToggleInput);
-    gridToggleContainer.appendChild(gridToggleLabel);
-    
     // Add clear button
     let clearButton = document.createElement('button');
     clearButton.textContent = 'Clear All';
@@ -1259,10 +1555,7 @@ function createHeptatonicScaleTable() {
     toggleContainer.appendChild(toggleSwitch);
     toggleContainer.appendChild(toggleLabel);
     toggleContainer.appendChild(clearButton);
-    toggleContainer.appendChild(gridToggleContainer);
     currentPlaceholder.appendChild(toggleContainer);
-
-    applyScalePositionGridVisibility();
 
     // Add root note selection table
     let rootNoteTable = createRootNoteTable();
@@ -1928,8 +2221,9 @@ function setPrimaryScale(scaleName) {
 
 
 export {
-    createHeptatonicScaleTable, 
-    selectedRootNote, 
+    createHeptatonicScaleTable,
+    createQuickScalePicker,
+    selectedRootNote,
     selectedScales,
     getPrimaryScale,
     navigateToNextScale,
@@ -1944,5 +2238,14 @@ export {
     initializeNavigationButtons,
     initializeNavigationButtonsDirect,
     setPrimaryRootNote,
-    setPrimaryScale
+    setPrimaryScale,
+    exclusiveMode,
+    navigateRootUpExclusive,
+    navigateRootDownExclusive,
+    navigateModeUpExclusive,
+    navigateModeDownExclusive,
+    navigateScaleFamilyUpExclusive,
+    navigateScaleFamilyDownExclusive,
+    navigateSequentialUpExclusive,
+    navigateSequentialDownExclusive
 }

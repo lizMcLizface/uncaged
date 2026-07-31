@@ -1,6 +1,6 @@
 import {processChord, generateSyntheticChords} from './intervals';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, translateNotes, stripOctave} from './scales';
-import {createHeptatonicScaleTable, selectedRootNote, selectedScales, getPrimaryScale, getPrimaryRootNote} from './scaleGenerator';
+import {createHeptatonicScaleTable, createQuickScalePicker, selectedRootNote, selectedScales, getPrimaryScale, getPrimaryRootNote} from './scaleGenerator';
 import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from './midi';
 import {
@@ -2155,6 +2155,130 @@ function initializeScalesInFretboard() {
     } else {
         console.warn('createHeptatonicScaleTable function not available');
     }
+    if (typeof createQuickScalePicker === 'function') {
+        createQuickScalePicker();
+    } else {
+        console.warn('createQuickScalePicker function not available');
+    }
+}
+
+/**
+ * Build a simple tabbed panel: a horizontal tab bar plus a content area that
+ * shows exactly one tab's content at a time (toggled via display, so nothing
+ * is unmounted and module-level state / getElementById lookups keep working
+ * regardless of which tab is active).
+ * @param {Array<{label: string, content: HTMLElement}>} tabs
+ * @param {number} defaultActiveIndex
+ * @returns {HTMLElement}
+ */
+function createTabbedPanel(tabs, defaultActiveIndex = 0) {
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = `
+        margin-top: 16px;
+    `;
+
+    const tabBar = document.createElement('div');
+    tabBar.style.cssText = `
+        display: flex;
+        gap: 4px;
+        border-bottom: 2px solid #444;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+    `;
+
+    const contentArea = document.createElement('div');
+
+    let activeIndex = defaultActiveIndex;
+    const buttons = [];
+
+    function styleButton(button, isActive, alignRight) {
+        button.style.cssText = `
+            padding: 10px 18px;
+            font-size: 14px;
+            font-weight: ${isActive ? 'bold' : 'normal'};
+            color: ${isActive ? '#fff' : '#aaa'};
+            background: ${isActive ? 'hsla(0, 0%, 24%, 1.00)' : 'transparent'};
+            border: none;
+            border-bottom: 2px solid ${isActive ? '#4A90E2' : 'transparent'};
+            margin-bottom: -2px;
+            ${alignRight ? 'margin-left: auto;' : ''}
+            cursor: pointer;
+            border-radius: 6px 6px 0 0;
+        `;
+    }
+
+    function setActive(index) {
+        activeIndex = index;
+        tabs.forEach((tab, i) => {
+            tab.content.style.display = i === activeIndex ? '' : 'none';
+            styleButton(buttons[i], i === activeIndex, tab.alignRight);
+        });
+    }
+
+    tabs.forEach((tab, i) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = tab.label;
+        button.addEventListener('click', () => setActive(i));
+        buttons.push(button);
+        tabBar.appendChild(button);
+        contentArea.appendChild(tab.content);
+    });
+
+    setActive(defaultActiveIndex);
+
+    wrapper.appendChild(tabBar);
+    wrapper.appendChild(contentArea);
+    return wrapper;
+}
+
+/**
+ * Build the persistent top bar: the app title plus a compact root/scale/mode
+ * quick-picker (populated by createQuickScalePicker into #quickScaleControls).
+ * This is separate from the detailed root-note/scale-family×mode tables,
+ * which remain in their own tab for browsing - the top bar is just for fast
+ * changes. Sits above the fretboard so both are always visible regardless of tab.
+ * @returns {HTMLElement}
+ */
+function createTopBar() {
+    const topBar = document.createElement('div');
+    topBar.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        flex-wrap: wrap;
+        padding: 14px 18px;
+        margin-bottom: 12px;
+        background: hsla(0, 0%, 20%, 1);
+        border-radius: 8px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    `;
+
+    const title = document.createElement('h1');
+    title.textContent = 'unCAGED';
+    title.style.cssText = `
+        margin: 0;
+        color: #fff;
+        font-size: 24px;
+        font-weight: bold;
+        flex: 0 0 auto;
+    `;
+    topBar.appendChild(title);
+
+    const quickScaleControls = document.createElement('div');
+    quickScaleControls.id = 'quickScaleControls';
+    quickScaleControls.style.cssText = `
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 10px;
+        flex-wrap: wrap;
+        margin-left: auto;
+    `;
+    topBar.appendChild(quickScaleControls);
+
+    return topBar;
 }
 
 /**
@@ -3179,59 +3303,73 @@ function createFretboardControls(fretboard) {
     // controlsContainer.appendChild(demoChordButton);
     // controlsContainer.appendChild(demoLineButton);
     
-    // Insert controls before the fretboard
-    // fretboard.container.insertBefore(controlsContainer, fretboard.fretboardElement);
-    
+    // Pin the title + root/scale/mode picker above the fretboard
+    fretboard.container.insertBefore(createTopBar(), fretboard.fretboardElement);
+
     // Add chord progression builder
     const progressionContainer = createChordProgressionUI(fretboard);
     if (progressionContainer) {
-        fretboard.container.insertBefore(progressionContainer, fretboard.fretboardElement);
-        
         // Load shared state from URL if present
         loadSharedStateFromURL();
     }
-    
-    // Create a flex container for scales and chord grid
-    const scalesAndChordsContainer = document.createElement('div');
-    scalesAndChordsContainer.style.cssText = `
-        display: flex;
-        gap: 20px;
-        align-items: flex-start;
-        margin-top: 20px;
-    `;
-    
-    // Create scale controls container
+
+    // Detailed root-note / scale-family x mode browser tables (populated by
+    // createHeptatonicScaleTable) - kept as a full overview alongside the
+    // compact top-bar quick-picker, not replaced by it.
     const scaleControlsContainer = document.createElement('div');
     scaleControlsContainer.id = 'scaleControlsContainer';
     scaleControlsContainer.style.cssText = `
-        flex: 0 0 auto;
         background: hsla(0, 0%, 24%, 1.00);
         border-radius: 8px;
         padding: 15px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        min-width: 300px;
     `;
-    
-    const scaleLabel = document.createElement('h3');
-    scaleLabel.textContent = 'Scale Controls';
-    scaleLabel.style.cssText = `
-        margin: 0 0 10px 0;
-        font-size: 16px;
-        font-weight: bold;
-        text-align: center;
-        color: #333;
-    `;
-    scaleControlsContainer.appendChild(scaleLabel);
-    
+
     // Add chord button grid after the fretboard
     const chordGrid = createChordButtonGrid();
     const scalePositionGrid = createScalePositionGrid();
     if (chordGrid) {
-        fretboard.container.appendChild(scalePositionGrid);
-        scalesAndChordsContainer.appendChild(scaleControlsContainer);
-        scalesAndChordsContainer.appendChild(chordGrid);
-        fretboard.container.appendChild(scalesAndChordsContainer);
-        
+        // Permanent "current scale" info panel (name, intervals, alternative
+        // names, mini piano, identified chords - the same info the scale
+        // table's hover tooltip shows) sits beside the chord pattern grid.
+        const scaleInfoPanel = document.createElement('div');
+        scaleInfoPanel.id = 'scaleInfoPanel';
+        scaleInfoPanel.style.cssText = `
+            flex: 0 0 auto;
+        `;
+
+        const scaleInformationTabContent = document.createElement('div');
+        scaleInformationTabContent.style.cssText = `
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+            flex-wrap: wrap;
+        `;
+        scaleInformationTabContent.appendChild(scaleInfoPanel);
+        scaleInformationTabContent.appendChild(chordGrid);
+
+        // Synthesizer tab content - the actual synth UI is a React component
+        // (App.js) that portals itself into this container once it's in the
+        // DOM, rather than popping out as a modal.
+        const synthesizerTabContent = document.createElement('div');
+        synthesizerTabContent.id = 'synthesizerTabContent';
+        synthesizerTabContent.style.cssText = `
+            min-height: 400px;
+        `;
+
+        const tabs = [];
+        tabs.push({ label: 'Scale Information', content: scaleInformationTabContent });
+        if (progressionContainer) {
+            tabs.push({ label: 'Chord Progression', content: progressionContainer });
+        }
+        tabs.push({ label: 'Scale Position Grid', content: scalePositionGrid });
+        tabs.push({ label: 'Scale Selection', content: scaleControlsContainer });
+        tabs.push({ label: 'Other Controls', content: controlsContainer });
+        tabs.push({ label: 'Synthesizer', content: synthesizerTabContent, alignRight: true });
+
+        const defaultTabIndex = tabs.findIndex(tab => tab.label === 'Scale Position Grid');
+        fretboard.container.appendChild(createTabbedPanel(tabs, defaultTabIndex >= 0 ? defaultTabIndex : 0));
+
         // Initialize chord grid colors based on current scale (if any)
         // Use setTimeout to ensure the DOM elements are fully added before updating colors
         setTimeout(() => {
@@ -4490,7 +4628,7 @@ function renderScalePositionGrid() {
         justify-content: center;
         gap: 12px;
         align-items: center;
-        margin-bottom: 10px;
+        margin-top: 10px;
         color: #e3e3e3;
         font-size: 11px;
     `;
@@ -4856,7 +4994,6 @@ function renderScalePositionGrid() {
     controls.appendChild(keepColorControl);
     controls.appendChild(keepShapeControl);
     controls.appendChild(darkDuplicateControl);
-    container.appendChild(controls);
 
     const fallbackScale = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
     const workingScale = scaleNoteNames.length > 0 ? scaleNoteNames : fallbackScale;
@@ -5115,6 +5252,7 @@ function renderScalePositionGrid() {
     }
 
     container.appendChild(table);
+    container.appendChild(controls);
 }
 
 /**
