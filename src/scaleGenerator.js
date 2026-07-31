@@ -1,8 +1,9 @@
 import $ from 'jquery';
 import {HeptatonicScales, scales, highlightKeysForScales, getScaleNotes, precomputeScaleChords, getChordsForScale, translateNotes, stripOctave} from './scales';
-import {identifySyntheticChords} from './intervals';
+import {identifySyntheticChords, matchChord} from './intervals';
+import {chords} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
-import { createScalePiano } from './components/MiniPiano/MiniPiano';
+import { createScalePiano, createIntervalPiano, getIntervalInfo, getSynthBaseOctave, DEFAULT_BASE_OCTAVE } from './components/MiniPiano/MiniPiano';
 
 // Import progression refresh function (use dynamic import to avoid circular dependency)
 let refreshProgressionDisplay = null;
@@ -14,9 +15,38 @@ try {
     console.warn('Could not import progression refresh function:', e);
 }
 
+// Persisted root note / scale selection so users return to where they left off
+const SCALE_SELECTION_STORAGE_KEY = 'PolySynth-ScaleSelection';
+
+function loadSavedScaleSelection() {
+    try {
+        const raw = localStorage.getItem(SCALE_SELECTION_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+        console.warn('Could not load saved scale/root selection, using defaults', error);
+        return null;
+    }
+}
+
+const savedScaleSelection = loadSavedScaleSelection();
+
+function persistScaleSelection() {
+    try {
+        localStorage.setItem(SCALE_SELECTION_STORAGE_KEY, JSON.stringify({
+            selectedScales,
+            selectedRootNote,
+            primaryScaleIndex,
+            primaryRootNoteIndex,
+            exclusiveMode
+        }));
+    } catch (error) {
+        console.warn('Could not persist scale/root selection', error);
+    }
+}
+
 // Global array to store selected scales
-let selectedScales = ['Major-6']; // Default to Aeolian (mode 6 of Major)
-let exclusiveMode = true; // Toggle between exclusive and multiple selection modes
+let selectedScales = savedScaleSelection?.selectedScales ?? ['Major-6']; // Default to Aeolian (mode 6 of Major)
+let exclusiveMode = savedScaleSelection?.exclusiveMode ?? true; // Toggle between exclusive and multiple selection modes
 let scalePositionDarkDuplicate = true; // Toggle for dark duplicate functionality
 
 /**
@@ -59,13 +89,13 @@ function positionTooltipSmart(tooltip, e) {
 }
 
 // Primary scale index for navigation through multiple selected scales
-let primaryScaleIndex = 0;
+let primaryScaleIndex = savedScaleSelection?.primaryScaleIndex ?? 0;
 
 // Global variable to store selected root notes (can be array or single string)
-let selectedRootNote = ['E']; // Default to E (all other roots deselected)
+let selectedRootNote = savedScaleSelection?.selectedRootNote ?? ['E']; // Default to E (all other roots deselected)
 
 // Primary root note index for navigation through multiple selected root notes
-let primaryRootNoteIndex = 0;
+let primaryRootNoteIndex = savedScaleSelection?.primaryRootNoteIndex ?? 0;
 
 // Global object to store user's enharmonic display preferences
 // Maps chromatic positions to preferred display (sharp or flat)
@@ -368,6 +398,8 @@ function highlightScaleNotes(noteArray){
 
 // Function to update the current scale display in the HTML
 function updateCurrentScaleDisplay() {
+    persistScaleSelection();
+
     const currentScaleNode = document.getElementById('currentScaleNode');
     const currentRootNode = document.getElementById('currentRootNode');
     if (!currentScaleNode) return;
@@ -520,6 +552,7 @@ function toggleSelectionMode() {
     
     // console.log(`Selection mode: ${exclusiveMode ? 'Exclusive' : 'Multiple'}`);
     // Don't call createHeptatonicScaleTable here - let the event listener handle it
+    persistScaleSelection();
 }
 
 // Try to get the new scale controls container first, fallback to old one
@@ -1264,6 +1297,122 @@ function createRootNoteTable() {
  * persistent for the "Scale Information" tab instead of hover-only.
  * Called from updateCurrentScaleDisplay so it refreshes on every scale change.
  */
+/**
+ * Shift a "Note/octave" string's octave number by `bump` (used when a
+ * stacked-third chord tone wraps past the top of scaleNotes back to a
+ * lower scale degree - that tone is actually a step higher in pitch than
+ * its raw scaleNotes entry, not back down at the scale's base octave).
+ * @param {string} noteWithOctave - e.g. "C/5"
+ * @param {number} bump - octaves to add
+ * @returns {string}
+ */
+function bumpOctave(noteWithOctave, bump) {
+    if (!bump) return noteWithOctave;
+    const match = /^(.*)\/(-?\d+)$/.exec(noteWithOctave);
+    if (!match) return noteWithOctave;
+    return `${match[1]}/${parseInt(match[2], 10) + bump}`;
+}
+
+/**
+ * Build the stacked-thirds chord for every degree of a scale, at a given
+ * chord length (3 = triad, 4 = seventh). Mirrors generateSyntheticChords'
+ * indexing (every other scale step, wrapping) but, unlike
+ * identifySyntheticChords, never throws when a chord doesn't match any
+ * known chord type - some scales (e.g. Blues Minor) don't yield "proper"
+ * named chords at every degree. Callers treat an empty `matches` array as
+ * a synthetic (unnamed) chord and fall back to showing just the root note.
+ *
+ * Returns both a bare-letter `chord` (for chord-matching/name/interval text,
+ * which can't take octave-tagged input) and a `chordWithOctave` carrying
+ * each tone's real pitch (bumped up an octave whenever the stacked-third
+ * index wraps past the top of scaleNotes) so playback and any octave-aware
+ * display can use the note's actual register in the scale rather than
+ * re-deriving it from scratch.
+ * @param {Array<string>} scaleNotes - getScaleNotes() output (with octave; includes the trailing octave-duplicate root)
+ * @param {number} length - 3 for triads, 4 for sevenths
+ * @returns {Array<{ chord: string[], chordWithOctave: string[], scaleDegrees: number[], matches: string[] }>}
+ */
+function buildDegreeChords(scaleNotes, length) {
+    const degreeCount = scaleNotes.length - 1;
+    const result = [];
+    for (let i = 0; i < degreeCount; i++) {
+        const scaleDegrees = [];
+        const chord = [];
+        const chordWithOctave = [];
+        for (let j = 0; j < length; j++) {
+            const rawIndex = i + j * 2;
+            const index = rawIndex % degreeCount;
+            const octaveBump = Math.floor(rawIndex / degreeCount);
+            scaleDegrees.push(index + 1);
+            chord.push(scaleNotes[index].slice(0, -2));
+            chordWithOctave.push(bumpOctave(scaleNotes[index], octaveBump));
+        }
+        const matches = matchChord(chord, chords, false) || [];
+        result.push({ chord, chordWithOctave, scaleDegrees, matches });
+    }
+    return result;
+}
+
+/**
+ * Build one Triad or Seventh block (name/notes/intervals/scale-degrees +
+ * its own mini piano) for a chord card. The mini piano is colored relative
+ * to scaleRootNote (not the chord's own root) so a given scale tone is the
+ * same color on every card and on the scale piano above them.
+ * @param {string} label - 'Triad' or 'Seventh'
+ * @param {{ chord: string[], scaleDegrees: number[], matches: string[] }} chordInfo
+ * @param {string} scaleRootNote
+ * @returns {HTMLElement}
+ */
+function buildChordSection(label, chordInfo, scaleRootNote) {
+    const chordRoot = chordInfo.chord[0];
+    const chordName = `${chordRoot}${chordInfo.matches[0] || ''}`;
+    const intervalLabels = chordInfo.chord.map(note => getIntervalInfo(chordRoot, note).label);
+
+    const section = document.createElement('div');
+    section.style.cssText = `margin: 6px 0;`;
+
+    const grid = document.createElement('div');
+    grid.style.cssText = `
+        display: grid;
+        grid-template-columns: max-content 1fr;
+        column-gap: 6px;
+        row-gap: 2px;
+        font-size: 11px;
+        margin-bottom: 6px;
+    `;
+    [
+        [`${label}:`, chordName],
+        ['Notes:', `[${chordInfo.chord.join(', ')}]`],
+        ['Intervals:', `[${intervalLabels.join(', ')}]`],
+        ['Scale notes:', `[${chordInfo.scaleDegrees.join(', ')}]`]
+    ].forEach(([labelText, valueText]) => {
+        const labelCell = document.createElement('div');
+        labelCell.textContent = labelText;
+        labelCell.style.cssText = `text-align: right; opacity: 0.85; white-space: nowrap;`;
+        const valueCell = document.createElement('div');
+        valueCell.textContent = valueText;
+        valueCell.style.cssText = `text-align: left;`;
+        grid.appendChild(labelCell);
+        grid.appendChild(valueCell);
+    });
+    section.appendChild(grid);
+
+    try {
+        const pianoSvg = createIntervalPiano({ notes: chordInfo.chordWithOctave, rootNote: scaleRootNote });
+        if (pianoSvg) section.appendChild(pianoSvg);
+    } catch (e) {
+        console.warn(`Error creating ${label} chord piano:`, e);
+    }
+
+    return section;
+}
+
+function makeChordCardDivider() {
+    const hr = document.createElement('hr');
+    hr.style.cssText = `border: none; border-top: 1px solid rgba(255,255,255,0.15); margin: 6px 0;`;
+    return hr;
+}
+
 function updateScaleInfoPanel() {
     const container = document.getElementById('scaleInfoPanel');
     if (!container) return;
@@ -1290,24 +1439,47 @@ function updateScaleInfoPanel() {
         margin-bottom: 16px;
     `;
 
+    // Info column (heading, interval/notes text, scale piano, color legend)
+    // and the chord cards sit side by side in contentRow below, instead of
+    // the chord cards stacking underneath the info - keeps the panel from
+    // growing so tall.
+    const infoColumn = document.createElement('div');
+    // flex-grow: 0 so this column hugs its own content width instead of
+    // stretching to fill leftover row space (which pushed the chord cards
+    // far to the right, reading as a big gap).
+    infoColumn.style.cssText = `flex: 0 1 260px;`;
+
     const heading = document.createElement('h3');
     heading.textContent = `${rootNote} ${scaleData.name}`;
     heading.style.cssText = `margin: 0 0 8px 0; font-size: 20px;`;
-    panel.appendChild(heading);
+    infoColumn.appendChild(heading);
+
+    // getScaleNotes always anchors a scale's root to DEFAULT_BASE_OCTAVE
+    // (see MiniPiano.js); shift every note by however far the synth's
+    // selected octave (Z/X) has moved from that anchor, so the panel's
+    // pianos - both the scale piano and every triad/seventh chord card -
+    // track the synth's register instead of always sitting at the anchor.
+    const octaveShift = getSynthBaseOctave() - DEFAULT_BASE_OCTAVE;
+    const scaleNotes = getScaleNotes(rootNote, scaleData.intervals).map(note => bumpOctave(note, octaveShift));
 
     const intervalLine = document.createElement('div');
     intervalLine.innerHTML = `<strong>Interval:</strong> ${scaleData.intervals.join(' ')}`;
     intervalLine.style.cssText = `margin-bottom: 6px; font-size: 13px;`;
-    panel.appendChild(intervalLine);
+    infoColumn.appendChild(intervalLine);
+
+    const scaleNotesLine = document.createElement('div');
+    // Drop the trailing octave-duplicate root that getScaleNotes appends.
+    const displayScaleNotes = scaleNotes.slice(0, -1).map(note => note.slice(0, -2));
+    scaleNotesLine.innerHTML = `<strong>Scale Notes:</strong> ${displayScaleNotes.join(', ')}`;
+    scaleNotesLine.style.cssText = `margin-bottom: 6px; font-size: 13px;`;
+    infoColumn.appendChild(scaleNotesLine);
 
     if (scaleData.alternativeNames && scaleData.alternativeNames.length > 0) {
         const altDiv = document.createElement('div');
         altDiv.style.cssText = `margin-bottom: 10px; font-size: 13px;`;
         altDiv.innerHTML = `<strong>Alternative Names:</strong><br>${scaleData.alternativeNames.map(name => `• ${name}`).join('<br>')}`;
-        panel.appendChild(altDiv);
+        infoColumn.appendChild(altDiv);
     }
-
-    const scaleNotes = getScaleNotes(rootNote, scaleData.intervals);
 
     try {
         const pianoContainer = document.createElement('div');
@@ -1321,23 +1493,116 @@ function updateScaleInfoPanel() {
         const pianoSvg = createScalePiano(scaleNotes, rootNote);
         if (pianoSvg) {
             pianoContainer.appendChild(pianoSvg);
-            panel.appendChild(pianoContainer);
+            infoColumn.appendChild(pianoContainer);
         }
     } catch (e) {
         console.warn('Error creating scale info piano:', e);
     }
 
-    if (scaleData.intervals.length === 7) {
-        const chordsDiv = document.createElement('div');
-        chordsDiv.style.cssText = `margin-top: 10px; font-size: 13px;`;
-        let chordsHtml = '<strong>Identified Chords:</strong><br>';
-        const identifiedChords3 = identifySyntheticChords(scaleData, 3);
-        const identifiedChords4 = identifySyntheticChords(scaleData, 4);
-        for (let degree = 0; degree < identifiedChords3.length; degree++) {
-            chordsHtml += `${intToRoman(degree + 1)}: Triad - ${identifiedChords3[degree].matches}, Seventh - ${identifiedChords4[degree].matches}<br>`;
-        }
-        chordsDiv.innerHTML = chordsHtml;
-        panel.appendChild(chordsDiv);
+    // Legend mapping each scale tone to the interval color used on the
+    // pianos above (and throughout the Scale Position Grid), so it's clear
+    // what "the color of this key" means.
+    try {
+        const legendDiv = document.createElement('div');
+        legendDiv.style.cssText = `
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+            margin: 8px 0 12px 0;
+            font-size: 11px;
+        `;
+
+        const seenSemitones = new Set();
+        scaleNotes.forEach(note => {
+            const { semitone, label, color } = getIntervalInfo(rootNote, note);
+            if (seenSemitones.has(semitone)) return;
+            seenSemitones.add(semitone);
+
+            const entry = document.createElement('span');
+            entry.style.cssText = `display: inline-flex; align-items: center; gap: 4px;`;
+
+            const swatch = document.createElement('span');
+            swatch.style.cssText = `
+                display: inline-block;
+                width: 12px;
+                height: 12px;
+                border-radius: 3px;
+                background: ${color};
+                border: 1px solid rgba(255,255,255,0.4);
+            `;
+            entry.appendChild(swatch);
+
+            const text = document.createElement('span');
+            text.textContent = label;
+            entry.appendChild(text);
+
+            legendDiv.appendChild(entry);
+        });
+
+        infoColumn.appendChild(legendDiv);
+    } catch (e) {
+        console.warn('Error creating scale info color legend:', e);
+    }
+
+    const contentRow = document.createElement('div');
+    contentRow.style.cssText = `
+        display: flex;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 16px;
+    `;
+    contentRow.appendChild(infoColumn);
+    panel.appendChild(contentRow);
+
+    if (scaleData.intervals.length >= 3) {
+        // Per-degree triad/seventh chord cards (name, notes, intervals, scale
+        // degrees, and a mini piano for each), fully replacing the old plain-
+        // text chord list. Chords are built via the same stacked-thirds
+        // approach regardless of scale shape; when a degree's stack doesn't
+        // match any known chord type (e.g. in Blues Minor), it's still shown
+        // with its root note only and flagged as synthetic rather than
+        // dropped, since it's still a usable chord tone grouping.
+        const triadChords = buildDegreeChords(scaleNotes, 3);
+        const seventhChords = buildDegreeChords(scaleNotes, 4);
+
+        const chordCardsDiv = document.createElement('div');
+        chordCardsDiv.style.cssText = `
+            display: flex;
+            flex-wrap: wrap;
+            align-content: flex-start;
+            gap: 10px;
+            flex: 2 1 120px;
+        `;
+
+        seventhChords.forEach((seventhInfo, degree) => {
+            const triadInfo = triadChords[degree];
+            const isSynthetic = triadInfo.matches.length === 0 || seventhInfo.matches.length === 0;
+            const chordRootLetter = seventhInfo.chord[0];
+
+            const chordCard = document.createElement('div');
+            chordCard.style.cssText = `
+                background: ${isSynthetic ? 'rgba(255,193,7,0.14)' : 'rgba(255,255,255,0.08)'};
+                border: 1px solid ${isSynthetic ? 'rgba(255,193,7,0.4)' : 'rgba(255,255,255,0.12)'};
+                border-radius: 6px;
+                padding: 8px 10px;
+                text-align: center;
+                width: 200px;
+            `;
+
+            const heading = document.createElement('div');
+            heading.textContent = `${intToRoman(degree + 1)}${isSynthetic ? ' (synthetic)' : ''} - ${chordRootLetter}`;
+            heading.style.cssText = `font-size: 16px; font-weight: bold; margin-bottom: 4px;`;
+            chordCard.appendChild(heading);
+
+            chordCard.appendChild(makeChordCardDivider());
+            chordCard.appendChild(buildChordSection('Triad', triadInfo, rootNote));
+            chordCard.appendChild(makeChordCardDivider());
+            chordCard.appendChild(buildChordSection('Seventh', seventhInfo, rootNote));
+
+            chordCardsDiv.appendChild(chordCard);
+        });
+        contentRow.appendChild(chordCardsDiv);
     }
 
     container.appendChild(panel);

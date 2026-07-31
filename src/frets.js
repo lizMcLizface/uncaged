@@ -30,6 +30,23 @@ import {
 const GUITAR_TUNING = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'];
 const FRET_COUNT = 21; // Number of frets to display
 
+// Map chord-suffix names (as used by processChord/the chord grid) to the
+// pattern-type keys known-shape lookups in chordPatterns.js are keyed by.
+const CHORD_TYPE_TO_PATTERN_TYPE = {
+    'Major': 'major',
+    'Minor': 'minor',
+    '7': 'dominant7',
+    'maj7': 'maj7',
+    'm7': 'min7',
+    'dim': 'dim',
+    'dim7': 'dim7',
+    'aug': 'aug',
+    'sus2': 'sus2',
+    'sus4': 'sus4',
+    '5': 'power',
+    'm7b5': 'm7b5'
+};
+
 // Calculate fret positions using the rule of 18 (each fret divides remaining string length by 18)
 function calculateFretPositions(fretCount) {
     const positions = [0]; // Open string position at 0%
@@ -89,7 +106,7 @@ let SCALE_POSITION_ROW_LABELS = ['B', 'A', 'G', 'E', 'D'];
 let MINI_SCALE_STRING_TUNING = ['E/4', 'B/3', 'G/3', 'D/3', 'A/2', 'E/2'];
 const SCALE_POSITION_DEGREES = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 const MINI_SCALE_FRET_COUNT = 6;
-const SCALE_POSITION_PATTERN_SCALE = 2.0;
+const SCALE_POSITION_PATTERN_SCALE = 1.5;
 const GENERIC_VISIBLE_FRET_START = 1;
 const GENERIC_ROOT_DISPLAY_COLUMN = 1;
 const SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET = 0;
@@ -125,20 +142,57 @@ function refreshScalePositionTuning(tuning) {
 }
 refreshScalePositionTuning();
 
-let scalePositionPatternScale = SCALE_POSITION_PATTERN_SCALE;
-let scalePositionUseAbsoluteFretLabels = false;
-let scalePositionDotScale = 1.75;
-let scalePositionShowChordNames = false;
-let scalePositionUseInstancedScale = false;
-let scalePositionUseNoteShapes = false;
-let scalePositionKeepColorConstant = false;
-let scalePositionKeepShapeConstant = false;
-let scalePositionDarkDuplicate = true;
-let scalePositionStackType = 'triad';
+// Persisted Scale Position Grid display settings so users return to where they left off
+const SCALE_POSITION_GRID_SETTINGS_KEY = 'PolySynth-ScalePositionGridSettings';
+
+function loadSavedScalePositionGridSettings() {
+    try {
+        const raw = localStorage.getItem(SCALE_POSITION_GRID_SETTINGS_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+        console.warn('Could not load saved Scale Position Grid settings, using defaults', error);
+        return null;
+    }
+}
+
+const savedScalePositionGridSettings = loadSavedScalePositionGridSettings();
+
+function persistScalePositionGridSettings() {
+    try {
+        localStorage.setItem(SCALE_POSITION_GRID_SETTINGS_KEY, JSON.stringify({
+            patternScale: scalePositionPatternScale,
+            useAbsoluteFretLabels: scalePositionUseAbsoluteFretLabels,
+            dotScale: scalePositionDotScale,
+            showChordNames: scalePositionShowChordNames,
+            useInstancedScale: scalePositionUseInstancedScale,
+            useNoteShapes: scalePositionUseNoteShapes,
+            keepColorConstant: scalePositionKeepColorConstant,
+            keepShapeConstant: scalePositionKeepShapeConstant,
+            darkDuplicate: scalePositionDarkDuplicate,
+            stackType: scalePositionStackType,
+            labelMode: scalePositionLabelMode,
+            allLabelsMode: scalePositionAllLabelsMode,
+            showGripLines: scalePositionShowGripLines
+        }));
+    } catch (error) {
+        console.warn('Could not persist Scale Position Grid settings', error);
+    }
+}
+
+let scalePositionPatternScale = savedScalePositionGridSettings?.patternScale ?? SCALE_POSITION_PATTERN_SCALE;
+let scalePositionUseAbsoluteFretLabels = savedScalePositionGridSettings?.useAbsoluteFretLabels ?? false;
+let scalePositionDotScale = savedScalePositionGridSettings?.dotScale ?? 2.5;
+let scalePositionShowChordNames = savedScalePositionGridSettings?.showChordNames ?? false;
+let scalePositionUseInstancedScale = savedScalePositionGridSettings?.useInstancedScale ?? false;
+let scalePositionUseNoteShapes = savedScalePositionGridSettings?.useNoteShapes ?? false;
+let scalePositionKeepColorConstant = savedScalePositionGridSettings?.keepColorConstant ?? false;
+let scalePositionKeepShapeConstant = savedScalePositionGridSettings?.keepShapeConstant ?? false;
+let scalePositionDarkDuplicate = savedScalePositionGridSettings?.darkDuplicate ?? true;
+let scalePositionStackType = savedScalePositionGridSettings?.stackType ?? 'triad';
 let scalePositionHiddenCells = new Set();
-let scalePositionLabelMode = 'none'; // 'none' | 'note' | 'interval' | 'finger' - text label on chord grip dots
-let scalePositionAllLabelsMode = 'none'; // 'none' | 'note' | 'interval' - text label on every dot (chord cells and the full scale column)
-let scalePositionShowGripLines = false; // Draw a connecting line between the picked grip's dots
+let scalePositionLabelMode = savedScalePositionGridSettings?.labelMode ?? 'none'; // 'none' | 'note' | 'interval' | 'finger' - text label on chord grip dots
+let scalePositionAllLabelsMode = savedScalePositionGridSettings?.allLabelsMode ?? 'interval'; // 'none' | 'note' | 'interval' - text label on every dot (chord cells and the full scale column)
+let scalePositionShowGripLines = savedScalePositionGridSettings?.showGripLines ?? false; // Draw a connecting line between the picked grip's dots
 
 const SCALE_POSITION_STACK_SIZES = { dyad: 2, triad: 3, tetrad: 4 };
 
@@ -228,11 +282,12 @@ class Fretboard {
         this.fretboardElement.className = 'fretboard';
         this.fretboardElement.style.cssText = `
             position: relative;
-            background: #f5f5f5;
+            background: #1e1e1e;
+            border: 1px solid #333;
             border-radius: 12px;
             margin: 20px 0;
             padding: 20px; /* Reduced padding since elements are now properly contained */
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
             overflow: visible; /* Allow content to extend beyond bounds for labels */
         `;
 
@@ -377,12 +432,12 @@ class Fretboard {
             text-align: center;
             font-size: ${fontSize}px;
             font-weight: bold;
-            color: #333;
+            color: #ddd;
             min-width: ${minWidth}px;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(0, 0, 0, 0.5);
             border-radius: 3px;
             padding: ${padding};
-            border: 1px solid #ccc;
+            border: 1px solid #555;
         `;
         fretNumberRow.appendChild(nutLabel);
         
@@ -401,12 +456,12 @@ class Fretboard {
                 text-align: center;
                 font-size: ${fontSize}px;
                 font-weight: bold;
-                color: #333;
+                color: #ddd;
                 min-width: ${minWidth}px;
-                background: rgba(255, 255, 255, 0.8);
+                background: rgba(0, 0, 0, 0.5);
                 border-radius: 3px;
                 padding: ${padding};
-                border: 1px solid #ccc;
+                border: 1px solid #555;
             `;
             fretNumberRow.appendChild(fretLabel);
         }
@@ -476,12 +531,13 @@ class Fretboard {
                 align-items: center;
                 justify-content: center;
                 font-weight: bold;
-                color: #333;
-                background-color: rgba(255, 255, 255, 0.9);
+                color: #fff;
+                background-color: rgba(40, 40, 40, 0.9);
+                border: 1px solid #555;
                 border-radius: 6px;
                 height: ${labelHeight}px;
                 font-size: ${fontSize}px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.4);
             `;
             stringContainer.appendChild(stringLabel);
         });
@@ -508,6 +564,9 @@ class Fretboard {
             height: ${neckHeight}px;
             width: 100%;
             margin: 0;
+            background: linear-gradient(to bottom, #2e2e2e, #1a1a1a);
+            border-radius: 8px;
+            box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
         `;
         
         // Store reference to neck container for fret grid
@@ -2246,16 +2305,20 @@ function initializeFretboard() {
  * Initialize scales within the fretboard container
  */
 function initializeScalesInFretboard() {
-    // Import and call the scale table creation function
-    if (typeof createHeptatonicScaleTable === 'function') {
-        createHeptatonicScaleTable();
-    } else {
-        console.warn('createHeptatonicScaleTable function not available');
-    }
+    // createQuickScalePicker() must run first: it creates #currentScaleNode/
+    // #currentRootNode, and createHeptatonicScaleTable() ends by calling
+    // updateCurrentScaleDisplay(), which silently no-ops (bailing out before
+    // it dispatches the 'scaleChanged' event or populates the Scale
+    // Information panel) if those nodes don't exist yet.
     if (typeof createQuickScalePicker === 'function') {
         createQuickScalePicker();
     } else {
         console.warn('createQuickScalePicker function not available');
+    }
+    if (typeof createHeptatonicScaleTable === 'function') {
+        createHeptatonicScaleTable();
+    } else {
+        console.warn('createHeptatonicScaleTable function not available');
     }
 }
 
@@ -2266,9 +2329,11 @@ function initializeScalesInFretboard() {
  * regardless of which tab is active).
  * @param {Array<{label: string, content: HTMLElement}>} tabs
  * @param {number} defaultActiveIndex
+ * @param {string} [storageKey] - When given, persists the active tab's label
+ *   here on every switch so the last-opened tab is restored on reload.
  * @returns {HTMLElement}
  */
-function createTabbedPanel(tabs, defaultActiveIndex = 0) {
+function createTabbedPanel(tabs, defaultActiveIndex = 0, storageKey = null) {
     const wrapper = document.createElement('div');
     wrapper.style.cssText = `
         margin-top: 16px;
@@ -2281,6 +2346,16 @@ function createTabbedPanel(tabs, defaultActiveIndex = 0) {
         border-bottom: 2px solid #444;
         margin-bottom: 12px;
         flex-wrap: wrap;
+    `;
+
+    const helpBar = document.createElement('div');
+    helpBar.style.cssText = `
+        font-size: 12px;
+        color: #bbb;
+        background: rgba(255,255,255,0.05);
+        border-radius: 6px;
+        padding: 8px 12px;
+        margin-bottom: 12px;
     `;
 
     const contentArea = document.createElement('div');
@@ -2310,6 +2385,18 @@ function createTabbedPanel(tabs, defaultActiveIndex = 0) {
             tab.content.style.display = i === activeIndex ? '' : 'none';
             styleButton(buttons[i], i === activeIndex, tab.alignRight);
         });
+
+        const helpText = tabs[activeIndex].help;
+        helpBar.textContent = helpText || '';
+        helpBar.style.display = helpText ? '' : 'none';
+
+        if (storageKey) {
+            try {
+                localStorage.setItem(storageKey, tabs[activeIndex].label);
+            } catch (error) {
+                console.warn('Could not persist active tab', error);
+            }
+        }
     }
 
     tabs.forEach((tab, i) => {
@@ -2325,8 +2412,82 @@ function createTabbedPanel(tabs, defaultActiveIndex = 0) {
     setActive(defaultActiveIndex);
 
     wrapper.appendChild(tabBar);
+    wrapper.appendChild(helpBar);
     wrapper.appendChild(contentArea);
     return wrapper;
+}
+
+/**
+ * Build and attach the page footer listing the computer-keyboard hotkeys:
+ * scale/root navigation (index.js's keydown handler) and the QWERTY-to-piano
+ * mapping plus octave shift (keyboard.js / index.js).
+ *
+ * Anchored to the bottom of the page (position: fixed) rather than left in
+ * normal flow, so it stays visible instead of trailing after whatever the
+ * active tab's content happens to be. A same-height spacer is appended to
+ * `container` right along with the footer so the fixed footer never covers
+ * the tail end of the tab content beneath it; a ResizeObserver keeps the
+ * spacer in sync as the footer wraps to more/fewer rows on resize.
+ * @param {HTMLElement} container - element the footer (and its spacer) are appended to
+ */
+function attachHotkeyFooter(container) {
+    const footer = document.createElement('div');
+    footer.style.cssText = `
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 100;
+        padding: 12px 16px;
+        background: rgba(20,20,20,0.95);
+        border-top: 1px solid rgba(255,255,255,0.1);
+        font-size: 12px;
+        color: #aaa;
+        line-height: 1.6;
+        box-sizing: border-box;
+    `;
+
+    const heading = document.createElement('div');
+    heading.textContent = 'Keyboard Shortcuts';
+    heading.style.cssText = `font-weight: bold; color: #ddd; margin-bottom: 6px;`;
+    // footer.appendChild(heading);
+
+    const rows = document.createElement('div');
+    rows.style.cssText = `
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px 28px;
+    `;
+    rows.innerHTML = `
+        <div><h1>Hotkeys:</h1></div>
+        <div><strong>, / .</strong> - previous/next root note</div>
+        <div><strong>n / m</strong> - previous/next scale mode</div>
+        <div><strong>v / b</strong> - previous/next scale family</div>
+        <div><strong>Home row (A S D F G H J K L ; ')</strong> - white keys</div>
+        <div><strong>Row above (W E T Y U I O)</strong> - black keys</div>
+        <div><strong>z / x</strong> - shift the synth down/up an octave</div>
+    `;
+    footer.appendChild(rows);
+
+    // Reserve enough space below the tab content so the fixed footer never
+    // covers it. A spacer *child* (rather than padding on the container) is
+    // used because the mobile media queries set `padding: 5px !important`
+    // on the container, which would otherwise clobber a padding-based fix.
+    // `order: 9999` keeps it last even if a sibling has an explicit order.
+    const spacer = document.createElement('div');
+    spacer.style.cssText = `flex-shrink: 0; width: 100%; order: 9999;`;
+    const reserveSpace = () => {
+        spacer.style.height = `${footer.offsetHeight}px`;
+    };
+    if (typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(reserveSpace).observe(footer);
+    } else {
+        window.addEventListener('resize', reserveSpace);
+        setTimeout(reserveSpace, 0);
+    }
+
+    container.appendChild(spacer);
+    container.appendChild(footer);
 }
 
 /**
@@ -3633,17 +3794,53 @@ function createFretboardControls(fretboard) {
         `;
 
         const tabs = [];
-        tabs.push({ label: 'Scale Information', content: scaleInformationTabContent });
+        tabs.push({
+            label: 'Scale Information',
+            content: scaleInformationTabContent,
+            help: "The current scale's notes, interval pattern, alternative names, and every diatonic triad/seventh chord built from it. Click a mini piano to hear it - the scale piano plays up the scale one note at a time, chord pianos play their notes together."
+        });
         if (progressionContainer) {
-            tabs.push({ label: 'Chord Progression', content: progressionContainer });
+            tabs.push({
+                label: 'Chord Progression',
+                content: progressionContainer,
+                help: "Build a chord progression from the current scale's diatonic chords. Click a chord to preview it, or play the whole progression back with the built-in sequencer."
+            });
         }
-        tabs.push({ label: 'Scale Position Grid', content: scalePositionGrid });
-        tabs.push({ label: 'Scale Selection', content: scaleControlsContainer });
-        tabs.push({ label: 'Other Controls', content: controlsContainer });
-        tabs.push({ label: 'Synthesizer', content: synthesizerTabContent, alignRight: true });
+        tabs.push({
+            label: 'Scale Position Grid',
+            content: scalePositionGrid,
+            help: 'Movable fretboard patterns for the current scale, one per string position, with adjustable pattern/dot size, fret labels, note-label modes, and chord-grip overlays.'
+        });
+        tabs.push({
+            label: 'Scale Selection',
+            content: scaleControlsContainer,
+            help: 'Pick root note(s) and a scale/mode from the full table of scale families, and toggle between selecting one at a time (exclusive) or comparing multiple selections side by side.'
+        });
+        tabs.push({
+            label: 'Other Controls',
+            content: controlsContainer,
+            help: 'Highlight or clear all fretboard notes, and click a roman-numeral (I-VII) button to display that scale-degree chord along with its playable fingering shapes.'
+        });
+        tabs.push({
+            label: 'Synthesizer',
+            content: synthesizerTabContent,
+            alignRight: true,
+            help: 'The built-in synthesizer. Play it with your mouse, a MIDI keyboard, or your computer keyboard (see the hotkeys in the page footer), and shape the sound with oscillators, filters, and effects.'
+        });
 
-        const defaultTabIndex = tabs.findIndex(tab => tab.label === 'Scale Position Grid');
-        fretboard.container.appendChild(createTabbedPanel(tabs, defaultTabIndex >= 0 ? defaultTabIndex : 0));
+        const ACTIVE_TAB_STORAGE_KEY = 'PolySynth-ActiveTab';
+        let lastActiveTabLabel = null;
+        try {
+            lastActiveTabLabel = localStorage.getItem(ACTIVE_TAB_STORAGE_KEY);
+        } catch (error) {
+            console.warn('Could not load saved active tab', error);
+        }
+        const lastActiveTabIndex = tabs.findIndex(tab => tab.label === lastActiveTabLabel);
+        const defaultTabIndex = lastActiveTabIndex >= 0
+            ? lastActiveTabIndex
+            : tabs.findIndex(tab => tab.label === 'Scale Position Grid');
+        fretboard.container.appendChild(createTabbedPanel(tabs, defaultTabIndex >= 0 ? defaultTabIndex : 0, ACTIVE_TAB_STORAGE_KEY));
+        attachHotkeyFooter(fretboard.container);
 
         // Initialize chord grid colors based on current scale (if any)
         // Use setTimeout to ensure the DOM elements are fully added before updating colors
@@ -3882,8 +4079,13 @@ function createChordButtonGrid() {
             });
             
             addInteractiveEvent(cell, 'click', () => {
-                // Toggle persistent display
-                showChordPatternOnFretboard(note, chordType, false);
+                // Play the chord through the synth using the same fretboard
+                // voicing shown on hover, rather than just toggling the
+                // persistent display.
+                const fretboard = getFretboard('fretNotPlaceholder');
+                if (fretboard) {
+                    playChordVoicing(getChordVoicingNotes(fretboard, note, chordType));
+                }
             });
             
             row.appendChild(cell);
@@ -4727,7 +4929,7 @@ function buildScalePositionFocusMatrix(columnCount) {
         color: #a8a8a8;
         font-size: 9px;
         margin-bottom: 4px;
-        max-width: 320px;
+        max-width: 720px;
     `;
     wrapper.appendChild(hint);
 
@@ -4849,6 +5051,8 @@ function renderScalePositionGrid() {
         return;
     }
 
+    persistScalePositionGridSettings();
+
     const scaleNoteNames = getCurrentScaleNoteNames();
     const primaryScale = getPrimaryScale();
     const primaryRoot = getPrimaryRootNote() || 'C';
@@ -4869,6 +5073,41 @@ function renderScalePositionGrid() {
     `;
     container.appendChild(title);
 
+    // Grid information (description, selected-scale summary, legend) on the
+    // left, the Focus Selector matrix on the right, side by side.
+    const infoRow = document.createElement('div');
+    infoRow.style.cssText = `
+        display: flex;
+        flex-wrap: wrap;
+        gap: 16px;
+        align-items: flex-start;
+        justify-content: center;
+        margin-bottom: 10px;
+    `;
+    const infoColumn = document.createElement('div');
+    infoColumn.style.cssText = `
+        flex: 0 1 1080px;
+        min-width: 280px;
+        text-align: center;
+    `;
+    const focusColumn = document.createElement('div');
+    focusColumn.style.cssText = `
+        flex: 0 0 auto;
+    `;
+    infoRow.appendChild(infoColumn);
+    infoRow.appendChild(focusColumn);
+    container.appendChild(infoRow);
+
+    const infoHeading = document.createElement('div');
+    infoHeading.textContent = 'Grid Information';
+    infoHeading.style.cssText = `
+        color: #f0f0f0;
+        font-size: 11px;
+        font-weight: bold;
+        margin-bottom: 2px;
+    `;
+    infoColumn.appendChild(infoHeading);
+
     const description = document.createElement('div');
     description.style.cssText = `
         color: #cbcbcb;
@@ -4877,7 +5116,7 @@ function renderScalePositionGrid() {
         margin-bottom: 10px;
     `;
     description.textContent = 'Generic row boards: root is fixed at displayed fret 2 (with one fret left), labels are row-consistent, and each row shifts by root string context.';
-    container.appendChild(description);
+    infoColumn.appendChild(description);
 
     const controls = document.createElement('div');
     controls.style.cssText = `
@@ -4939,7 +5178,7 @@ function renderScalePositionGrid() {
     const dotInput = document.createElement('input');
     dotInput.type = 'range';
     dotInput.min = '0.5';
-    dotInput.max = '2';
+    dotInput.max = '3';
     dotInput.step = '0.05';
     dotInput.value = String(scalePositionDotScale);
     const dotValue = document.createElement('span');
@@ -5270,7 +5509,7 @@ function renderScalePositionGrid() {
     `;
     const titlePrefix = scalePositionUseInstancedScale ? `${normalizedRoot} ` : '';
     selectedScaleTitle.textContent = `${titlePrefix}${scaleDescriptor} | Intervals: ${intervalSummary} ${noteSummary}`;
-    container.appendChild(selectedScaleTitle);
+    infoColumn.appendChild(selectedScaleTitle);
 
     const legend = document.createElement('div');
     legend.style.cssText = `
@@ -5337,9 +5576,9 @@ function renderScalePositionGrid() {
         gripItem.textContent = 'Dashed = suggested fingering grip';
         legend.appendChild(gripItem);
     }
-    container.appendChild(legend);
+    infoColumn.appendChild(legend);
 
-    container.appendChild(buildScalePositionFocusMatrix(columnCount));
+    focusColumn.appendChild(buildScalePositionFocusMatrix(columnCount));
 
     const rowCount = SCALE_POSITION_ROW_STRINGS.length;
     const showScaleColumn = !isScalePositionColumnFullyHidden(-1, rowCount);
@@ -5840,6 +6079,57 @@ function renderFingeringTabs(fretboard, labelMode) {
 }
 
 /**
+ * Resolve the actual sounding pitches (real octave, per string) for a
+ * chord's best playable fretboard shape - the same shape-picking logic
+ * used to display the chord's fingering on hover - so playback matches
+ * what's shown rather than a generic root-position triad.
+ * @param {Fretboard} fretboard
+ * @param {string} rootNote
+ * @param {string} chordType
+ * @returns {Array<string>} notes in PolySynth format (e.g. "C4", "D#5")
+ */
+function getChordVoicingNotes(fretboard, rootNote, chordType) {
+    const chordInfo = processChord(rootNote + chordType);
+    if (!chordInfo || !chordInfo.notes) {
+        return [];
+    }
+
+    const translatedChordNotes = notationTranslateNotes(chordInfo.notes);
+    const chordNotes = translatedChordNotes.map(note =>
+        typeof note === 'string' && note.includes('/') ? note.split('/')[0] : note
+    );
+
+    const patternType = CHORD_TYPE_TO_PATTERN_TYPE[chordType];
+    const specificPatterns = patternType ? getPatternsByChordType(patternType) : null;
+
+    const shapes = buildFingeringShapes(fretboard, chordNotes, chordNotes[0], {}, specificPatterns);
+    const bestShape = shapes[0];
+    if (!bestShape || !Array.isArray(bestShape.positions)) {
+        return [];
+    }
+
+    return bestShape.positions
+        .map(position => fretboard.getNoteAt(position.string, position.fret))
+        .filter(note => typeof note === 'string')
+        .map(note => note.replace('/', ''));
+}
+
+/**
+ * Play a chord voicing through PolySynth, activating the synth first if
+ * needed - mirrors the activation dance used for regular key playback.
+ * @param {Array<string>} notes - PolySynth-format notes (e.g. "C4")
+ */
+function playChordVoicing(notes) {
+    if (!notes || notes.length === 0 || !window.polySynthRef || !window.polySynthRef.playNotes) {
+        return;
+    }
+    if (window.polySynthRef.isActive && !window.polySynthRef.isActive() && window.polySynthRef.activate) {
+        window.polySynthRef.activate();
+    }
+    window.polySynthRef.playNotes(notes, 70, 800);
+}
+
+/**
  * Show chord pattern on fretboard with scale context (local version)
  */
 function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
@@ -5884,21 +6174,7 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                     const intervalLabelMap = buildIntervalLabelMap(fretboard, chordNotes, chordIntervalLabels);
 
                     // Map chord types to pattern types for known-shape lookup
-                    const chordTypeMapping = {
-                        'Major': 'major',
-                        'Minor': 'minor',
-                        '7': 'dominant7',
-                        'maj7': 'maj7',
-                        'm7': 'min7',
-                        'dim': 'dim',
-                        'dim7': 'dim7',
-                        'aug': 'aug',
-                        'sus2': 'sus2',
-                        'sus4': 'sus4',
-                        '5': 'power',
-                        'm7b5': 'm7b5'
-                    };
-                    const patternType = chordTypeMapping[chordType];
+                    const patternType = CHORD_TYPE_TO_PATTERN_TYPE[chordType];
                     const specificPatterns = patternType ? getPatternsByChordType(patternType) : null;
 
                     // Find playable shapes (predefined first, best-effort fallback) and

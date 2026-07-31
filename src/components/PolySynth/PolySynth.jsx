@@ -1582,73 +1582,94 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
     // Programmatic note control functions
     const playNotesProgrammatic = (notes, volume = 50, duration = null) => {
         console.log('playNotesProgrammatic called with notes:', notes, 'synthActive state:', synthActive, 'synthActiveRef:', synthActiveRef.current);
-        
+
         if (!synthActiveRef.current) {
             console.log('Synth not active (checking ref), calling activateSynth from playNotesProgrammatic...');
             activateSynth();
             console.log('activateSynth called from playNotesProgrammatic, synthActiveRef now:', synthActiveRef.current);
         }
-        
-        console.log('Proceeding with note playback, synthActiveRef state:', synthActiveRef.current);
-        
-        const gainValue = volume / 100; // Convert percentage to gain value
-        
-        // Capture schedule time once for all simultaneous notes to ensure phase alignment
-        const scheduleTime = AC.currentTime + 0.001; // 1ms offset for stable scheduling
-        
-        notes.forEach(noteString => {
-            // Parse note string (e.g., "C4", "D#5")
-            const note = parseNoteString(noteString);
-            if (!note) return;
-            
-            // Find available synth or reuse existing one
-            let targetSynth = null;
-            if (!synthArr[synthPos].currentNote) {
-                targetSynth = synthArr[synthPos];
-                // console.log('Reusing synth at position:', synthPos);
-            } else {
-                const initialPos = synthPos;
-                // console.log('Finding available synth, starting at position:', synthPos);
+
+        const schedule = () => {
+            console.log('Proceeding with note playback, synthActiveRef state:', synthActiveRef.current);
+
+            const gainValue = volume / 100; // Convert percentage to gain value
+
+            // Capture schedule time once for all simultaneous notes to ensure phase alignment
+            const scheduleTime = AC.currentTime + 0.001; // 1ms offset for stable scheduling
+
+            notes.forEach(noteString => {
+                // Parse note string (e.g., "C4", "D#5")
+                const note = parseNoteString(noteString);
+                if (!note) return;
+
+                // Find available synth or reuse existing one
+                let targetSynth = null;
+                if (!synthArr[synthPos].currentNote) {
+                    targetSynth = synthArr[synthPos];
+                    // console.log('Reusing synth at position:', synthPos);
+                } else {
+                    const initialPos = synthPos;
+                    // console.log('Finding available synth, starting at position:', synthPos);
+                    incrementSynthPos();
+
+                    while (synthPos !== initialPos) {
+                        // console.log('Checking synth at position:', synthPos);
+                        if (!synthArr[synthPos].currentNote) break;
+                        incrementSynthPos();
+                    }
+                    // console.log('Found available synth at position:', synthPos);
+                    targetSynth = synthArr[synthPos];
+                }
+
+                // Create unique ID for this note instance
+                const noteId = `${noteString}_${noteIdCounter.current++}`;
+
+                // Start the note with synchronized schedule time and get the voice ID
+                const voiceId = synthNoteOn(targetSynth, note, gainValue, scheduleTime);
+
+                // Store note info for tracking
+                const noteInfo = {
+                    synth: targetSynth,
+                    noteString: noteString,
+                    volume: gainValue,
+                    noteId: noteId,
+                    voiceId: voiceId // Store voice ID for proper cleanup
+                };
+
+                activeNotes.current.set(noteId, noteInfo);
                 incrementSynthPos();
 
-                while (synthPos !== initialPos) {
-                    // console.log('Checking synth at position:', synthPos);
-                    if (!synthArr[synthPos].currentNote) break;
-                    incrementSynthPos();
+                // If duration is specified, schedule note off
+                if (duration) {
+                    setTimeout(() => {
+                        const noteInfo = activeNotes.current.get(noteId);
+                        if (noteInfo) {
+                            synthNoteOff(noteInfo.synth, note, noteInfo.voiceId);
+                            activeNotes.current.delete(noteId);
+                        }
+                    }, duration);
                 }
-                // console.log('Found available synth at position:', synthPos);
-                targetSynth = synthArr[synthPos];
-            }
+            });
+        };
 
-            // Create unique ID for this note instance
-            const noteId = `${noteString}_${noteIdCounter.current++}`;
-            
-            // Start the note with synchronized schedule time and get the voice ID
-            const voiceId = synthNoteOn(targetSynth, note, gainValue, scheduleTime);
-            
-            // Store note info for tracking
-            const noteInfo = {
-                synth: targetSynth,
-                noteString: noteString,
-                volume: gainValue,
-                noteId: noteId,
-                voiceId: voiceId // Store voice ID for proper cleanup
-            };
-            
-            activeNotes.current.set(noteId, noteInfo);
-            incrementSynthPos();
-            
-            // If duration is specified, schedule note off
-            if (duration) {
-                setTimeout(() => {
-                    const noteInfo = activeNotes.current.get(noteId);
-                    if (noteInfo) {
-                        synthNoteOff(noteInfo.synth, note, noteInfo.voiceId);
-                        activeNotes.current.delete(noteId);
-                    }
-                }, duration);
-            }
-        });
+        if (AC.state !== 'running') {
+            // On the very first user interaction (or if the browser has
+            // suspended the context again, e.g. after backgrounding the
+            // tab), AC.currentTime stays frozen until resume() actually
+            // completes. Computing scheduleTime from it before that happens
+            // schedules the note in what's effectively the past relative to
+            // when audio actually starts flowing again, so playback picks
+            // the note up mid-envelope instead of at its attack. Waiting
+            // for the real resume first costs a beat only on that first
+            // note - unavoidable since audio output requires the resume to
+            // follow a user gesture.
+            AC.resume().then(schedule).catch((error) => {
+                console.error('AudioContext resume failed, scheduling notes anyway:', error);
+                schedule();
+            });
+        } else {
+            schedule();
+        }
     };
 
     const stopNotesProgrammatic = (notes) => {
