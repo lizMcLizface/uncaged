@@ -15,7 +15,12 @@ function App() {
   const [synthTabContainer, setSynthTabContainer] = useState(null);
   const polySynthRef = useRef(null);
 
-  // Make polySynth globally accessible for progression triggering
+  // Make polySynth globally accessible for progression triggering. Keyed on
+  // synthTabContainer (not just mount) because polySynthRef.current only
+  // becomes non-null once the portal below actually renders
+  // PolySynthWrapper, which happens on a later render than App's own mount -
+  // a plain mount-time effect can run before that and find the ref still
+  // null, permanently leaving window.polySynthRef unset.
   React.useEffect(() => {
     if (polySynthRef.current) {
       window.polySynthRef = polySynthRef.current;
@@ -23,18 +28,7 @@ function App() {
     }
     window.polySynthEnabled = polySynthEnabled;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [polySynthEnabled]);
-
-  // Additional effect to ensure ref is set after render
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      if (polySynthRef.current && !window.polySynthRef) {
-        window.polySynthRef = polySynthRef.current;
-        console.log('PolySynth reference set via timer:', polySynthRef.current);
-      }
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
+  }, [polySynthEnabled, synthTabContainer]);
 
   // Expose App functions globally for progression builder
   React.useEffect(() => {

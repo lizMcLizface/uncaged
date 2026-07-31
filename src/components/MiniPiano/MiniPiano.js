@@ -111,6 +111,217 @@ function normalizeNoteName(note) {
     return enharmonicMap[normalizedNote] || normalizedNote;
 }
 
+// Interval-color palette keyed by semitone distance from a reference root
+// (0-11). Mirrors the palette used throughout the Scale Position Grid
+// (frets.js's getIntervalColor) so a given scale tone reads as the same
+// color everywhere in the app - the scale piano, every chord piano, and
+// the fretboard all agree on what color "the b7" is.
+const INTERVAL_COLORS = [
+    '#ff4d4d', // R
+    '#ff8a3d', // b2
+    '#ffb347', // 2
+    '#ffd34f', // b3
+    '#d2f25f', // 3
+    '#8fdc5b', // 4
+    '#4dd6b8', // b5
+    '#45b6ff', // 5
+    '#5a88ff', // b6
+    '#7a6cff', // 6
+    '#a46cff', // b7
+    '#d26bff'  // 7
+];
+
+const CHROMATIC_SEMITONES = {
+    C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11
+};
+
+/**
+ * Color for a given interval, matching the Scale Position Grid's palette.
+ * @param {number} semitone - Interval distance from the reference root (0-11)
+ * @returns {string} Hex color
+ */
+export function getIntervalColor(semitone) {
+    return INTERVAL_COLORS[((semitone % 12) + 12) % 12];
+}
+
+// Standard interval names by semitone distance, matching frets.js's
+// SEMITONE_TO_INTERVAL_LABEL so labels agree everywhere in the app.
+const INTERVAL_LABELS = ['R', 'm2', 'M2', 'm3', 'M3', 'P4', 'd5', 'P5', 'm6', 'M6', 'm7', 'M7'];
+
+/**
+ * Standard interval name for a given semitone distance (0-11).
+ * @param {number} semitone
+ * @returns {string}
+ */
+export function getIntervalLabel(semitone) {
+    return INTERVAL_LABELS[((semitone % 12) + 12) % 12];
+}
+
+/**
+ * Semitone distance of a note from a reference root (both plain note names;
+ * octave and enharmonic spelling are normalized away first).
+ * @param {string} rootNote
+ * @param {string} note
+ * @returns {number} 0-11
+ */
+function getSemitoneFromRoot(rootNote, note) {
+    const rootSemitone = CHROMATIC_SEMITONES[normalizeNoteName(rootNote)] || 0;
+    const noteSemitone = CHROMATIC_SEMITONES[normalizeNoteName(note)] || 0;
+    return ((noteSemitone - rootSemitone) % 12 + 12) % 12;
+}
+
+/**
+ * Interval semitone distance, standard label (R, m3, P5, ...) and palette
+ * color for a note relative to a reference root - the single source of
+ * truth consumers should use rather than re-deriving each piece themselves.
+ * @param {string} rootNote
+ * @param {string} note
+ * @returns {{semitone: number, label: string, color: string}}
+ */
+export function getIntervalInfo(rootNote, note) {
+    const semitone = getSemitoneFromRoot(rootNote, note);
+    return { semitone, label: getIntervalLabel(semitone), color: getIntervalColor(semitone) };
+}
+
+// --- Click-to-play wiring ---
+// Mirrors progressionBuilder.js's triggerChordProgression: the synth is a
+// React component mounted elsewhere, reached from this vanilla-JS module
+// only via the globals App.js publishes (window.polySynthRef/polySynthEnabled).
+function getActivePolySynth() {
+    if (typeof window === 'undefined' || !window.polySynthEnabled || !window.polySynthRef || !window.polySynthRef.playNotes) {
+        return null;
+    }
+    return window.polySynthRef;
+}
+
+// Fallback register used only when a note carries no octave of its own and
+// the synth hasn't reported a selected octave (see getSynthBaseOctave). Also
+// the register getScaleNotes() anchors a scale's root to, so it doubles as
+// the reference point other modules shift away from when following the
+// synth's selected octave.
+export const DEFAULT_BASE_OCTAVE = 4;
+
+/**
+ * The synth's currently selected reference octave (the register Z/X shift
+ * up/down in index.js), so mini-piano playback lines up with whatever
+ * octave the on-screen/QWERTY keyboard is currently playing in. Falls back
+ * to DEFAULT_BASE_OCTAVE if the synth hasn't published one yet. Exported so
+ * other modules (e.g. the Scale Information panel) can shift their own
+ * displayed/played note octaves to match the same reference.
+ * @returns {number}
+ */
+export function getSynthBaseOctave() {
+    if (typeof window !== 'undefined' && typeof window.getSynthBaseOctave === 'function') {
+        const value = window.getSynthBaseOctave();
+        if (typeof value === 'number' && !Number.isNaN(value)) return value;
+    }
+    return DEFAULT_BASE_OCTAVE;
+}
+
+/**
+ * Extract the octave from a "Note/octave" string (e.g. "C#/5" -> 5).
+ * @param {string} note
+ * @returns {number|null}
+ */
+function extractOctave(note) {
+    if (typeof note !== 'string') return null;
+    const match = /\/(-?\d+)\s*$/.exec(note);
+    return match ? parseInt(match[1], 10) : null;
+}
+
+/**
+ * Assign real octaves to a sequence of notes for playback. Notes that
+ * already carry an explicit octave (e.g. "C/5", as produced from an actual
+ * scale degree) keep that exact register - this is what lets a chord built
+ * on a high scale degree play at its true pitch instead of being reset to
+ * baseOctave. Bare note letters (no octave) fall back to the previous
+ * behavior: the first (lowest) note sits at baseOctave and every following
+ * note is strictly higher in pitch, rolling over to the next octave
+ * whenever its pitch class would otherwise land at or below the previous
+ * note's.
+ * @param {Array<string>} noteLetters
+ * @param {number} [baseOctave] - defaults to the synth's selected octave
+ * @returns {Array<string>} e.g. ['E4', 'G4', 'B4', 'D5']
+ */
+function assignAscendingOctaves(noteLetters, baseOctave = getSynthBaseOctave()) {
+    let octave = baseOctave;
+    let prevSemitone = null;
+    return noteLetters.map(note => {
+        const normalized = normalizeNoteName(note);
+        const explicitOctave = extractOctave(note);
+        if (explicitOctave !== null) {
+            return `${normalized}${explicitOctave}`;
+        }
+        const semitone = CHROMATIC_SEMITONES[normalized] || 0;
+        if (prevSemitone !== null && semitone <= prevSemitone) {
+            octave += 1;
+        }
+        prevSemitone = semitone;
+        return `${normalized}${octave}`;
+    });
+}
+
+/**
+ * Play a set of note letters together as a block chord.
+ */
+function playNotesAsChord(noteLetters, { volume = 70, duration = 800 } = {}) {
+    const synth = getActivePolySynth();
+    if (!synth || !noteLetters.length) return;
+    const notes = assignAscendingOctaves(noteLetters);
+    if (synth.stopAllNotes) synth.stopAllNotes();
+    synth.playNotes(notes, volume, duration);
+}
+
+/**
+ * Play a set of note letters one at a time, ascending - used for the scale
+ * piano's "run up the scale" playback.
+ */
+function playNotesAsSequence(noteLetters, { volume = 70, noteDuration = 320, gap = 340 } = {}) {
+    const synth = getActivePolySynth();
+    if (!synth || !noteLetters.length) return;
+    const notes = assignAscendingOctaves(noteLetters);
+    if (synth.stopAllNotes) synth.stopAllNotes();
+    notes.forEach((note, index) => {
+        setTimeout(() => {
+            const activeSynth = getActivePolySynth();
+            if (activeSynth) activeSynth.playNotes([note], volume, noteDuration);
+        }, index * gap);
+    });
+}
+
+/**
+ * Wire a mini piano SVG so clicking (or pressing Enter/Space when focused)
+ * plays noteLetters through the synth, either as a chord or as an ascending
+ * sequence. No-ops harmlessly if the synth isn't available/enabled.
+ * @param {SVGElement} svg
+ * @param {Array<string>} noteLetters
+ * @param {'chord'|'sequence'} playMode
+ */
+function makePianoPlayable(svg, noteLetters, playMode) {
+    if (!noteLetters || noteLetters.length === 0) return;
+
+    svg.style.cursor = 'pointer';
+    svg.setAttribute('tabindex', '0');
+    svg.setAttribute('role', 'button');
+    svg.setAttribute('aria-label', playMode === 'sequence' ? 'Play scale' : 'Play chord');
+
+    const trigger = () => {
+        if (playMode === 'sequence') {
+            playNotesAsSequence(noteLetters);
+        } else {
+            playNotesAsChord(noteLetters);
+        }
+    };
+
+    svg.addEventListener('click', trigger);
+    svg.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            trigger();
+        }
+    });
+}
+
 /**
  * Create a mini piano SVG element
  * @param {Object} options - Configuration options
@@ -278,12 +489,100 @@ export function createChordPiano(chordNotes, rootNote) {
  * @returns {HTMLElement} SVG element containing the mini piano
  */
 export function createScalePiano(scaleNotes, rootNote) {
-    return createMiniPiano({
-        notes: scaleNotes,
-        rootNote: rootNote,
-        highlightType: 'scale',
-        showNoteNames: true
+    return createIntervalPiano({ notes: scaleNotes, rootNote, showNoteNames: true, playMode: 'sequence' });
+}
+
+/**
+ * Create a mini piano where every highlighted note is colored by its
+ * interval distance from rootNote, using the same palette as the Scale
+ * Position Grid (see getIntervalColor above). Used for the scale piano and
+ * for per-chord pianos so a given scale tone is always the same color,
+ * whether it's the scale's own display or the root of one chord and the
+ * 3rd of another.
+ * Clicking the piano plays notes through the synth (see makePianoPlayable):
+ * 'chord' mode (the default, used for triad/seventh pianos) plays every note
+ * together; 'sequence' mode (used for the scale piano) plays them one at a
+ * time, ascending.
+ * @param {Object} options
+ * @param {Array} options.notes - Notes to highlight
+ * @param {string} options.rootNote - Reference root for interval coloring
+ * @param {boolean} [options.showNoteNames=true]
+ * @param {boolean} [options.playable=true] - Whether clicking plays the notes
+ * @param {'chord'|'sequence'} [options.playMode='chord']
+ * @returns {HTMLElement|null} SVG element containing the mini piano
+ */
+export function createIntervalPiano(options = {}) {
+    const { notes = [], rootNote, showNoteNames = true, playable = true, playMode = 'chord' } = options;
+
+    if (!notes || notes.length === 0 || !rootNote) {
+        return null;
+    }
+
+    const config = MINI_PIANO_CONFIG;
+    const normalizedNotes = notes.map(note => normalizeNoteName(note));
+    const normalizedRoot = normalizeNoteName(rootNote);
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('width', config.width);
+    svg.setAttribute('height', config.height + 20);
+    svg.style.cssText = `
+        display: block;
+        margin: 4px auto;
+        background: rgba(0,0,0,0.05);
+        border-radius: 4px;
+        padding: 2px;
+    `;
+
+    const drawKey = (note, x, y, width, height, isBlack) => {
+        const isHighlighted = normalizedNotes.includes(note);
+        const isRoot = normalizedRoot === note;
+
+        let fillColor = isBlack ? config.blackKeyFill : config.whiteKeyFill;
+        if (isHighlighted) {
+            fillColor = getIntervalColor(getSemitoneFromRoot(normalizedRoot, note));
+        }
+
+        const key = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+        key.setAttribute('x', x);
+        key.setAttribute('y', y);
+        key.setAttribute('width', width);
+        key.setAttribute('height', height);
+        key.setAttribute('fill', fillColor);
+        key.setAttribute('stroke', isBlack ? config.blackKeyStroke : config.whiteKeyStroke);
+        key.setAttribute('stroke-width', isRoot ? config.overlapBorderWidth : 1);
+        key.setAttribute('rx', config.cornerRadius);
+        key.setAttribute('ry', config.cornerRadius);
+        svg.appendChild(key);
+
+        if (showNoteNames && isHighlighted) {
+            const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            text.setAttribute('x', x + width / 2);
+            text.setAttribute('y', height - (isBlack ? 6 : 8));
+            text.setAttribute('text-anchor', 'middle');
+            text.setAttribute('fill', isBlack ? config.blackKeyTextColor : config.textColor);
+            text.setAttribute('font-size', config.fontSize - (isBlack ? 1 : 0));
+            text.setAttribute('font-family', 'Arial, sans-serif');
+            text.setAttribute('font-weight', isRoot ? 'bold' : 'normal');
+            text.textContent = note;
+            svg.appendChild(text);
+        }
+    };
+
+    WHITE_KEYS.forEach((note, index) => {
+        drawKey(note, index * config.whiteKeyWidth, 0, config.whiteKeyWidth, config.whiteKeyHeight, false);
     });
+
+    BLACK_KEYS.forEach(note => {
+        const position = BLACK_KEY_POSITIONS[note];
+        const x = (position * config.whiteKeyWidth) - (config.blackKeyWidth / 2);
+        drawKey(note, x, 0, config.blackKeyWidth, config.blackKeyHeight, true);
+    });
+
+    if (playable) {
+        makePianoPlayable(svg, notes, playMode);
+    }
+
+    return svg;
 }
 
 /**

@@ -14,9 +14,13 @@ class Gain {
         }
     }
 
-    disconnect = () => {
+    disconnect = (destination) => {
         try {
-            this.node.disconnect();
+            if (destination) {
+                this.node.disconnect(destination);
+            } else {
+                this.node.disconnect();
+            }
         } catch (e) {
             console.warn('Failed to disconnect Gain node:', e);
         }

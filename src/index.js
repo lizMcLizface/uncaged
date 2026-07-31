@@ -7,7 +7,7 @@ import $ from 'jquery';
 // import { metronome, reset } from './metronome';
 // import {processChord} from './intervals';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
-import {createHeptatonicScaleTable, selectedRootNote, selectedScales, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, exclusiveMode, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive} from './scaleGenerator';
+import {createHeptatonicScaleTable, selectedRootNote, selectedScales, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, exclusiveMode, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scaleGenerator';
 // import {chords, processedChords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes, createChordButtonGrid} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
 // import {createScaleChordCrossReference, updateCrossReferenceDisplay} from './cross';
@@ -2219,6 +2219,13 @@ var currentSynthNotes = {};
 
 let baseOctave = 4;
 
+// Expose the synth's currently selected reference octave (shifted via Z/X)
+// so other modules - e.g. the mini pianos' click-to-play - can align their
+// own playback octave with whatever register the on-screen keyboard is in.
+if (typeof window !== 'undefined') {
+    window.getSynthBaseOctave = () => baseOctave;
+}
+
 // Function to check if a text input element is currently focused
 function isTextInputFocused() {
     const activeElement = document.activeElement;
@@ -2253,11 +2260,13 @@ function onKeyPress(event, up) {
         console.log('Reducing Base Octave: ', baseOctave);
         baseOctave -= 1;
         if(baseOctave < 0) baseOctave = 0;
+        updateCurrentScaleDisplay(); // Refresh Scale Information pianos to the new octave
     }
     if (event.type == 'keydown' && event.code == 'KeyX'){
         console.log('Increasing Base Octave: ', baseOctave);
         baseOctave += 1;
         if(baseOctave > 8) baseOctave = 8;
+        updateCurrentScaleDisplay(); // Refresh Scale Information pianos to the new octave
     }
 
     // Scale/root navigation hotkeys. In exclusive mode (single selection),
@@ -5730,75 +5739,24 @@ function initializePolySynthMouse() {
     initializeMouseInput(playNote2Callback, stopNotes2Callback);
 }
 
-// Initialize guitar interface functionality
+// Wire up mouse input for piano keys once PolySynth becomes available.
+// (Fretboard/tabs/progression-builder/scale-table init all happen once,
+// on their own, via frets.js's own DOMContentLoaded/setTimeout bootstrap -
+// calling initializeFretboard() again here used to race with that, randomly
+// tearing down #fretNotPlaceholder - including the Synthesizer tab's
+// PolySynth portal target - out from under React after it had already
+// mounted into it.)
 document.addEventListener('DOMContentLoaded', () => {
-    // Initialize the existing guitar interface functionality
-    initializeGuitarInterface();
-    
-    // Set up a periodic check to initialize mouse input when PolySynth becomes available
     const checkPolySynth = setInterval(() => {
         if (window.polySynthRef) {
             initializePolySynthMouse();
             clearInterval(checkPolySynth);
         }
     }, 100);
-    
+
     // Clear the interval after 30 seconds to avoid infinite checking
     setTimeout(() => clearInterval(checkPolySynth), 30000);
 });
-
-// Initialize the existing guitar interface
-function initializeGuitarInterface() {
-    console.log('Initializing guitar interface...');
-    
-    // Initialize the fretboard
-    if (typeof initializeFretboard === 'function') {
-        try {
-            initializeFretboard();
-            console.log('Fretboard initialized successfully');
-        } catch (error) {
-            console.error('Error initializing fretboard:', error);
-        }
-    }
-    
-    // Setup fretboard and get reference
-    const fretboard = getFretboard();
-    if (fretboard) {
-        console.log('Fretboard reference obtained');
-        
-        // Initialize chord progression builder
-        try {
-            // Import and initialize the progression builder
-            import('./progressionBuilder.js').then((progressionModule) => {
-                if (progressionModule.createChordProgressionUI) {
-                    const progressionContainer = progressionModule.createChordProgressionUI(fretboard);
-                    
-                    // Find the placeholder element and replace it with the progression builder
-                    const placeholder = document.getElementById('fretNotPlaceholder');
-                    if (placeholder) {
-                        placeholder.innerHTML = '';
-                        placeholder.appendChild(progressionContainer);
-                        console.log('Chord progression builder initialized');
-                    }
-                }
-            }).catch(error => {
-                console.error('Error loading progression builder:', error);
-            });
-        } catch (error) {
-            console.error('Error initializing chord progression builder:', error);
-        }
-    }
-    
-    // Initialize scale generator table
-    if (typeof createHeptatonicScaleTable === 'function') {
-        try {
-            createHeptatonicScaleTable();
-            console.log('Scale table initialized');
-        } catch (error) {
-            console.error('Error initializing scale table:', error);
-        }
-    }
-}
 
 // Create React root and render the App
 const root = ReactDOM.createRoot(document.getElementById('root'));
