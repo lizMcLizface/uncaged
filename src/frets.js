@@ -753,8 +753,17 @@ class Fretboard {
      * Calculate the note at a specific string and fret using enhanced notation
      */
     calculateNote(openStringNote, fret) {
-        const openMidi = notationNoteToMidi(openStringNote);
-        const frettedMidi = openMidi + fret + 12; // Add 12 to correct octave offset
+        // Tuning strings are stored as "D4" (no separator, see tuning.js),
+        // but notationNoteToMidi only recognizes the "D/4" slash format -
+        // without it, it silently defaults every string to octave 4,
+        // discarding the string's real tuning octave. The stale "+ 12"
+        // this used to carry was compensating for that (making open
+        // strings all land around octave 5), not a real conversion need.
+        const slashed = openStringNote.includes('/')
+            ? openStringNote
+            : openStringNote.replace(/^([A-Ga-g][#♯b♭]*)(-?\d+)$/, '$1/$2');
+        const openMidi = notationNoteToMidi(slashed);
+        const frettedMidi = openMidi + fret;
         return notationMidiToNote(frettedMidi);
     }
     
@@ -4559,11 +4568,17 @@ function createScalePositionMiniFretboard(
 
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
     const width = Math.round(128 * patternScale);
-    const height = Math.round(104 * patternScale);
     const startX = Math.round(10 * patternScale);
     const startY = Math.round(10 * patternScale);
     const fretGap = 18 * patternScale;
     const stringGap = 12 * patternScale;
+    // Height scales with the number of strings on the active instrument (e.g.
+    // 4-string bass vs 8-string guitar) instead of a fixed value tuned for
+    // 6-string guitar, which made bass boards look squashed-tall and extended
+    // range boards look cramped.
+    const stringsSpan = (MINI_SCALE_STRING_TUNING.length - 1) * stringGap;
+    const bottomMargin = showRelativeFretLabels ? (22 * patternScale) : (10 * patternScale);
+    const height = Math.round(startY + stringsSpan + bottomMargin);
 
     svg.setAttribute('width', String(width));
     svg.setAttribute('height', String(height));
