@@ -64,7 +64,6 @@ export function getChordPatterns() {
             chordType: 'major',
             rootString: 2, // G string
             notes: [
-            notes: [
                 { string: 3, fretOffset: 0, interval: 1, label: 'R', offset: 'R' }, // Root on G string
                 { string: 2, fretOffset: 0, interval: 3, label: '3', offset: 'M3'}, // Major 3rd on B string
                 { string: 1, fretOffset: 0, interval: 3, label: '5', offset: 'P5' }, // Major 3rd on B string
