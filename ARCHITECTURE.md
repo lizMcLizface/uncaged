@@ -11,7 +11,8 @@ and updated as Phases 1, 2 and 2b landed the same day. Sections describe the
 ## 1. Runtime shape, in one paragraph
 
 This is a Create React App page with two coexisting UIs that never fully
-merged. The vanilla-JS half (`frets.js`, `progressionBuilder.js`,
+merged. The vanilla-JS half (`src/fretboard/` - split out of a single
+`frets.js` by `REFACTOR_PLAN.md` Phase 3 - plus `progressionBuilder.js`,
 `scaleGenerator.js`, `scales.js`, `chords.js`, …) builds the fretboard, scale
 tables and chord-progression UI by direct DOM manipulation, mounted once from
 `index.js`. The React half (`App.js` and everything under `src/components/`)
@@ -189,7 +190,7 @@ Three entry points now dispatch through the registry:
 |---|---|---|
 | Keyboard | `index.js`'s `onKeyPress`, bound via `document.addEventListener('keydown'/'keyup', onKeyPress)`. Maps `event.code` to a note via `keyToNote()` (`keyboard.js:29`). Gates on `isChannelEnabled('synth')`. | `"C#4"` (octave suffix, no `/`) |
 | Mouse | `midi.js`'s `initializeMouseInput(playNote2Callback, stopNotes2Callback)`, wired from `index.js`'s `initializePolySynthMouse()`; the polling loop that waits for the synth to exist now polls `getChannel('synth')` instead of `window.polySynthRef`. | same |
-| Programmatic | `frets.js`'s `playChordVoicing()`, `progressionBuilder.js`'s `triggerChordProgression()` (playback calls only - its `getProgressionSequencerState()` read stays on `window.polySynthRef`, see §3.1), and `MiniPiano.js`'s `getActivePolySynth()`. | same |
+| Programmatic | `src/fretboard/index.js`'s `playChordVoicing()`, `progressionBuilder.js`'s `triggerChordProgression()` (playback calls only - its `getProgressionSequencerState()` read stays on `window.polySynthRef`, see §3.1), and `MiniPiano.js`'s `getActivePolySynth()`. | same |
 
 Every call site still independently guards `getChannel('synth') &&
 channel.playNotes` (mirroring the old `window.polySynthRef &&
@@ -239,11 +240,11 @@ section.
 
 | Global | Writer | Live reference count | Status |
 |---|---|---|---|
-| `window.polySynthRef` (playback surface: `playNotes`/`stopNotes`/`stopAllNotes`/`isActive`/`activate`/`triggerChord`) | `App.js:26` | was counted in the ~115 below; now reached via `getChannel('synth')` (`src/audio/dispatch.js`) at every keyboard/mouse/programmatic call site (`index.js`, `frets.js`, `MiniPiano.js`, `progressionBuilder.js`'s `triggerChordProgression`) | **Migrated, Phase 2b (2026-08-01).** |
+| `window.polySynthRef` (playback surface: `playNotes`/`stopNotes`/`stopAllNotes`/`isActive`/`activate`/`triggerChord`) | `App.js:26` | was counted in the ~115 below; now reached via `getChannel('synth')` (`src/audio/dispatch.js`) at every keyboard/mouse/programmatic call site (`index.js`, `src/fretboard/index.js`, `MiniPiano.js`, `progressionBuilder.js`'s `triggerChordProgression`) | **Migrated, Phase 2b (2026-08-01).** |
 | `window.polySynthRef` (progression-sequencer-control surface: `getProgressionSequencerState`/`toggleProgressionSequencer`/`setProgressionData`/`setProgressionRate`/`setProgressionDuration`/`updateProgressionSettings`) | `App.js:26` | ~40, all in `progressionBuilder.js` | **Still live.** Not note dispatch - see §3.1. Migrates once `progressionBuilder.js` has a real module boundary (Phase 4). |
 | `window.polySynthRef` (microtonal surface: `getPitchValues`/`setPitchValues`/`resetMicrotonalPitches`, bundled with a few playback calls in one shared helper) | `App.js:26` | 2 (`IntervalPractice.jsx`'s `getPolySynthRef()`) | **Still live** — see §3.1 for why this one helper wasn't split. |
 | `window.polySynthEnabled` | `App.js:29` | was small; the `index.js`/`progressionBuilder.js`(click-gate)/`MiniPiano.js` reads that gated *playback* now read `isChannelEnabled('synth')` instead | **Migrated, Phase 2b**, except `IntervalPractice.jsx`'s bundled helper (still live, same reason as above). |
-| `window.updateFretboardsForScaleChange` | `frets.js:6920` | 17 (1 write + call in `frets.js`, 16 guarded read/call sites in `scaleGenerator.js:2219-2424`) — verified exactly matches `REFACTOR_PLAN.md`'s count | Phase 5 step 3, or a plain import once `frets.js`/`scaleGenerator.js` don't need load-order independence |
+| `window.updateFretboardsForScaleChange` | `frets.js:6920` (pre-Phase-3 baseline; now `src/fretboard/index.js`) | 17 (1 write + call, now in `src/fretboard/index.js`; 16 guarded read/call sites in `scaleGenerator.js:2219-2424`) — verified exactly matches `REFACTOR_PLAN.md`'s count | Phase 5 step 3, or a plain import once `src/fretboard/index.js`/`scaleGenerator.js` don't need load-order independence |
 
 ### 5.2 Live, lower-traffic — remaining Phase 5 work
 
@@ -290,20 +291,20 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/theory/` *(Phase 2)* | Note names, intervals, scale/chord data, roman numeral parsing. No DOM, with two documented exceptions below. | nothing app-specific, except `roman.js`'s one deliberate exception | everything else may import it |
 | `src/audio/` *(Phase 2b landed 2026-08-01: `context.js`/`bus.js`/`dispatch.js`; `clock.js`/`scheduler.js` belong to `SESSION_MODE_FEASIBILITY.md` Stage 2's Timing Grid, not a `REFACTOR_PLAN.md` phase)* | The shared `AudioContext`, master bus, note-event/channel registry dispatch. | nothing app-specific today | UI modules should depend on it, not the reverse |
 | `src/nodes/` | Framework-free Web Audio node wrappers (`Gain`, `Filter`, `Distortion`, …), a shared `.getNode()`/`.connect()` interface. | nothing app-specific | — |
-| `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` when Phase 3 splits `frets.js` — noted explicitly in `REFACTOR_PLAN.md` Phase 3 |
+| `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` — `REFACTOR_PLAN.md` Phase 3 called this out explicitly, and Phase 3's completed `src/fretboard/` split kept them where they were |
 | `src/fretboard/state.js` *(Phase 3, in progress, landed 2026-08-01)* | The ~28 module-level `let`s `frets.js` used to hold directly - Scale Position Grid row anchors/tuning + its persisted display settings, the fretboard instance registry, chord/display state, chord-fingering tab state, and the scale-change debounce timestamps - plus `refreshScalePositionTuning()` and `persistScalePositionGridSettings()`. Exported as one mutable object, `fretboardState`, not bare `let`s - see §6.3 for why. | `theory/notation`, `tuning` | everything that used to read/write these as bare identifiers now imports `fretboardState` instead |
 | `src/fretboard/geometry.js` *(Phase 3, in progress, landed 2026-08-01)* | Pure fret-position and note-at-position math: `calculateFretPositions`, `calculateFretPosition`, `calculateNote`, `extractNoteName`, `extractOctave`, `getNoteAt`, `findNotePositions`. No DOM, no class instance - takes plain data (tuning array, fret count, fret-position table) in, plain data out. The `Fretboard` class keeps same-named methods that delegate to these (e.g. `calculateNote(a, b) { return geometryCalculateNote(a, b); }`), so its public API is unchanged. | `theory/notation` | — |
 | `src/fretboard/markers.js` *(Phase 3, in progress, landed 2026-08-01)* | `createNoteShapeMarker` - builds one detached SVG shape element (circle/square/diamond/triangle/pentagon/hexagon/star/plus/cross) for a Scale Position Grid dot. Touches the DOM (`document.createElementNS`) but no app state - not framework-free the way `geometry.js` is, just state-free. | nothing app-specific | — |
 | `src/fretboard/patterns.js` *(Phase 3, in progress, landed 2026-08-01)* | CAGED chord-pattern matching and generic fingering-shape scoring: `calculateChordPatternPositions`, `findChordPatternMatches`, `findOptimalChordShape`. Takes tuning/fretCount as parameters instead of reading `this.*`; calls `geometry.js`'s functions directly. Not framework-free - depends on `chordPatterns.js`'s canned shape library and `tuning.js`'s `isStandardGuitarTuning`. The `Fretboard` class keeps same-named delegate methods, matching the Phase 0 characterization tests that call them as instance methods. | `chordPatterns.js`, `tuning.js`, `theory/notation`, `src/fretboard/geometry.js` | — |
-| `src/fretboard/Fretboard.js` *(Phase 3, in progress, landed 2026-08-01)* | The `Fretboard` class itself - DOM rendering (neck/fret grid, note/scale/chord marking, subscale boxes, chord-shape lines, CAGED/fingering display) for one fretboard instance. Also owns `GUITAR_TUNING`/`FRET_COUNT` (constructor defaults), `SCALE_COLORS`/`DEFAULT_COLORS` (marker coloring) and `addInteractiveEvent` (a generic DOM helper with no better home yet) - `frets.js` imports the first three plus the helper back for its own remaining UI code. | theory, `chordFingering`/`chordPatterns`, `tuning.js`, `src/fretboard/state.js`, `geometry.js`, `patterns.js` | must not import `frets.js` (would be circular - `frets.js` imports `Fretboard` from here) |
+| `src/fretboard/Fretboard.js` *(Phase 3, landed 2026-08-01)* | The `Fretboard` class itself - DOM rendering (neck/fret grid, note/scale/chord marking, subscale boxes, chord-shape lines, CAGED/fingering display) for one fretboard instance. Also owns `GUITAR_TUNING`/`FRET_COUNT` (constructor defaults), `SCALE_COLORS`/`DEFAULT_COLORS` (marker coloring) and `addInteractiveEvent` (a generic DOM helper with no better home yet) - `./index.js` imports `GUITAR_TUNING`/`SCALE_COLORS` back for its own glue code, `ui/scalePositionGrid.js` imports `FRET_COUNT`, and `ui/controls.js`/`ui/chordGrid.js` import `addInteractiveEvent`. | theory, `chordFingering`/`chordPatterns`, `tuning.js`, `src/fretboard/state.js`, `geometry.js`, `patterns.js` | must not import `./index.js` (would be circular - `index.js` imports `Fretboard` from here) |
 | `src/fretboard/ui/controls.js` *(Phase 3, in progress, landed 2026-08-01)* | The top bar (title + instrument/tuning picker), the tabbed-panel shell, the hotkey footer, and `createFretboardControls` - the orchestrator that builds the "Other Controls" panel and assembles all six tabs (Scale Information / Chord Progression / Scale Position Grid / Scale Selection / Other Controls / Synthesizer). Called once, from `initializeFretboard()` in `frets.js`. | `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), `src/fretboard/ui/chordGrid`, `src/fretboard/ui/scalePositionGrid`, `scales.js`, `scaleGenerator.js`, `tuning.js`, `progressionBuilder.js`, and (cross-import, see §6.8) several glue functions from `frets.js` | — (see §6.8 for the two-way relationship with `frets.js`) |
 | `src/fretboard/ui/chordGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Chord Pattern Grid (12-note x 12-chord-type button table, color coded for scale compatibility) and the chord-fingering-shape pipeline it shares with the Roman-numeral chord display: matching `chordPatterns.js` shapes to a chord, a "best-effort" fallback grip, the position-picker tab bar, and the scale/chord-interval math (`getSemitoneFromReference`, `getScaleIntervalEntries`, `deriveChordSuffix`, `getScaleDescriptor`) that both this grid and `src/fretboard/ui/scalePositionGrid.js` depend on. See §6.9. | theory, `scales.js`, `scaleGenerator.js`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), and (cross-import, see §6.9) glue functions from `frets.js` | must not import `src/fretboard/ui/scalePositionGrid.js` (the dependency runs one way - see §6.10) |
 | `src/fretboard/ui/scalePositionGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Scale Position Grid tab: one movable mini-fretboard pattern per (root string x scale degree) cell, the Focus Selector visibility matrix, and the per-cell rendering options (pattern/dot size, fret-label mode, note shapes, chord-name headers, etc.) on `fretboardState`. See §6.10. | theory, `scaleGenerator.js`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`FRET_COUNT`), `src/fretboard/markers`, `src/fretboard/ui/chordGrid` | — |
-| `frets.js` (→ `src/fretboard/` in Phase 3) | The glue functions called from `index.js`/`chords.js`/`progressionBuilder.js` and from `src/fretboard/ui/controls.js`'s/`chordGrid.js`'s button handlers - `initializeFretboard`, chord display/search/pattern functions, `playChordVoicing`/`getChordVoicingNotes`, etc. State, geometry math, marker drawing, pattern matching, the class itself, the top bar/tab-shell/"Other Controls" panel, the chord grid, and the scale position grid moved to `src/fretboard/state.js`/`geometry.js`/`markers.js`/`patterns.js`/`Fretboard.js`/`ui/controls.js`/`ui/chordGrid.js`/`ui/scalePositionGrid.js` (see above); what's left is glue plus the six-line `CHORD_TYPE_TO_PATTERN_TYPE` map, pending only the barrel. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), all of `src/fretboard/*` above, `src/fretboard/ui/controls.js` (for `createFretboardControls`), `src/fretboard/ui/chordGrid.js` (for the fingering-shape pipeline the glue functions call) | — |
+| `src/fretboard/index.js` *(Phase 3, done 2026-08-01 - `frets.js` deleted)* | The public barrel for `src/fretboard/`: `initializeFretboard`, chord display/search/pattern glue functions, `playChordVoicing`/`getChordVoicingNotes`, the `CHORD_TYPE_TO_PATTERN_TYPE` map, and the re-exports that make this folder's surface a single import. Everything else that used to live in `src/frets.js` moved to `state.js`/`geometry.js`/`markers.js`/`patterns.js`/`Fretboard.js`/`ui/controls.js`/`ui/chordGrid.js`/`ui/scalePositionGrid.js` across this phase's earlier steps (see §6.3-6.10); this file is what remained plus the barrel role. See §6.11. | theory, `chordFingering`/`chordPatterns`, `../chords.js`, `../progressionBuilder.js` (for the Chord Progression tab content), all of `src/fretboard/*` above, `./ui/controls.js` (for `createFretboardControls`), `./ui/chordGrid.js` (for the fingering-shape pipeline the glue functions call) | — (two-way with `../chords.js` and with `./ui/controls.js`/`./ui/chordGrid.js` - see §6.11) |
 | `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
-| `index.js` | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `frets.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
+| `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
 | `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`/`window.polySynthEnabled` and registers the `'synth'` channel with `src/audio/dispatch.js` (Phase 2b). | `src/audio/dispatch.js` | — |
 
 ### 6.1 `src/theory/`, as it actually landed (Phase 2, 2026-08-01)
@@ -842,6 +843,94 @@ glue - the entry points other files import (`initializeFretboard`,
 button-handler-adjacent functions `controls.js` and `chordGrid.js`
 cross-import. What remains for Phase 3 is the barrel
 (`src/fretboard/index.js`) re-exporting today's public surface unchanged.
+
+### 6.11 `src/fretboard/index.js` — the barrel, and the end of `src/frets.js` (Phase 3, final step, 2026-08-01)
+
+`frets.js`'s remaining ~1,120 lines - by this point pure glue, per §6.10's
+closing note - moved to `src/fretboard/index.js` verbatim, save for import
+paths shifting one directory level deeper (`./theory/chords` →
+`../theory/chords`, `./fretboard/state` → `./state`, etc.). `src/frets.js`
+was then deleted rather than kept as a re-export shim: the plan's own
+sketch names `src/fretboard/index.js` as the eighth and final Phase 3
+target, not a ninth file alongside a retained `frets.js`, and a shim would
+have meant two files owning one export list forever - the thing this whole
+phase was undoing.
+
+**Three external call sites changed, exactly as expected.** `REFACTOR_PLAN.md`
+Phase 3's framing - "no import site outside the folder changes" - describes
+why steps 1-8 could each land as an independently reviewable pure move
+(frets.js's own export list stayed stable throughout, so nothing outside it
+ever needed touching); it was never a claim that the final barrel step
+itself would avoid updating `frets.js`'s own importers, since retiring
+`frets.js` is the one point where that has to happen. All three - confirmed
+by grepping `from '../frets'`/`from './frets'` across `src/` before this
+step - were updated to `from './fretboard'`: `src/chords.js`,
+`src/index.js` (the app entry point, not this barrel - the two are
+same-named but different files, `src/index.js` vs `src/fretboard/index.js`),
+and the Phase 0 characterization test file, which was also renamed from
+`frets.test.js` to `fretboard.test.js` since the file it was named after no
+longer exists.
+
+**Two internal cross-imports repointed too.** `ui/controls.js` and
+`ui/chordGrid.js` (§6.8, §6.9) imported their glue functions
+(`showChordPatternOnFretboard`, `restoreFretboardState`,
+`updateChordButtonStyles`, `updateChordInfoDisplay`, and for `chordGrid.js`
+also `getFretboard`/`playChordVoicing`/`getChordVoicingNotes`) from
+`'../../frets'`; both now import from `'..'` (the parent directory's
+`index.js`, i.e. this barrel). The two-way import shape these files have
+with the barrel is unchanged from the two-way shape they had with
+`frets.js` - same reasoning applies (every cross-import is only touched
+inside a function body invoked later, never at module top-level) - only the
+target file's name changed. `ui/scalePositionGrid.js` (§6.10) never
+imported from `frets.js` directly (it only depends on `chordGrid.js`), so
+it needed no change here.
+
+**Historical `Lifted from src/frets.js` provenance comments were left
+alone**, in every module Phase 3 already extracted (`state.js`,
+`geometry.js`, `markers.js`, `patterns.js`, `Fretboard.js`,
+`ui/scalePositionGrid.js`) - they're accurate statements about where that
+code came from, not claims about where it lives now, so deleting the file
+they name doesn't make them wrong. A handful of comments describing
+*current* relationships (not historical provenance) were updated where
+they'd otherwise mislead: `state.js`'s "shared by frets.js and..." header,
+its `mainFretboard` field comment, `geometry.js`'s
+`getIntervalLabelFromRoot` doc comment, `Fretboard.js`'s header paragraph
+about who imports `GUITAR_TUNING`/`FRET_COUNT`/`SCALE_COLORS`/
+`addInteractiveEvent` back, and `markers.js`'s doc comment naming where
+`createScalePositionMiniFretboard` lives. A few similar present-tense
+mentions of `frets.js` in files this phase never touched
+(`App.js`, `MiniPiano.js`, `progressionBuilder.js`, `theory/intervals.js`,
+`theory/notes.js`, `tuning.js`) were left as-is - some predate this phase
+entirely (e.g. `MiniPiano.js`'s comment already referred to
+`getIntervalColor` as if still in `frets.js`, when Phase 2 had moved it to
+`theory/intervals.js` months of phase-time earlier), and fixing them isn't
+this step's job any more than step 6 rewriting `chords.js`'s pre-existing
+quirks was its job. This document's own present-tense sections (§1, §3, §5,
+the module ownership table) were updated instead, since keeping *this* file
+accurate is what §3 of `REFACTOR_PLAN.md` requires.
+
+Verified via `npm test` (28/28, including `fretboard.test.js` importing
+correctly under its new name and path), plain `npm run build` (total
+warning count unchanged at 219; `src/fretboard/index.js` carries exactly
+the two pre-existing `frets.js` warnings that moved with the glue code
+verbatim - `filterEnharmonicMatches`/`tuningToSlashFormat` unused imports -
+zero new warnings anywhere, including in `chords.js`/`src/index.js` after
+their import-path change), and the `run-app` skill: all six tabs (Scale
+Information, Chord Progression, Scale Position Grid, Scale Selection, Other
+Controls, Synthesizer) load with zero console errors, including the
+Synthesizer tab specifically - the one place `ARCHITECTURE.md` §1 and
+`index.js`'s own comments flag a documented historical race between
+`initializeFretboard()`'s re-run and React's portal mount into
+`#fretNotPlaceholder`, so confirming it still mounts cleanly after this
+much import-graph surgery was the highest-value single check available.
+
+**Phase 3 is complete.** `src/frets.js` (originally 6,974 lines, 5,837 live)
+no longer exists; its contents are `src/fretboard/state.js`, `geometry.js`,
+`markers.js`, `patterns.js`, `Fretboard.js`, `ui/controls.js`,
+`ui/chordGrid.js`, `ui/scalePositionGrid.js`, and `index.js` (this barrel).
+Every external consumer imports the folder as a unit via `from
+'./fretboard'`. Phase 4 (splitting `progressionBuilder.js` and
+`scaleGenerator.js`/`scales.js`) is next per `REFACTOR_PLAN.md`.
 
 ---
 

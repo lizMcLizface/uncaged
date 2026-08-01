@@ -5,18 +5,19 @@
 // position-picker tab bar for choosing between them. Also home to the
 // scale/chord-interval math (getSemitoneFromReference,
 // getScaleIntervalEntries, deriveChordSuffix, getScaleDescriptor) used by
-// both this grid and, for now, the not-yet-extracted Scale Position Grid
-// code still in frets.js.
+// both this grid and src/fretboard/ui/scalePositionGrid.js.
 //
 // getFretboard, showChordPatternOnFretboard, restoreFretboardState,
-// playChordVoicing and getChordVoicingNotes are glue that stays in frets.js
-// (called from index.js/chords.js/progressionBuilder.js too, not just from
-// this grid) - imported back from there. This is the same safe two-way
-// import shape as src/fretboard/ui/controls.js <-> frets.js (see
-// ARCHITECTURE.md §6.8): every cross-import here is only touched inside a
-// function body invoked later, never at module top-level.
+// playChordVoicing and getChordVoicingNotes are glue that stays in
+// ../index.js (the src/fretboard/ barrel - called from
+// index.js/chords.js/progressionBuilder.js too, not just from this grid) -
+// imported back from there. This is the same safe two-way import shape as
+// src/fretboard/ui/controls.js <-> ../index.js (see ARCHITECTURE.md §6.8):
+// every cross-import here is only touched inside a function body invoked
+// later, never at module top-level.
 //
-// Lifted from src/frets.js as part of REFACTOR_PLAN.md Phase 3, step 7/8.
+// Lifted from src/frets.js as part of REFACTOR_PLAN.md Phase 3, step 7/8
+// (frets.js itself folded into ../index.js as the barrel in step 8/8).
 
 import { processChord } from '../../theory/chords';
 import { HeptatonicScales, getScaleNotes } from '../../scales';
@@ -39,7 +40,7 @@ import {
     restoreFretboardState,
     playChordVoicing,
     getChordVoicingNotes
-} from '../../frets';
+} from '..';
 
 export const SEMITONE_TO_SCALE_INTERVAL_LABEL = ['R', 'm2', 'M2', 'm3', 'M3', 'A3', 'd5', 'P5', 'm6', 'M6', 'm7', 'M7'];
 const MODE_DISPLAY_NAMES = ['Ionian', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian', 'Aeolian', 'Locrian'];

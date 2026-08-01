@@ -1,5 +1,5 @@
-// Shared mutable state for the fretboard UI (frets.js and, as Phase 3
-// continues, src/fretboard/ui/*). Exported as a single object rather than
+// Shared mutable state for the fretboard UI (src/fretboard/index.js and
+// src/fretboard/ui/*). Exported as a single object rather than
 // individual `let` bindings because ES module named exports are read-only
 // live bindings - importers cannot reassign them, only property-mutate an
 // exported object. Every module that used to read/write one of these as a
@@ -60,7 +60,7 @@ export const fretboardState = {
     lastScaleData: null,
 
     // The main fretboard instance, set once DOM is ready (see
-    // initializeFretboardWithScale() in frets.js).
+    // initializeFretboardWithScale() in src/fretboard/index.js).
     mainFretboard: null
 };
 

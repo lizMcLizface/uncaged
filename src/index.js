@@ -8,7 +8,7 @@ import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from '.
 import {createHeptatonicScaleTable, selectedRootNote, selectedScales, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, exclusiveMode, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scaleGenerator';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
 import {modifiers, keyToNote} from './keyboard';
-import {initializeFretboard, getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState} from './frets';
+import {initializeFretboard, getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState} from './fretboard';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { getChannel, isChannelEnabled } from './audio/dispatch';
 
@@ -252,8 +252,8 @@ function initializePolySynthMouse() {
 
 // Wire up mouse input for piano keys once PolySynth becomes available.
 // (Fretboard/tabs/progression-builder/scale-table init all happen once,
-// on their own, via frets.js's own DOMContentLoaded/setTimeout bootstrap -
-// calling initializeFretboard() again here used to race with that, randomly
+// on their own, via src/fretboard/index.js's own DOMContentLoaded/setTimeout
+// bootstrap - calling initializeFretboard() again here used to race with that, randomly
 // tearing down #fretNotPlaceholder - including the Synthesizer tab's
 // PolySynth portal target - out from under React after it had already
 // mounted into it.)

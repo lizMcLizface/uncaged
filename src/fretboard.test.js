@@ -1,4 +1,4 @@
-import { Fretboard } from './frets';
+import { Fretboard } from './fretboard';
 import { getChordPatterns } from './chordPatterns';
 
 // Characterization tests written ahead of REFACTOR_PLAN.md Phase 3, which

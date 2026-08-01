@@ -114,7 +114,7 @@ export function getNoteAt(tuning, fretCount, stringIndex, fret) {
 /**
  * Interval label (from src/theory/intervals.js's INTERVAL_LABELS) between
  * a root note and a target note, ignoring octave. Used by both the
- * Fretboard class and frets.js's chord-grid/scale-info UI code, so it
+ * Fretboard class and src/fretboard/index.js's chord-display glue, so it
  * lives here rather than in either.
  */
 export function getIntervalLabelFromRoot(rootNote, targetNote) {

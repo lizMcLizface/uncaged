@@ -1,29 +1,49 @@
-import {processChord, generateSyntheticChords} from './theory/chords';
-import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, translateNotes, stripOctave} from './scales';
-import {createHeptatonicScaleTable, createQuickScalePicker, selectedRootNote, selectedScales, getPrimaryScale, getPrimaryRootNote} from './scaleGenerator';
-import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
-import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from './midi';
+// Public barrel for src/fretboard/. This is what src/frets.js was reduced
+// to across REFACTOR_PLAN.md Phase 3's extraction steps: state.js,
+// geometry.js, markers.js, patterns.js, Fretboard.js (the class),
+// ui/controls.js, ui/chordGrid.js and ui/scalePositionGrid.js all moved out
+// (see ARCHITECTURE.md §6.3-6.10); what's left here is pure glue -
+// `initializeFretboard()` and the console-facing search/chord-pattern
+// helpers - plus the re-exports that make this folder's public surface a
+// single import.
+//
+// External callers (src/index.js, src/chords.js, src/frets.test.js) import
+// from here (`from './fretboard'`) instead of the now-deleted
+// src/frets.js. The export surface below is unchanged from what frets.js
+// exported - this step is a pure move, not a public-API change.
+//
+// Two-way imports with src/chords.js and with ./ui/controls.js /
+// ./ui/chordGrid.js are pre-existing (frets.js had the same shape before
+// this move) and safe for the same reason noted throughout Phase 3: every
+// cross-import is only read inside a function body invoked later, never at
+// module top-level.
+
+import {processChord, generateSyntheticChords} from '../theory/chords';
+import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, translateNotes, stripOctave} from '../scales';
+import {createHeptatonicScaleTable, createQuickScalePicker, selectedRootNote, selectedScales, getPrimaryScale, getPrimaryRootNote} from '../scaleGenerator';
+import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from '../chords';
+import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from '../midi';
 import {
     translateNotes as notationTranslateNotes,
     stripOctave as notationStripOctave,
     filterEnharmonicMatches
-} from './theory/notation';
-import { CHROMATIC } from './theory/notes';
-import { getChannel } from './audio/dispatch';
-import {getChordPatterns, getPatternsByChordType} from './chordPatterns';
+} from '../theory/notation';
+import { CHROMATIC } from '../theory/notes';
+import { getChannel } from '../audio/dispatch';
+import {getChordPatterns, getPatternsByChordType} from '../chordPatterns';
 import {
     getActiveConfig as getActiveInstrumentConfig,
     subscribe as subscribeToInstrumentChanges,
     toSlashFormat as tuningToSlashFormat
-} from './tuning';
-import { fretboardState, refreshScalePositionTuning } from './fretboard/state';
-import { getIntervalLabelFromRoot } from './fretboard/geometry';
+} from '../tuning';
+import { fretboardState, refreshScalePositionTuning } from './state';
+import { getIntervalLabelFromRoot } from './geometry';
 import {
     Fretboard,
     GUITAR_TUNING,
     SCALE_COLORS
-} from './fretboard/Fretboard';
-import { createFretboardControls } from './fretboard/ui/controls';
+} from './Fretboard';
+import { createFretboardControls } from './ui/controls';
 import {
     buildIntervalLabelMap,
     buildFingeringShapes,
@@ -32,8 +52,8 @@ import {
     clearFingeringTabs,
     analyzeChordScaleCompatibility,
     updateChordGridColors
-} from './fretboard/ui/chordGrid';
-import { renderScalePositionGrid } from './fretboard/ui/scalePositionGrid';
+} from './ui/chordGrid';
+import { renderScalePositionGrid } from './ui/scalePositionGrid';
 
 // Map chord-suffix names (as used by processChord/the chord grid) to the
 // pattern-type keys known-shape lookups in chordPatterns.js are keyed by.
@@ -51,33 +71,6 @@ const CHORD_TYPE_TO_PATTERN_TYPE = {
     '5': 'power',
     'm7b5': 'm7b5'
 };
-
-// Scale Position Grid row anchors/tuning, its persisted display settings,
-// the fretboard instance registry, chord/display state and the scale-change
-// debounce timestamps all live in src/fretboard/state.js (REFACTOR_PLAN.md
-// Phase 3) as `fretboardState`, imported above alongside
-// refreshScalePositionTuning(). SCALE_POSITION_DEGREES,
-// MINI_SCALE_FRET_COUNT, GENERIC_VISIBLE_FRET_START,
-// GENERIC_ROOT_DISPLAY_COLUMN, SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET,
-// SCALE_POSITION_STACK_SIZES and NOTE_SHAPE_TYPES - the config data for the
-// grid these fed - moved with it to src/fretboard/ui/scalePositionGrid.js.
-
-// SEMITONE_TO_SCALE_INTERVAL_LABEL and MODE_DISPLAY_NAMES now live in
-// src/fretboard/ui/chordGrid.js (REFACTOR_PLAN.md Phase 3) - imported above.
-
-// The Fretboard class, its default tuning/fret-count/marker-color
-// constants, and the addInteractiveEvent DOM helper now live in
-// src/fretboard/Fretboard.js (REFACTOR_PLAN.md Phase 3) - imported above.
-
-// Fretboard instance registry, chord/display state and chord-fingering tab
-// state now live in src/fretboard/state.js as `fretboardState` (imported
-// above) - REFACTOR_PLAN.md Phase 3.
-
-// normalizeIntervalLabel now lives in src/fretboard/ui/chordGrid.js
-// (REFACTOR_PLAN.md Phase 3), private to that module.
-
-// getIntervalLabelFromRoot now lives in src/fretboard/geometry.js (imported
-// above) - needed by both this file and the Fretboard class.
 
 /**
  * Create a new fretboard instance
@@ -104,7 +97,7 @@ function initializeFretboard() {
         showStringNames: false,
         tuning: getActiveInstrumentConfig().tuning
     });
-    
+
     // Create control panel
     createFretboardControls(mainFretboard);
 
@@ -155,31 +148,6 @@ function initializeScalesInFretboard() {
     }
 }
 
-// createTabbedPanel, attachHotkeyFooter, createInstrumentTuningPicker,
-// createTopBar and createFretboardControls (the panel/tab-assembly
-// orchestrator) now live in src/fretboard/ui/controls.js (REFACTOR_PLAN.md
-// Phase 3, step 6/8) - imported below.
-
-// analyzeChordScaleCompatibility, createChordButtonGrid,
-// getCurrentScaleNoteNames, getScaleIntervalEntries, deriveChordSuffix,
-// buildDegreeHeaderLabel, getScaleDescriptor and getSemitoneFromReference
-// now live in src/fretboard/ui/chordGrid.js (REFACTOR_PLAN.md Phase 3) -
-// imported above.
-
-// createNoteShapeMarker now lives in src/fretboard/markers.js, used only by
-// the scale position grid code (src/fretboard/ui/scalePositionGrid.js,
-// REFACTOR_PLAN.md Phase 3) - no longer imported here.
-
-// findRowRootAbsoluteFret, getAbsoluteFretForDisplayColumn, shadeColor,
-// getContrastTextColor, createScalePositionMiniFretboard, the cell-
-// visibility/toggle helpers, the Focus Selector matrix builders,
-// renderScalePositionGrid and createScalePositionGrid now live in
-// src/fretboard/ui/scalePositionGrid.js (REFACTOR_PLAN.md Phase 3) -
-// imported above.
-
-// updateChordGridColors now lives in src/fretboard/ui/chordGrid.js
-// (REFACTOR_PLAN.md Phase 3) - imported above.
-
 /**
  * Force refresh of fretboard and chord grid (useful for manual calls)
  */
@@ -187,14 +155,14 @@ function refreshFretboardDisplay() {
     try {
         const primaryScale = getPrimaryScale();
         const rootNote = getPrimaryRootNote();
-        
+
         if (primaryScale && rootNote && HeptatonicScales && Object.keys(HeptatonicScales).length > 0) {
             console.log('Manually refreshing fretboard display');
-            
+
             // Update chord grid colors first
             updateChordGridColors();
             renderScalePositionGrid();
-            
+
             // Then restore the appropriate fretboard display
             if (fretboardState.currentChordGridSelection) {
                 // Re-apply chord grid selection with new scale context
@@ -216,11 +184,6 @@ function refreshFretboardDisplay() {
         console.warn('Error refreshing fretboard display:', error);
     }
 }
-
-// buildIntervalLabelMap, buildFingeringShapes, getFingeringMarkerLabel,
-// renderFingeringShape, clearFingeringTabs and renderFingeringTabs now live
-// in src/fretboard/ui/chordGrid.js (REFACTOR_PLAN.md Phase 3) - imported
-// above.
 
 /**
  * Resolve the actual sounding pitches (real octave, per string) for a
@@ -286,11 +249,11 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
             fretboardState.currentDisplayedChord = null;
             updateChordButtonStyles();
         }
-        
+
         // Get current scale information
         const primaryScale = getPrimaryScale();
         const scaleRootNote = getPrimaryRootNote();
-        
+
         if (primaryScale && scaleRootNote) {
             const [family] = primaryScale.split('-');
             // Guard against accessing HeptatonicScales before it's initialized
@@ -364,7 +327,7 @@ function restoreFretboardState() {
         showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);
         return;
     }
-    
+
     // Try to restore the previous Roman numeral state
     if (fretboardState.currentDisplayedChord === null) {
         // Clear fretboard and chord info display
@@ -390,16 +353,16 @@ function restoreFretboardState() {
 function showChordOnFretboard(chordIndex, isTemporary = false) {
     const fretboard = getFretboard('fretNotPlaceholder');
     if (!fretboard) return;
-    
+
     try {
         const primaryScale = getPrimaryScale();
         const rootNote = getPrimaryRootNote();
-        
+
         if (!primaryScale || !rootNote) {
             console.warn('No primary scale or root note available');
             return;
         }
-        
+
         // Get scale intervals
         const [family, mode] = primaryScale.split('-');
         // Guard against accessing HeptatonicScales before it's initialized
@@ -408,17 +371,17 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
             return;
         }
         const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
-        
+
         // Generate chords
         const chordLength = fretboardState.currentChordType === 'sevenths' ? 4 : 3;
         const syntheticChords = generateSyntheticChords({ intervals }, chordLength, rootNote);
-        
+
         if (chordIndex >= 0 && chordIndex < syntheticChords.length) {
             const chord = syntheticChords[chordIndex];
             const romanNumerals = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
             const chordName = `${romanNumerals[chordIndex]} (${fretboardState.currentChordType})`;
             console.log(`Displaying chord: ${chordName} (${chord.join(', ')})`);
-            
+
             // Update chord info display
             updateChordInfoDisplay(chordName, chord);
 
@@ -453,16 +416,16 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
 function showScaleOnFretboard(isTemporary = false) {
     const fretboard = getFretboard('fretNotPlaceholder');
     if (!fretboard) return;
-    
+
     try {
         const primaryScale = getPrimaryScale();
         const rootNote = getPrimaryRootNote();
-        
+
         if (!primaryScale || !rootNote) {
             console.warn('No primary scale or root note available');
             return;
         }
-        
+
         const [family, mode] = primaryScale.split('-');
         // Guard against accessing HeptatonicScales before it's initialized
         if (!HeptatonicScales || !HeptatonicScales[family]) {
@@ -471,11 +434,11 @@ function showScaleOnFretboard(isTemporary = false) {
         }
         const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
         const scaleNotes = getScaleNotes(rootNote, intervals);
-        
+
         // Update chord info display to show scale information
         const scaleName = `${rootNote} ${family} (Mode ${mode})`;
         updateChordInfoDisplay(scaleName, scaleNotes);
-        
+
         // Clear markers and lines first to prevent overlap
         fretboard.clearMarkers();
         fretboard.clearChordLines();
@@ -502,16 +465,16 @@ function updateChordInfoDisplay(chordName = null, chordNotes = null) {
     const chordInfoContainer = document.getElementById('chord-info-display');
     const chordNameDisplay = document.getElementById('chord-name-display');
     const chordNotesDisplay = document.getElementById('chord-notes-display');
-    
+
     if (!chordInfoContainer || !chordNameDisplay || !chordNotesDisplay) {
         return; // Elements not found, probably not initialized yet
     }
-    
+
     if (chordName && chordNotes) {
         // Translate notes to proper notation if scale context is available
         const translatedNotes = notationTranslateNotes(chordNotes);
         const displayNotes = translatedNotes.map(note => notationStripOctave(note));
-        
+
         // Log for debugging the notation system
         if (JSON.stringify(chordNotes) !== JSON.stringify(displayNotes)) {
             console.log('🎵 Notation Translation:', {
@@ -520,7 +483,7 @@ function updateChordInfoDisplay(chordName = null, chordNotes = null) {
                 chord: chordName
             });
         }
-        
+
         // Show chord information with properly notated notes
         chordNameDisplay.textContent = chordName;
         chordNotesDisplay.textContent = `Notes: ${displayNotes.join(' - ')}`;
@@ -557,17 +520,17 @@ function updateChordButtonStyles() {
 function updateFretboardsForScaleChange(scaleData) {
     // Skip if no fretboards are showing scales or chords, or if already updating
     if ((fretboardState.fretboardsShowingScale.size === 0 && fretboardState.fretboardsShowingChords.size === 0) || fretboardState.isUpdatingFretboards) return;
-    
+
     try {
         fretboardState.isUpdatingFretboards = true;
-        
+
         const { primaryScale, rootNote, scaleNotes } = scaleData;
-        
+
         if (!primaryScale || !rootNote || !scaleNotes) {
             console.warn('Invalid scale data for fretboard update');
             return;
         }
-        
+
         console.log(`Updating fretboards for scale change: ${rootNote} ${primaryScale}`);
 
         console.log('Scale notes:', scaleNotes);
@@ -583,7 +546,7 @@ function updateFretboardsForScaleChange(scaleData) {
                 });
             }
         });
-        
+
         // Update all fretboards that are showing chords
         fretboardState.fretboardsShowingChords.forEach(containerId => {
             const fretboard = fretboardState.fretboardInstances.get(containerId);
@@ -597,7 +560,7 @@ function updateFretboardsForScaleChange(scaleData) {
                     });
                     return;
                 }
-                
+
                 // Re-generate and display the current chord with new scale
                 try {
                     if (fretboardState.currentDisplayedChord === 0) {
@@ -614,7 +577,7 @@ function updateFretboardsForScaleChange(scaleData) {
                         const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
                         const chordLength = fretboardState.currentChordType === 'sevenths' ? 4 : 3;
                         const syntheticChords = generateSyntheticChords({ intervals }, chordLength, rootNote);
-                        
+
                         const chordIndex = fretboardState.currentDisplayedChord - 1;
                         if (chordIndex >= 0 && chordIndex < syntheticChords.length) {
                             // Use the updated showChordOnFretboard function which includes pattern matching
@@ -640,25 +603,25 @@ window.addEventListener('scaleChanged', (event) => {
     if (now - fretboardState.lastScaleUpdateTime < 200) { // Increased debounce to 200ms
         return;
     }
-    
+
     // Check if the scale data has actually changed
     const currentScaleData = event.detail;
     const scaleKey = `${currentScaleData.rootNote}-${currentScaleData.primaryScale}`;
     const lastScaleKey = fretboardState.lastScaleData ? `${fretboardState.lastScaleData.rootNote}-${fretboardState.lastScaleData.primaryScale}` : null;
-    
+
     if (scaleKey === lastScaleKey) {
         // Scale hasn't actually changed, skip update
         return;
     }
-    
+
     fretboardState.lastScaleUpdateTime = now;
     fretboardState.lastScaleData = currentScaleData;
     console.log('Scale changed:', currentScaleData);
-    
+
     updateFretboardsForScaleChange(event.detail);
     updateChordGridColors(); // Update chord grid colors when scale changes
     renderScalePositionGrid(); // Keep scale position mini-fretboards in sync with current scale
-    
+
     // If there's a current chord grid selection, re-apply it with the new scale context
     if (fretboardState.currentChordGridSelection) {
         showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);
@@ -704,10 +667,10 @@ function quickSearchAndMark(note, options = {}) {
         console.warn('Main fretboard not found');
         return;
     }
-    
+
     const results = fretboard.searchNote(note);
     console.log(`Found ${results.length} instances of "${note}":`, results);
-    
+
     if (results.length > 0) {
         fretboard.clearMarkers();
         const defaultOptions = {
@@ -718,7 +681,7 @@ function quickSearchAndMark(note, options = {}) {
             size: 24,
             useCustomStyle: true
         };
-        
+
         results.forEach(result => {
             fretboard.markFret(result.string, result.fret, {
                 ...defaultOptions,
@@ -727,7 +690,7 @@ function quickSearchAndMark(note, options = {}) {
             });
         });
     }
-    
+
     return results;
 }
 
@@ -754,24 +717,24 @@ function analyzeFretboardNotes(note = null) {
         console.warn('Main fretboard not found');
         return;
     }
-    
+
     if (note) {
         // Analyze specific note
         const results = fretboard.searchNote(note);
         console.group(`🎸 Analysis for note "${note}"`);
         console.log(`Total instances: ${results.length}`);
-        
+
         if (results.length > 0) {
             // Fret distribution
             const fretDist = {};
             results.forEach(r => fretDist[r.fret] = (fretDist[r.fret] || 0) + 1);
             console.log('Fret distribution:', fretDist);
-            
+
             // String distribution
             const stringDist = {};
             results.forEach(r => stringDist[`String ${r.string + 1}`] = (stringDist[`String ${r.string + 1}`] || 0) + 1);
             console.log('String distribution:', stringDist);
-            
+
             // Octave distribution
             const octaveDist = {};
             results.forEach(r => octaveDist[`Octave ${r.octave}`] = (octaveDist[`Octave ${r.octave}`] || 0) + 1);
@@ -784,13 +747,13 @@ function analyzeFretboardNotes(note = null) {
         console.group('🎸 Complete Fretboard Analysis');
         console.log(`Total unique notes: ${allNotes.length}`);
         console.log('Available notes:', allNotes);
-        
+
         const noteDistribution = {};
         allNotes.forEach(noteName => {
             const count = fretboard.searchNote(noteName).length;
             noteDistribution[noteName] = count;
         });
-        
+
         console.log('Note frequency distribution:');
         console.table(noteDistribution);
         console.groupEnd();
@@ -810,13 +773,13 @@ function createSubscaleBoxPattern(fretboard, patternType, startFret, options = {
         'three-string-run': { strings: [2, 4], frets: 3, label: 'Three String Run' },
         'full-neck': { strings: [0, 5], frets: 12, label: 'Full Neck' }
     };
-    
+
     const pattern = patterns[patternType];
     if (!pattern) {
         console.warn(`Unknown pattern type: ${patternType}`);
         return false;
     }
-    
+
     const endFret = Math.min(startFret + pattern.frets, 15);
     const mergedOptions = {
         label: pattern.label,
@@ -824,7 +787,7 @@ function createSubscaleBoxPattern(fretboard, patternType, startFret, options = {
         color: '#ff6b35',
         ...options
     };
-    
+
     fretboard.drawSubscaleBox(
         `${patternType}-${startFret}`,
         pattern.strings[0],
@@ -833,7 +796,7 @@ function createSubscaleBoxPattern(fretboard, patternType, startFret, options = {
         endFret,
         mergedOptions
     );
-    
+
     return true;
 }
 
@@ -881,11 +844,11 @@ function quickChordPattern(chordName, options = {}) {
         console.warn('Main fretboard not found');
         return;
     }
-    
+
     // Parse chord name and determine notes
     const parseChord = (name) => {
         const lowerName = name.toLowerCase();
-        
+
         // Extract root note (first character, potentially with # or b)
         let root = name.charAt(0).toUpperCase();
         let i = 1;
@@ -893,11 +856,11 @@ function quickChordPattern(chordName, options = {}) {
             root += name.charAt(i);
             i++;
         }
-        
+
         // Determine chord type
         let chordType = '';
         let notes = [];
-        
+
         if (lowerName.includes('major') || (!lowerName.includes('minor') && !lowerName.includes('7'))) {
             chordType = 'major';
             notes = [root, getThird(root, 'major'), getFifth(root)];
@@ -908,10 +871,10 @@ function quickChordPattern(chordName, options = {}) {
             chordType = 'dominant7';
             notes = [root, getThird(root, 'major'), getFifth(root), getSeventh(root, 'dominant')];
         }
-        
+
         return { root, chordType, notes };
     };
-    
+
     // Helper functions to calculate chord tones (simplified)
     const getThird = (root, type) => {
         const notes = CHROMATIC;
@@ -932,17 +895,17 @@ function quickChordPattern(chordName, options = {}) {
         const offset = type === 'dominant' ? 10 : 11;
         return notes[(rootIndex + offset) % 12];
     };
-    
+
     try {
         const { root, chordType, notes } = parseChord(chordName);
         console.log(`🎸 Displaying patterns for ${chordName}: ${notes.join(' - ')}`);
-        
+
         const matches = fretboard.displayChordWithPatterns(notes, root, {
             clearFirst: true,
             preferredPatterns: getPatternsByChordType(chordType),
             ...options
         });
-        
+
         console.log(`Found ${matches.length} pattern matches for ${chordName}`);
         return matches;
     } catch (error) {
@@ -980,13 +943,8 @@ export {
 
 // Not part of the public barrel above - exported only so
 // src/fretboard/ui/controls.js and src/fretboard/ui/chordGrid.js can
-// cross-import them (REFACTOR_PLAN.md Phase 3, steps 6/8-7/8). See the
-// circular-import note at the top of controls.js for why this is safe.
-// clearFingeringTabs/createChordButtonGrid/updateChordGridColors and
-// createScalePositionGrid/renderScalePositionGrid have both since made this
-// move - re-exported from ./fretboard/ui/chordGrid and
-// ./fretboard/ui/scalePositionGrid respectively instead of defined here -
-// this list is now down to the glue those two modules still need back.
+// cross-import them (REFACTOR_PLAN.md Phase 3). See the circular-import
+// note at the top of this file for why this is safe.
 export {
     showChordPatternOnFretboard,
     restoreFretboardState,
@@ -1006,7 +964,7 @@ function initializeFretboardWithScale() {
     try {
         fretboardState.mainFretboard = initializeFretboard();
         console.log('Fretboard initialized successfully');
-        
+
         // Force a scale visualization and chord grid color update after initialization
         // Use setTimeout to ensure all modules are fully loaded
         setTimeout(() => {
@@ -1015,7 +973,7 @@ function initializeFretboardWithScale() {
                 // Force show the scale if one is selected
                 const primaryScale = getPrimaryScale();
                 const rootNote = getPrimaryRootNote();
-                
+
                 if (primaryScale && rootNote) {
                     console.log('Refreshing fretboard display with current scale');
                     showScaleOnFretboard();
@@ -1028,7 +986,7 @@ function initializeFretboardWithScale() {
                 console.warn('HeptatonicScales not yet available during fretboard initialization');
             }
         }, 250); // Give extra time for all modules to initialize
-        
+
     } catch (error) {
         console.warn('Failed to initialize fretboard:', error);
     }
@@ -1069,7 +1027,7 @@ window.updateFretboardsForScaleChange = updateFretboardsForScaleChange;
 window.testNotationSystem = function() {
     console.log('🎵 Testing Musical Notation System');
     console.log('=====================================');
-    
+
     // Test scale generation with proper enharmonics
     const scales = [
         { root: 'C', intervals: ['W', 'W', 'H', 'W', 'W', 'W', 'H'], name: 'C Major' },
@@ -1077,15 +1035,15 @@ window.testNotationSystem = function() {
         { root: 'Db', intervals: ['W', 'W', 'H', 'W', 'W', 'W', 'H'], name: 'Db Major' },
         { root: 'A', intervals: ['W', 'H', 'W', 'W', 'H', 'W', 'W'], name: 'A Minor' }
     ];
-    
+
     scales.forEach(scale => {
         console.log(`\n${scale.name} Scale:`);
-        
+
         // Generate scale using the new notation system
         const scaleNotes = getScaleNotes(scale.root, scale.intervals);
         const displayNotes = scaleNotes.map(note => stripOctave(note));
         console.log(`  Proper notation: ${displayNotes.join(' - ')}`);
-        
+
         // Compare with original system for reference
         const oldScaleNotes = scale.intervals.reduce((acc, interval, i) => {
             if (i === 0) return [scale.root];
@@ -1098,21 +1056,21 @@ window.testNotationSystem = function() {
         }, []);
         console.log(`  Old chromatic:   ${oldScaleNotes.join(' - ')}`);
     });
-    
+
     console.log(`\n✨ Enhanced notation system active!`);
 };
 
 window.testScaleContext = function() {
     console.log('🎵 Testing Scale Context Translation');
     console.log('===================================');
-    
+
     // Test note translation with F# Major
     const intervals = ['W', 'W', 'H', 'W', 'W', 'W', 'H'];
     const scaleNotes = getScaleNotes('F#', intervals);
-    
+
     console.log('F# Major scale with proper notation:');
     console.log('Scale notes:', scaleNotes.map(n => stripOctave(n)).join(' - '));
-    
+
     // Test translation of chord notes in this context
     const testChord = ['F#', 'A#', 'C#']; // F# Major chord
     const translated = translateNotes(testChord);

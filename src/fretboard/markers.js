@@ -5,8 +5,9 @@
  * isn't framework-free the way src/fretboard/geometry.js is.
  *
  * Used by the Scale Position Grid's mini-fretboard renderer and legend
- * (createScalePositionMiniFretboard / its legend in frets.js) to draw each
- * dot as one of NOTE_SHAPE_TYPES instead of always a circle.
+ * (createScalePositionMiniFretboard / its legend in
+ * src/fretboard/ui/scalePositionGrid.js) to draw each dot as one of
+ * NOTE_SHAPE_TYPES instead of always a circle.
  *
  * Lifted from src/frets.js as part of REFACTOR_PLAN.md Phase 3.
  */
