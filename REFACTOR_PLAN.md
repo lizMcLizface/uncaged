@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 3/? - `src/progression/state.js`, `parse.js`, `share.js` landed (`ARCHITECTURE.md` §6.12-§6.14). Remaining: the `ui/*.js` split, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | Step 4/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js` landed (`ARCHITECTURE.md` §6.12-§6.15). Remaining: `scaleSync.js`, `fretboardDisplay.js`, the chord-card cluster, `progressionList.js`, `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -731,6 +731,69 @@ clicked Share, then navigated to the resulting URL fresh in the same
 browser session and confirmed the progression, pattern selections, and
 toggle all restored correctly - zero console errors. Remaining steps: the
 `ui/*.js` split, then the barrel.
+
+**Investigation (2026-08-01), before starting the `ui/*.js` split:** the
+remaining ~3,300 lines don't split cleanly along the plan's original
+`input.js`/`controls.js`/`display.js`/`miniFretboard.js`/`patternSelector.js`
+sketch - tracing actual call sites (not just function names/position, the
+same lesson §6.15 below re-learned the hard way with
+`getFretboardForProgression`) found six clusters instead:
+
+- **playback** (~180 lines) - landed as `playback.js`, see step 4/§6.15.
+- **chord card** (~1,160 lines) - `createChordElement` ->
+  `createPatternSelector` -> `createMiniFretboardVisualization` ->
+  `copySvgAsPng` -> `showNotification`, plus `lightenColor`. Tightly
+  coupled, one file, not further split.
+- **fretboard display** (~190 lines) - `displaySingleChordPattern`,
+  `displayScaleContext`, `displayAllChordPatterns`. Called by the chord-card
+  cluster (hover), scale sync, controls, and `clearProgression`.
+- **scale sync** (~256 lines) - `setupScaleChangeListener`,
+  `initializeScaleNotesDisplay`, `updateScaleNotesDisplay`,
+  `generateFallbackScaleNotes`, `updateProgressionDisplayForScaleChange`,
+  `updateRomanNumeralChords`.
+- **progression list** (~118 lines) - `createProgressionDisplaySection`,
+  `updateProgressionDisplay`, `highlightCurrentChord`.
+- **input** (205 lines) - `createInputSection`, self-contained.
+- **controls** (912 lines) - `createProgressionControlsSection`, needs the
+  same per-control-group split `createFretboardControls` got in Phase 3.
+  Still has ~40 direct `window.polySynthRef` reads/writes for the
+  progression-sequencer-control surface `ARCHITECTURE.md` §5.1 deferred
+  until this file has "a real module boundary" - that's what this phase is
+  building, but migrating those references off `window` is still Phase 5's
+  job, not this one's.
+
+The residual - `createChordProgressionUI`, `updateProgression`,
+`clearProgression`, `getChordDisplayName`, `getFretboardForProgression` -
+is needed back by three or more of the files above each, the same shape
+`frets.js` had before becoming `src/fretboard/index.js`'s barrel in Phase 3.
+It isn't a file to further split; it's what `progressionBuilder.js` itself
+turns into at the end of this phase.
+
+Planned order (least-coupled first): `playback.js` (done) -> `scaleSync.js`
+-> `fretboardDisplay.js` -> the chord-card cluster -> `progressionList.js`
+-> `input.js` -> `controls.js` -> rename the residual to
+`src/progression/index.js`, repointing `src/fretboard/ui/controls.js`'s one
+external import.
+
+**Progress (2026-08-01), step 4 - `src/progression/playback.js`:** landed,
+with one correction to the investigation above: `getFretboardForProgression`
+looked like part of this cluster by file position, but grepping its actual
+call sites found none of the six playback functions call it - its three
+real callers are all in the still-unmoved fretboard-display cluster, so it
+stayed in `progressionBuilder.js` rather than moving. Of the six functions
+that did move, three (`getProcessedChordNotes`, `getProcessedProgression`,
+`triggerChordProgression`) are called from code that hasn't moved yet
+(controls, chord card), so those three are this module's export list;
+`convertNoteForPolySynth`/`getOneBeatDuration`/`getDurationInMs` stay
+private. One now-dead import (`getChordPatternMatches`) fell out of
+`progressionBuilder.js`, caught by `scripts/check-build.sh`'s diff. Full
+detail in `ARCHITECTURE.md` §6.15. `npm test` (28/28) and plain `npm run
+build` pass - 219 warnings, unchanged. Verified via `run-app`: clicked a
+chord card and confirmed the console log shows
+`triggerChordProgression` -> `getProcessedChordNotes` -> the cross-imported
+`getChordDisplayName` resolving correctly - zero console errors. Remaining
+steps: `scaleSync.js`, `fretboardDisplay.js`, the chord-card cluster,
+`progressionList.js`, `input.js`, `controls.js`, then the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 
