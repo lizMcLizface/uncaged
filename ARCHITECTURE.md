@@ -296,9 +296,10 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/fretboard/markers.js` *(Phase 3, in progress, landed 2026-08-01)* | `createNoteShapeMarker` - builds one detached SVG shape element (circle/square/diamond/triangle/pentagon/hexagon/star/plus/cross) for a Scale Position Grid dot. Touches the DOM (`document.createElementNS`) but no app state - not framework-free the way `geometry.js` is, just state-free. | nothing app-specific | — |
 | `src/fretboard/patterns.js` *(Phase 3, in progress, landed 2026-08-01)* | CAGED chord-pattern matching and generic fingering-shape scoring: `calculateChordPatternPositions`, `findChordPatternMatches`, `findOptimalChordShape`. Takes tuning/fretCount as parameters instead of reading `this.*`; calls `geometry.js`'s functions directly. Not framework-free - depends on `chordPatterns.js`'s canned shape library and `tuning.js`'s `isStandardGuitarTuning`. The `Fretboard` class keeps same-named delegate methods, matching the Phase 0 characterization tests that call them as instance methods. | `chordPatterns.js`, `tuning.js`, `theory/notation`, `src/fretboard/geometry.js` | — |
 | `src/fretboard/Fretboard.js` *(Phase 3, in progress, landed 2026-08-01)* | The `Fretboard` class itself - DOM rendering (neck/fret grid, note/scale/chord marking, subscale boxes, chord-shape lines, CAGED/fingering display) for one fretboard instance. Also owns `GUITAR_TUNING`/`FRET_COUNT` (constructor defaults), `SCALE_COLORS`/`DEFAULT_COLORS` (marker coloring) and `addInteractiveEvent` (a generic DOM helper with no better home yet) - `frets.js` imports the first three plus the helper back for its own remaining UI code. | theory, `chordFingering`/`chordPatterns`, `tuning.js`, `src/fretboard/state.js`, `geometry.js`, `patterns.js` | must not import `frets.js` (would be circular - `frets.js` imports `Fretboard` from here) |
-| `src/fretboard/ui/controls.js` *(Phase 3, in progress, landed 2026-08-01)* | The top bar (title + instrument/tuning picker), the tabbed-panel shell, the hotkey footer, and `createFretboardControls` - the orchestrator that builds the "Other Controls" panel and assembles all six tabs (Scale Information / Chord Progression / Scale Position Grid / Scale Selection / Other Controls / Synthesizer). Called once, from `initializeFretboard()` in `frets.js`. | `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), `src/fretboard/ui/chordGrid`, `scales.js`, `scaleGenerator.js`, `tuning.js`, `progressionBuilder.js`, and (cross-import, see §6.8) several glue functions and the still-unmoved scale position grid builders from `frets.js` | — (see §6.8 for the two-way relationship with `frets.js`) |
-| `src/fretboard/ui/chordGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Chord Pattern Grid (12-note x 12-chord-type button table, color coded for scale compatibility) and the chord-fingering-shape pipeline it shares with the Roman-numeral chord display: matching `chordPatterns.js` shapes to a chord, a "best-effort" fallback grip, the position-picker tab bar, and the scale/chord-interval math (`getSemitoneFromReference`, `getScaleIntervalEntries`, `deriveChordSuffix`, `getScaleDescriptor`) that both this grid and the still-unmoved Scale Position Grid code in `frets.js` depend on. See §6.9. | theory, `scales.js`, `scaleGenerator.js`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), and (cross-import, see §6.9) glue functions from `frets.js` | — (see §6.9 for the two-way relationship with `frets.js`) |
-| `frets.js` (→ `src/fretboard/` in Phase 3) | The scale position grid builder - still-vanilla-JS UI construction that mounts `Fretboard` instances and wires them to the DOM - plus the glue functions called from `index.js`/`chords.js`/`progressionBuilder.js` and from `src/fretboard/ui/controls.js`'s/`chordGrid.js`'s button handlers. State, geometry math, marker drawing, pattern matching, the class itself, the top bar/tab-shell/"Other Controls" panel, and the chord grid moved to `src/fretboard/state.js`/`geometry.js`/`markers.js`/`patterns.js`/`Fretboard.js`/`ui/controls.js`/`ui/chordGrid.js` (see above); the rest is still one file, pending the scale position grid split and the barrel. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), all of `src/fretboard/*` above, `src/fretboard/ui/controls.js` (for `createFretboardControls`), `src/fretboard/ui/chordGrid.js` (for the interval/label helpers the still-unmoved Scale Position Grid code needs) | — |
+| `src/fretboard/ui/controls.js` *(Phase 3, in progress, landed 2026-08-01)* | The top bar (title + instrument/tuning picker), the tabbed-panel shell, the hotkey footer, and `createFretboardControls` - the orchestrator that builds the "Other Controls" panel and assembles all six tabs (Scale Information / Chord Progression / Scale Position Grid / Scale Selection / Other Controls / Synthesizer). Called once, from `initializeFretboard()` in `frets.js`. | `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), `src/fretboard/ui/chordGrid`, `src/fretboard/ui/scalePositionGrid`, `scales.js`, `scaleGenerator.js`, `tuning.js`, `progressionBuilder.js`, and (cross-import, see §6.8) several glue functions from `frets.js` | — (see §6.8 for the two-way relationship with `frets.js`) |
+| `src/fretboard/ui/chordGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Chord Pattern Grid (12-note x 12-chord-type button table, color coded for scale compatibility) and the chord-fingering-shape pipeline it shares with the Roman-numeral chord display: matching `chordPatterns.js` shapes to a chord, a "best-effort" fallback grip, the position-picker tab bar, and the scale/chord-interval math (`getSemitoneFromReference`, `getScaleIntervalEntries`, `deriveChordSuffix`, `getScaleDescriptor`) that both this grid and `src/fretboard/ui/scalePositionGrid.js` depend on. See §6.9. | theory, `scales.js`, `scaleGenerator.js`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), and (cross-import, see §6.9) glue functions from `frets.js` | must not import `src/fretboard/ui/scalePositionGrid.js` (the dependency runs one way - see §6.10) |
+| `src/fretboard/ui/scalePositionGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Scale Position Grid tab: one movable mini-fretboard pattern per (root string x scale degree) cell, the Focus Selector visibility matrix, and the per-cell rendering options (pattern/dot size, fret-label mode, note shapes, chord-name headers, etc.) on `fretboardState`. See §6.10. | theory, `scaleGenerator.js`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`FRET_COUNT`), `src/fretboard/markers`, `src/fretboard/ui/chordGrid` | — |
+| `frets.js` (→ `src/fretboard/` in Phase 3) | The glue functions called from `index.js`/`chords.js`/`progressionBuilder.js` and from `src/fretboard/ui/controls.js`'s/`chordGrid.js`'s button handlers - `initializeFretboard`, chord display/search/pattern functions, `playChordVoicing`/`getChordVoicingNotes`, etc. State, geometry math, marker drawing, pattern matching, the class itself, the top bar/tab-shell/"Other Controls" panel, the chord grid, and the scale position grid moved to `src/fretboard/state.js`/`geometry.js`/`markers.js`/`patterns.js`/`Fretboard.js`/`ui/controls.js`/`ui/chordGrid.js`/`ui/scalePositionGrid.js` (see above); what's left is glue plus the six-line `CHORD_TYPE_TO_PATTERN_TYPE` map, pending only the barrel. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), all of `src/fretboard/*` above, `src/fretboard/ui/controls.js` (for `createFretboardControls`), `src/fretboard/ui/chordGrid.js` (for the fingering-shape pipeline the glue functions call) | — |
 | `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
@@ -740,6 +741,107 @@ grid cell (confirms the `addInteractiveEvent` handlers and the
 `showChordPatternOnFretboard`/`restoreFretboardState`/`playChordVoicing`
 cross-import into `chordGrid.js` all still fire) - zero console errors
 throughout.
+
+### 6.10 `src/fretboard/ui/scalePositionGrid.js` (Phase 3, eighth/final step, 2026-08-01)
+
+The Scale Position Grid tab: twenty functions moved as one contiguous block
+(it was already contiguous in `frets.js`, unlike the chord-grid group in
+§6.9 which was split across two locations) - `findRowRootAbsoluteFret`,
+`getAbsoluteFretForDisplayColumn`, `shadeColor`, `getContrastTextColor`,
+`createScalePositionMiniFretboard`, `scalePositionCellKey` and the nine
+visibility/toggle helpers next to it, `styleScalePositionFocusCell`,
+`buildScalePositionFocusMatrix`, `createScalePositionPlaceholderCell`,
+`renderScalePositionGrid`, `createScalePositionGrid` - plus six config
+constants that fed only this block: `SCALE_POSITION_DEGREES`,
+`MINI_SCALE_FRET_COUNT`, `GENERIC_VISIBLE_FRET_START`,
+`GENERIC_ROOT_DISPLAY_COLUMN`, `SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET`,
+`SCALE_POSITION_STACK_SIZES`, and `NOTE_SHAPE_TYPES`.
+`GENERIC_VISIBLE_FRET_START` was already dead (assigned, never read)
+before this phase touched it - confirmed by grep before moving, kept dead
+rather than cleaned up, same policy as Phase 1's leftover-cruft note and
+step 6's dead button groups. Every function is `export function`, matching
+`geometry.js`/`markers.js`/`patterns.js`/`chordGrid.js`'s convention of
+exporting everything rather than curating a minimal surface - all twenty
+are called from within this module's own `renderScalePositionGrid`, so a
+minimal-export pass would have exported nearly all of them anyway.
+
+One pre-existing doc-comment quirk carried over unfixed, matching step 6's
+policy on the `createTabbedPanel`/`createTopBar` quirk: the JSDoc block
+naming `createScalePositionMiniFretboard`'s parameters sits directly above
+`shadeColor` instead of above the function it describes (`shadeColor` was
+evidently inserted between them at some point in the file's history) - kept
+verbatim, not this phase's job to fix.
+
+**Depends on `chordGrid.js`, one-directional - the only non-independent
+step in this phase.** Unlike steps 1-6, this module isn't self-contained:
+`createScalePositionMiniFretboard` and `renderScalePositionGrid` call
+`getSemitoneFromReference`, `getFingeringMarkerLabel`,
+`getCurrentScaleNoteNames`, `getScaleIntervalEntries`, `getScaleDescriptor`,
+`buildDegreeHeaderLabel` and the `SEMITONE_TO_SCALE_INTERVAL_LABEL`
+constant, all from `./chordGrid` (§6.9) - a dependency `frets.js` was
+carrying on `chordGrid.js`'s behalf until this step, per §6.9's note about
+the import list it picked up. Nothing in `chordGrid.js` calls back into
+`scalePositionGrid.js`, so this is a plain one-way import, not a new cycle;
+`chordGrid.js`'s module ownership row above now states the converse
+explicitly (must not import `scalePositionGrid.js`) to keep the direction
+from silently reversing in a future edit.
+
+**`frets.js`'s import list dropped substantially, both from `chordGrid.js`
+and from its own remaining code.** With the Scale Position Grid code gone,
+`frets.js` no longer needed six of the fifteen names it imported from
+`chordGrid.js` in step 7 (`getSemitoneFromReference`,
+`getCurrentScaleNoteNames`, `getScaleIntervalEntries`, `getScaleDescriptor`,
+`buildDegreeHeaderLabel`, `SEMITONE_TO_SCALE_INTERVAL_LABEL`) plus
+`getFingeringMarkerLabel` - all removed rather than left to warn. Ten more
+imports fell out of `frets.js` entirely once the block moved -
+`FRET_COUNT`, `getIntervalColor`, `noteArrayContains`,
+`areEnharmonicEquivalent`, the `notation.js` `midiToNote`/`noteToMidi`
+aliases, `normalizeNote`, `assignFingers`, `selectGripFromPositions`,
+`createNoteShapeMarker` - each confirmed via grep to have zero remaining
+call sites in `frets.js` before removal, same discipline as every prior
+step. `frets.js` still imports `renderScalePositionGrid` (three glue call
+sites remain: the scale-selection handler, the scale-change debounce
+handler, and `initializeFretboardWithScale`'s deferred `setTimeout`), but
+not `createScalePositionGrid` - nothing in `frets.js` itself calls it
+anymore, since `controls.js` now gets it directly from
+`./scalePositionGrid` (below) rather than cross-importing it through
+`frets.js`.
+
+**`controls.js` repointed, same treatment as step 7 gave `chordGrid.js`'s
+three names:** `createScalePositionGrid`/`renderScalePositionGrid` were the
+last two entries in `controls.js`'s temporary cross-import from `frets.js`
+(§6.8); both now come from `./scalePositionGrid` directly. `frets.js`'s
+temporary cross-import `export { ... }` block (introduced in §6.8, trimmed
+in §6.9) is now down to exactly the glue `chordGrid.js` and `controls.js`
+still need back: `showChordPatternOnFretboard`, `restoreFretboardState`,
+`updateChordButtonStyles`, `updateChordInfoDisplay`, `playChordVoicing`,
+`getChordVoicingNotes`.
+
+Verified via `npm test` (28/28), plain `npm run build` (total warning count
+unchanged at 219; `scalePositionGrid.js` carries exactly the four warnings
+that moved with its code verbatim - the pre-existing
+`GENERIC_VISIBLE_FRET_START` unused-const and three pre-existing `eqeqeq`
+warnings inside the "dark duplicate" branch - and `frets.js` dropped to
+its two remaining pre-existing warnings, `filterEnharmonicMatches`/
+`tuningToSlashFormat`; zero new warnings anywhere, confirmed by a second
+build pass after the `getFingeringMarkerLabel`/`createScalePositionGrid`
+cleanup this step's first build pass surfaced). The `run-app` skill
+confirmed the default load (Scale Position Grid tab, pixel-identical to
+every prior checkpoint), a Pattern Size slider drag (exercises
+`renderScalePositionGrid`'s re-render path end to end), and the Scale
+Information tab's Chord Pattern Grid (confirms `chordGrid.js` is unaffected
+by this step) - zero console errors throughout. A Focus Selector cell click
+hit a Playwright selector ambiguity (a bare `table` selector matched more
+than one on-page table) rather than an app issue - per the Phase 3 resume
+notes' guidance on fighting fragile selectors, not pursued further given
+the slider re-render and the unit tests already covering this path.
+
+This closes out Phase 3's function-extraction work. `frets.js` is now pure
+glue - the entry points other files import (`initializeFretboard`,
+`getFretboard`, chord/scale display functions, search functions) plus the
+button-handler-adjacent functions `controls.js` and `chordGrid.js`
+cross-import. What remains for Phase 3 is the barrel
+(`src/fretboard/index.js`) re-exporting today's public surface unchanged.
 
 ---
 
