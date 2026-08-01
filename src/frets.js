@@ -29,6 +29,15 @@ import {
     toSlashFormat as tuningToSlashFormat
 } from './tuning';
 import { fretboardState, refreshScalePositionTuning, persistScalePositionGridSettings } from './fretboard/state';
+import {
+    calculateFretPositions,
+    calculateFretPosition as geometryCalculateFretPosition,
+    calculateNote as geometryCalculateNote,
+    extractNoteName as geometryExtractNoteName,
+    extractOctave as geometryExtractOctave,
+    getNoteAt as geometryGetNoteAt,
+    findNotePositions as geometryFindNotePositions
+} from './fretboard/geometry';
 
 // Fallback tuning used only if no active instrument config is available yet.
 const GUITAR_TUNING = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'];
@@ -51,34 +60,11 @@ const CHORD_TYPE_TO_PATTERN_TYPE = {
     'm7b5': 'm7b5'
 };
 
-// Calculate fret positions using the rule of 18 (each fret divides remaining string length by 18)
-function calculateFretPositions(fretCount) {
-    const positions = [0]; // Open string position at 0%
-    
-    // Calculate what the full string length should be so that the 15th fret ends at 100%
-    // Work backwards from the desired end position
-    let totalLength = 100;
-    let tempLength = totalLength;
-    
-    // Calculate the theoretical positions if we started with this length
-    const tempPositions = [0];
-    for (let fret = 1; fret <= fretCount; fret++) {
-        const fretDistance = tempLength / 17.817;
-        tempPositions.push(totalLength - tempLength + fretDistance);
-        tempLength -= fretDistance;
-    }
-    
-    // Scale so that the last fret (15th) is at 100%
-    const lastFretPosition = tempPositions[fretCount];
-    const scaleFactor = 100 / lastFretPosition;
-    
-    // Apply scaling to all positions
-    for (let fret = 1; fret <= fretCount; fret++) {
-        positions.push(tempPositions[fret] * scaleFactor);
-    }
-    
-    return positions;
-}
+// calculateFretPositions, calculateFretPosition, calculateNote,
+// extractNoteName, extractOctave, getNoteAt and findNotePositions now live
+// in src/fretboard/geometry.js as pure functions (REFACTOR_PLAN.md Phase
+// 3) - imported above. The Fretboard class methods of the same names below
+// are thin delegates so its public API is unchanged.
 
 // Scale degree colors for visual differentiation
 const SCALE_COLORS = {
@@ -670,57 +656,30 @@ class Fretboard {
      * Calculate the note at a specific string and fret using enhanced notation
      */
     calculateNote(openStringNote, fret) {
-        // Tuning strings are stored as "D4" (no separator, see tuning.js),
-        // but notationNoteToMidi only recognizes the "D/4" slash format -
-        // without it, it silently defaults every string to octave 4,
-        // discarding the string's real tuning octave. The stale "+ 12"
-        // this used to carry was compensating for that (making open
-        // strings all land around octave 5), not a real conversion need.
-        const slashed = openStringNote.includes('/')
-            ? openStringNote
-            : openStringNote.replace(/^([A-Ga-g][#♯b♭]*)(-?\d+)$/, '$1/$2');
-        const openMidi = notationNoteToMidi(slashed);
-        const frettedMidi = openMidi + fret;
-        return notationMidiToNote(frettedMidi);
+        return geometryCalculateNote(openStringNote, fret);
     }
-    
+
     /**
      * Extract note name without octave from a full note string
      * Handles both "C/4" and "C4" formats, with proper notation support
      */
     extractNoteName(noteString) {
-        if (!noteString) return '';
-        return notationStripOctave(noteString);
+        return geometryExtractNoteName(noteString);
     }
-    
+
     /**
      * Extract octave number from a full note string
      * Returns null if no octave found
      */
     extractOctave(noteString) {
-        if (!noteString) return null;
-        // Handle format like "C/4"
-        if (noteString.includes('/')) {
-            const parts = noteString.split('/');
-            return parts.length > 1 ? parseInt(parts[1]) : null;
-        }
-        // Handle format like "C4" (fallback)
-        const match = noteString.match(/(\d+)$/);
-        return match ? parseInt(match[1]) : null;
+        return geometryExtractOctave(noteString);
     }
-    
+
     /**
      * Calculate the horizontal position for a fret (same logic as dot inlays)
      */
     calculateFretPosition(fret) {
-        if (fret === 0) {
-            return 0; // Nut position
-        } else {
-            // Position in the center of the fret space, same as dot inlays
-            const prevFretPos = fret > 1 ? this.fretPositions[fret - 1] : 0;
-            const currentFretPos = this.fretPositions[fret];
-            return (prevFretPos + currentFretPos) / 2;
-        }
+        return geometryCalculateFretPosition(this.fretPositions, fret);
     }
     
     /**
@@ -1265,53 +1224,14 @@ class Fretboard {
      * Get the note at a specific string and fret
      */
     getNoteAt(stringIndex, fret) {
-        if (stringIndex < 0 || stringIndex >= this.tuning.length || fret < 0 || fret > this.fretCount) {
-            return null;
-        }
-        return this.calculateNote(this.tuning[stringIndex], fret);
+        return geometryGetNoteAt(this.tuning, this.fretCount, stringIndex, fret);
     }
-    
+
     /**
      * Find all positions of a specific note on the fretboard
      */
     findNotePositions(targetNote) {
-        const positions = [];
-        
-        // Check if targeting a specific octave or all octaves
-        const hasSpecificOctave = targetNote.includes('/');
-        let targetNoteName, targetOctave;
-        
-        if (hasSpecificOctave) {
-            targetNoteName = this.extractNoteName(targetNote);
-            targetOctave = this.extractOctave(targetNote);
-        } else {
-            targetNoteName = targetNote;
-            targetOctave = null;
-        }
-        
-        this.tuning.forEach((stringNote, stringIndex) => {
-            for (let fret = 0; fret <= this.fretCount; fret++) {
-                const note = this.calculateNote(stringNote, fret);
-                const noteName = this.extractNoteName(note);
-                const noteOctave = this.extractOctave(note);
-                
-                let shouldInclude = false;
-                
-                if (hasSpecificOctave) {
-                    // Match both note name and octave using enharmonic equivalence
-                    shouldInclude = (areEnharmonicEquivalent(noteName, targetNoteName) && noteOctave === targetOctave);
-                } else {
-                    // Match just the note name using enharmonic equivalence
-                    shouldInclude = areEnharmonicEquivalent(noteName, targetNoteName);
-                }
-                
-                if (shouldInclude) {
-                    positions.push({ string: stringIndex, fret, note });
-                }
-            }
-        });
-        
-        return positions;
+        return geometryFindNotePositions(this.tuning, this.fretCount, targetNote);
     }
     
     /**

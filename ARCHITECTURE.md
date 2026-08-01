@@ -292,7 +292,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/nodes/` | Framework-free Web Audio node wrappers (`Gain`, `Filter`, `Distortion`, …), a shared `.getNode()`/`.connect()` interface. | nothing app-specific | — |
 | `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` when Phase 3 splits `frets.js` — noted explicitly in `REFACTOR_PLAN.md` Phase 3 |
 | `src/fretboard/state.js` *(Phase 3, in progress, landed 2026-08-01)* | The ~28 module-level `let`s `frets.js` used to hold directly - Scale Position Grid row anchors/tuning + its persisted display settings, the fretboard instance registry, chord/display state, chord-fingering tab state, and the scale-change debounce timestamps - plus `refreshScalePositionTuning()` and `persistScalePositionGridSettings()`. Exported as one mutable object, `fretboardState`, not bare `let`s - see §6.3 for why. | `theory/notation`, `tuning` | everything that used to read/write these as bare identifiers now imports `fretboardState` instead |
-| `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, fret geometry, marker/shape drawing, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. State moved to `src/fretboard/state.js` (see above); the rest is still one file, pending the remaining Phase 3 steps. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), `src/fretboard/state.js` | — |
+| `src/fretboard/geometry.js` *(Phase 3, in progress, landed 2026-08-01)* | Pure fret-position and note-at-position math: `calculateFretPositions`, `calculateFretPosition`, `calculateNote`, `extractNoteName`, `extractOctave`, `getNoteAt`, `findNotePositions`. No DOM, no class instance - takes plain data (tuning array, fret count, fret-position table) in, plain data out. The `Fretboard` class keeps same-named methods that delegate to these (e.g. `calculateNote(a, b) { return geometryCalculateNote(a, b); }`), so its public API is unchanged. | `theory/notation` | — |
+| `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, marker/shape drawing, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. State and geometry math moved to `src/fretboard/state.js`/`geometry.js` (see above); the rest is still one file, pending the remaining Phase 3 steps. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), `src/fretboard/state.js`, `src/fretboard/geometry.js` | — |
 | `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
@@ -422,6 +423,25 @@ mechanical rename.
 Verified via `npm test` (28/28), `npm run build`, and the `run-app` skill
 (default load, Scale Position Grid tab, Other Controls chord-grid tab) with
 zero console errors.
+
+### 6.4 `src/fretboard/geometry.js` (Phase 3, second step, 2026-08-01)
+
+Unlike `state.js`, this step had no surprises: `calculateNote`,
+`extractNoteName` and `extractOctave` were already `this`-free (pure
+functions that happened to be declared as class methods); `calculateFretPosition`,
+`getNoteAt` and `findNotePositions` only touched `this.fretPositions`/
+`this.tuning`/`this.fretCount` - plain data, not DOM - so they moved by
+adding those as parameters. The `Fretboard` class methods of the same
+names are now one-line delegates (the same shape the file already used for
+`getPatternsByChordType`, a class method delegating to a same-named
+module-level function - not a new pattern here). `calculateFretPositions`
+(plural - builds the whole fret-position table from a fret count) moved
+unchanged; it had no `this` dependency to begin with.
+
+Verified via `npm test` (28/28, including the Phase 0 `calculateNote`/
+`calculateChordPatternPositions` characterization tests, which exercise this
+module through the class delegates), `npm run build`, and a `run-app`
+screenshot pixel-identical to the pre-checkpoint baseline.
 
 ---
 
