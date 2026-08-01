@@ -13,7 +13,7 @@ session finds its place without re-reading the codebase.
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
-| 3 — Split `frets.js` | in progress | this commit | Steps 1-6/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7, the class itself), `ui/controls.js` (§6.8, top bar/tab shell/hotkey footer/"Other Controls" panel). Remaining: chord grid, scale position grid, the barrel. |
+| 3 — Split `frets.js` | in progress | this commit | Steps 1-7/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7, the class itself), `ui/controls.js` (§6.8, top bar/tab shell/hotkey footer/"Other Controls" panel), `ui/chordGrid.js` (§6.9, Chord Pattern Grid + fingering-shape pipeline). Remaining: scale position grid, the barrel. |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
@@ -523,6 +523,37 @@ Other Controls tab, Scale Position Grid tab) show zero console errors and
 correct rendering. Remaining steps: chord grid, scale position grid, then
 the barrel.
 
+**Progress (2026-08-01), step 7/8 - `src/fretboard/ui/chordGrid.js`:**
+landed as sixteen functions moved together (the Chord Pattern Grid button
+table plus the entire chord-fingering-shape pipeline it shares with the
+Roman-numeral chord display), matching the plan's §6.1 categorization with
+one addition the sketch missed - `normalizeIntervalLabel` belongs here too,
+kept private since it has no caller outside `buildIntervalLabelMap`. Unlike
+steps 1-6, this one isn't independent of the still-unmoved Scale Position
+Grid code: `createScalePositionMiniFretboard`/`renderScalePositionGrid`
+(still in `frets.js`) call six of the moved functions plus the moved
+`SEMITONE_TO_SCALE_INTERVAL_LABEL` constant, so `frets.js` picked up a
+substantial new import list from `chordGrid.js` - one-directional, not a
+new cycle, and expected to shrink once the Scale Position Grid code moves
+into its own module and can import `chordGrid.js` directly. `controls.js`
+was repointed to import `clearFingeringTabs`/`createChordButtonGrid`/
+`updateChordGridColors` from `./chordGrid` directly rather than continuing
+to cross-import them through `frets.js`, shrinking that temporary list
+further (it now holds only the still-unmoved `createScalePositionGrid`/
+`renderScalePositionGrid`, plus two newly-added entries -
+`playChordVoicing`/`getChordVoicingNotes` - that `chordGrid.js` itself
+needs back from `frets.js`). Two imports fell out of `frets.js` as a
+result and were removed rather than left to warn: `classifyFingeringSource`
+(`chordFingering.js`) and `addInteractiveEvent` (`Fretboard.js`). Full
+detail in `ARCHITECTURE.md` §6.9. `npm test` (28/28) and plain `npm run
+build` pass - total warning count unchanged at 219, `frets.js` reduced to
+exactly its three pre-existing warnings, zero new ones in `chordGrid.js`/
+`controls.js`. `run-app` screenshots (default load / Scale Position Grid
+tab, the Scale Information tab where the Chord Pattern Grid actually lives,
+and a hover+click on a grid cell to exercise the cross-imported glue) show
+zero console errors and correct rendering. Remaining steps: scale position
+grid, then the barrel.
+
 ### Phase 4 — Split the other two
 
 Same treatment, same barrel trick.
@@ -639,11 +670,11 @@ To pick up mid-phase, append what was already done and what remains.
 
 ### 6.1 Resuming Phase 3 at step 6/8 (the UI-builder split)
 
-**Superseded 2026-08-01: step 6/8 (`ui/controls.js`) is now done too** - see
-the Phase 3 Result notes above and `ARCHITECTURE.md` §6.8. Remaining:
-chord grid, scale position grid, then the barrel (steps 7-8). The block
-below is kept for its steps-1-5 insights (still applicable) but its
-step-6-specific categorization is historical.
+**Superseded 2026-08-01: steps 6/8 (`ui/controls.js`) and 7/8
+(`ui/chordGrid.js`) are now done too** - see the Phase 3 Result notes above
+and `ARCHITECTURE.md` §6.8/§6.9. Remaining: scale position grid, then the
+barrel (step 8). The block below is kept for its steps-1-5 insights (still
+applicable) but its step-6/7-specific categorization is historical.
 
 Steps 1-5 (`state.js`, `geometry.js`, `markers.js`, `patterns.js`,
 `Fretboard.js`) are done, one commit each, `ARCHITECTURE.md` §6.3-6.7 and
