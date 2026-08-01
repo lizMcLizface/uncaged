@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 1/? - `src/progression/state.js` landed (`ARCHITECTURE.md` §6.12). Remaining: `parse.js`, `share.js`, the `ui/*.js` split, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | Step 2/? - `src/progression/state.js` and `parse.js` landed (`ARCHITECTURE.md` §6.12/§6.13). Remaining: `share.js`, the `ui/*.js` split, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -690,6 +690,31 @@ typing a progression and toggling two of the migrated state fields
 (`showMiniPianos`, `useSeventhChords`) to confirm they drive re-render
 end-to-end, not just at parse time - zero console errors. Remaining steps:
 `parse.js`, `share.js`, the `ui/*.js` split, then the barrel.
+
+**Progress (2026-08-01), step 2 - `src/progression/parse.js`:** landed as
+planned - the eight named functions turned out to already be one
+contiguous block right after the state block step 1 removed, so this was a
+pure cut-and-paste with import paths adjusted, no reordering. Two functions
+the block calls (`getChordDisplayName`, `getFretboardForProgression`) were
+left behind in `progressionBuilder.js` rather than moved, since both are
+called more from code that stays there than from what moved - `parse.js`
+imports them back, the same two-way-import shape Phase 3 used for
+`ui/controls.js`/`ui/chordGrid.js` <-> `frets.js` (now `src/fretboard/index.js`).
+That required adding both to `progressionBuilder.js`'s own export list,
+where they weren't exported before. Three now-dead imports
+(`parseChordToken`, `getActiveInstrumentConfig`, `selectGripFromPositions`)
+fell out of `progressionBuilder.js` as a result and were caught by
+`scripts/check-build.sh`'s diff (three new `no-unused-vars` hits on the
+first build after the move) rather than left in. Full detail in
+`ARCHITECTURE.md` §6.13. `npm test` (28/28) and plain `npm run build` pass -
+219 warnings, unchanged, the one warning inside the moved block relocated
+to `parse.js` verbatim. Verified via `run-app`: typed a progression, edited
+it incrementally (exercising `updateProgressionIncremental`/
+`compareTokenArrays`, not just full reparse), and switched a chord's
+pattern-selector dropdown to confirm `precomputePatternData`/
+`getChordPatternMatches` still drive the displayed voicing correctly -
+zero console errors. Remaining steps: `share.js`, the `ui/*.js` split, then
+the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 
