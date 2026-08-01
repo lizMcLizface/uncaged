@@ -13,7 +13,7 @@ session finds its place without re-reading the codebase.
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
-| 3 — Split `frets.js` | not started | — | |
+| 3 — Split `frets.js` | in progress | this commit | Step 1/8 landed: `src/fretboard/state.js` extracted (the ~28 module-level `let`s + persistence, as one mutable `fretboardState` object - see the Phase 3 progress note and `ARCHITECTURE.md` §6.3 for why an object, not exported `let`s). Remaining: geometry, markers, patterns, the `Fretboard` class, the three UI builders, the barrel. |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
@@ -423,6 +423,27 @@ Note: `chordFingering.js` and `chordPatterns.js` are domain logic, not
 fretboard UI helpers — they produce `{string, fret, finger}` voicings that a
 future string-synthesis engine depends on. Keep them out of
 `src/fretboard/ui/`; they belong next to `src/theory/`.
+
+**Progress (2026-08-01), step 1/8 - `state.js`:** landed as planned, with
+one deviation the plan's one-liner didn't anticipate: ES module named
+exports are live bindings importers cannot reassign, and `frets.js` writes
+to most of these ~28 values from dozens of call sites, so `state.js`
+exports one mutable object (`fretboardState`) rather than individual `let`s
+- full reasoning in `ARCHITECTURE.md` §6.3. All ~188 bare-identifier
+read/write sites in `frets.js` were mechanically rewritten to
+`fretboardState.<name>`, except the one pre-existing local shadow inside
+`initializeFretboard()` (its own `const mainFretboard`, unrelated to the
+module-level pointer). One consequence reached outside `frets.js`: the
+barrel's `export { currentDisplayedChord }` couldn't stay a live binding as
+a re-exported object property, so the barrel now exports `fretboardState`
+instead, and its two external consumers (`chords.js`, `index.js`) were
+updated to read `fretboardState.currentDisplayedChord` - the only
+Phase-3-so-far change outside `frets.js`/`src/fretboard/`. `npm test`
+(28/28) and `npm run build` pass; verified via the `run-app` skill (default
+load, Scale Position Grid tab, Other Controls chord-grid tab) with zero
+console errors. Remaining steps: geometry, markers, patterns, the
+`Fretboard` class, the three UI builders (`controls`/`chordGrid`/
+`scalePositionGrid`), then the barrel.
 
 ### Phase 4 — Split the other two
 

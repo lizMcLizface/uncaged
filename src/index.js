@@ -8,7 +8,7 @@ import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from '.
 import {createHeptatonicScaleTable, selectedRootNote, selectedScales, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, exclusiveMode, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scaleGenerator';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
 import {modifiers, keyToNote} from './keyboard';
-import {initializeFretboard, getFretboard, showChordOnFretboard, showScaleOnFretboard, currentDisplayedChord} from './frets';
+import {initializeFretboard, getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState} from './frets';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { getChannel, isChannelEnabled } from './audio/dispatch';
 
@@ -38,7 +38,7 @@ window.HeptatonicScales = HeptatonicScales;
 window.getFretboard = getFretboard;
 window.showChordOnFretboard = showChordOnFretboard;
 window.showScaleOnFretboard = showScaleOnFretboard;
-window.currentDisplayedChord = currentDisplayedChord;
+window.currentDisplayedChord = fretboardState.currentDisplayedChord;
 
 const { Vex, Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, Dot, StaveConnector, Voice, GhostNote } = require("vexflow");
 const { Factory } = Vex.Flow;
