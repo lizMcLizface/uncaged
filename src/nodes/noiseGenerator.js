@@ -17,10 +17,12 @@ class NoiseGenerator {
     
     async initializeWorklets() {
         try {
-            // Load all noise processor worklets
-            await this.AC.audioWorklet.addModule('/white-noise-processor.js');
-            await this.AC.audioWorklet.addModule('/pink-noise-processor.js');
-            await this.AC.audioWorklet.addModule('/brown-noise-processor.js');
+            // Load all noise processor worklets. Relative to PUBLIC_URL, not
+            // the domain root - see ARCHITECTURE.md §2.3 for why an absolute
+            // path only worked here by coincidence.
+            await this.AC.audioWorklet.addModule(`${process.env.PUBLIC_URL}/white-noise-processor.js`);
+            await this.AC.audioWorklet.addModule(`${process.env.PUBLIC_URL}/pink-noise-processor.js`);
+            await this.AC.audioWorklet.addModule(`${process.env.PUBLIC_URL}/brown-noise-processor.js`);
             
             // Upgrade to worklet-based noise
             this.upgradeToWorklet();

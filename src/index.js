@@ -10,6 +10,7 @@ import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initia
 import {modifiers, keyToNote} from './keyboard';
 import {initializeFretboard, getFretboard, showChordOnFretboard, showScaleOnFretboard, currentDisplayedChord} from './frets';
 import { ThemeProvider } from './contexts/ThemeContext';
+import { getChannel, isChannelEnabled } from './audio/dispatch';
 
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))
@@ -163,7 +164,8 @@ function onKeyPress(event, up) {
     }
 
     // Only process musical notes if PolySynth is enabled
-    if (!window.polySynthEnabled || !window.polySynthRef) {
+    const synthChannel = getChannel('synth');
+    if (!isChannelEnabled('synth') || !synthChannel) {
         return;
     }
 
@@ -181,24 +183,24 @@ function onKeyPress(event, up) {
         currentPressed.push(note);
 
         // Trigger note on PolySynth using the exposed methods
-        if (window.polySynthRef && window.polySynthRef.playNotes) {
-            console.log('PolySynth active status BEFORE activation:', window.polySynthRef.isActive());
+        if (synthChannel && synthChannel.playNotes) {
+            console.log('PolySynth active status BEFORE activation:', synthChannel.isActive());
 
             // Explicitly activate the synth if not active
-            if (!window.polySynthRef.isActive() && window.polySynthRef.activate) {
+            if (!synthChannel.isActive() && synthChannel.activate) {
                 console.log('Synth not active, calling activate method...');
-                window.polySynthRef.activate();
+                synthChannel.activate();
                 // Check status after a brief delay to allow React state update
                 setTimeout(() => {
-                    console.log('PolySynth active status AFTER activation:', window.polySynthRef.isActive());
+                    console.log('PolySynth active status AFTER activation:', synthChannel.isActive());
                 }, 10);
             }
 
             console.log('Calling PolySynth playNotes with:', [noteWithOctave], 70);
-            window.polySynthRef.playNotes([noteWithOctave], 70);
-            console.log('PolySynth active status AFTER playNotes call:', window.polySynthRef.isActive());
+            synthChannel.playNotes([noteWithOctave], 70);
+            console.log('PolySynth active status AFTER playNotes call:', synthChannel.isActive());
         } else {
-            console.log('PolySynth ref not available:', window.polySynthRef);
+            console.log('PolySynth ref not available:', synthChannel);
         }
 
         // Add visual feedback to piano keys if available
@@ -212,8 +214,8 @@ function onKeyPress(event, up) {
         currentPressed = currentPressed.filter(item => item !== note);
 
         // Stop note on PolySynth using the exposed methods
-        if (window.polySynthRef && window.polySynthRef.stopNotes) {
-            window.polySynthRef.stopNotes([noteWithOctave]);
+        if (synthChannel && synthChannel.stopNotes) {
+            synthChannel.stopNotes([noteWithOctave]);
         }
 
         // Remove visual feedback from piano keys if available
@@ -231,14 +233,16 @@ document.addEventListener('keyup', onKeyPress);
 function initializePolySynthMouse() {
     // Define callbacks for playing and stopping notes
     const playNote2Callback = (notes, volume = 70) => {
-        if (window.polySynthRef && window.polySynthRef.playNotes) {
-            window.polySynthRef.playNotes(notes, volume);
+        const synthChannel = getChannel('synth');
+        if (synthChannel && synthChannel.playNotes) {
+            synthChannel.playNotes(notes, volume);
         }
     };
 
     const stopNotes2Callback = (notes) => {
-        if (window.polySynthRef && window.polySynthRef.stopNotes) {
-            window.polySynthRef.stopNotes(notes);
+        const synthChannel = getChannel('synth');
+        if (synthChannel && synthChannel.stopNotes) {
+            synthChannel.stopNotes(notes);
         }
     };
 
@@ -255,7 +259,7 @@ function initializePolySynthMouse() {
 // mounted into it.)
 document.addEventListener('DOMContentLoaded', () => {
     const checkPolySynth = setInterval(() => {
-        if (window.polySynthRef) {
+        if (getChannel('synth')) {
             initializePolySynthMouse();
             clearInterval(checkPolySynth);
         }

@@ -16,6 +16,7 @@ import {
 } from './theory/notation';
 import { CHROMATIC } from './theory/notes';
 import { INTERVAL_LABELS, getIntervalColor } from './theory/intervals';
+import { getChannel } from './audio/dispatch';
 import { createChordProgressionUI, loadSharedStateFromURL } from './progressionBuilder';
 import {getChordPatterns, getPatternsByChordType} from './chordPatterns';
 import {assignFingers, selectGripFromPositions, classifyFingeringSource} from './chordFingering';
@@ -6099,13 +6100,14 @@ function getChordVoicingNotes(fretboard, rootNote, chordType) {
  * @param {Array<string>} notes - PolySynth-format notes (e.g. "C4")
  */
 function playChordVoicing(notes) {
-    if (!notes || notes.length === 0 || !window.polySynthRef || !window.polySynthRef.playNotes) {
+    const synthChannel = getChannel('synth');
+    if (!notes || notes.length === 0 || !synthChannel || !synthChannel.playNotes) {
         return;
     }
-    if (window.polySynthRef.isActive && !window.polySynthRef.isActive() && window.polySynthRef.activate) {
-        window.polySynthRef.activate();
+    if (synthChannel.isActive && !synthChannel.isActive() && synthChannel.activate) {
+        synthChannel.activate();
     }
-    window.polySynthRef.playNotes(notes, 70, 800);
+    synthChannel.playNotes(notes, 70, 800);
 }
 
 /**
