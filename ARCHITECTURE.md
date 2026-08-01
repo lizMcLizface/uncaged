@@ -291,7 +291,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/audio/` *(Phase 2b landed 2026-08-01: `context.js`/`bus.js`/`dispatch.js`; `clock.js`/`scheduler.js` belong to `SESSION_MODE_FEASIBILITY.md` Stage 2's Timing Grid, not a `REFACTOR_PLAN.md` phase)* | The shared `AudioContext`, master bus, note-event/channel registry dispatch. | nothing app-specific today | UI modules should depend on it, not the reverse |
 | `src/nodes/` | Framework-free Web Audio node wrappers (`Gain`, `Filter`, `Distortion`, …), a shared `.getNode()`/`.connect()` interface. | nothing app-specific | — |
 | `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` when Phase 3 splits `frets.js` — noted explicitly in `REFACTOR_PLAN.md` Phase 3 |
-| `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, fret geometry, marker/shape drawing, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content) | — |
+| `src/fretboard/state.js` *(Phase 3, in progress, landed 2026-08-01)* | The ~28 module-level `let`s `frets.js` used to hold directly - Scale Position Grid row anchors/tuning + its persisted display settings, the fretboard instance registry, chord/display state, chord-fingering tab state, and the scale-change debounce timestamps - plus `refreshScalePositionTuning()` and `persistScalePositionGridSettings()`. Exported as one mutable object, `fretboardState`, not bare `let`s - see §6.3 for why. | `theory/notation`, `tuning` | everything that used to read/write these as bare identifiers now imports `fretboardState` instead |
+| `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, fret geometry, marker/shape drawing, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. State moved to `src/fretboard/state.js` (see above); the rest is still one file, pending the remaining Phase 3 steps. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), `src/fretboard/state.js` | — |
 | `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
@@ -384,6 +385,43 @@ restructuring-only phase:
   `src/scales/state.js` and already lists the data half moving to
   `src/theory/` - this correction just makes that division point explicit
   rather than something Phase 2 could do as a side effect.
+
+### 6.3 `src/fretboard/state.js` (Phase 3, first step, 2026-08-01): why a mutable object, not exported `let`s
+
+`REFACTOR_PLAN.md` Phase 3 describes `state.js` as "the ~20 module-level
+`let`s + persistence" (28, once counted exactly). Moving them turned up a
+constraint the plan's one-line description didn't anticipate: **ES module
+named exports are live bindings that importers cannot reassign.** `frets.js`
+doesn't just read these values, it writes to most of them (`currentDisplayedChord
+= 0`, `isUpdatingFretboards = true`, etc.) from ~30 call sites scattered
+through the file. If `state.js` exported plain `let currentDisplayedChord`,
+every one of those writes would either throw or silently fail once moved
+out of the declaring module.
+
+The fix: `state.js` exports one object, `fretboardState`, and every former
+bare identifier became a property access (`fretboardState.currentDisplayedChord`).
+Property mutation on an imported object works everywhere, in both
+directions, with no live-binding restriction - this is the same shape as
+`src/audio/dispatch.js`'s registry, just holding fretboard UI state instead
+of channels. `frets.js` was mechanically rewritten at all ~188 read/write
+sites; the one local shadow (`initializeFretboard()`'s own `const
+mainFretboard`, distinct from the module-level pointer since before this
+phase) was left untouched, not renamed.
+
+**One barrel-export consequence:** `frets.js` used to `export { ...,
+currentDisplayedChord }`, and `chords.js`/`index.js` imported that binding
+directly, relying on the same live-binding behavior to see the *current*
+value whenever they read it (not a snapshot from import time). An object
+property can't be re-exported as a bare name and stay live the same way, so
+the barrel now exports `fretboardState` itself instead, and both consumers
+were updated to read `fretboardState.currentDisplayedChord`. This is the
+only change Phase 3 has made so far to a file outside `frets.js`/
+`src/fretboard/`; everything else this checkpoint touched stayed inside the
+mechanical rename.
+
+Verified via `npm test` (28/28), `npm run build`, and the `run-app` skill
+(default load, Scale Position Grid tab, Other Controls chord-grid tab) with
+zero console errors.
 
 ---
 

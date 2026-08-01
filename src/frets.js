@@ -28,6 +28,7 @@ import {
     isStandardGuitarTuning,
     toSlashFormat as tuningToSlashFormat
 } from './tuning';
+import { fretboardState, refreshScalePositionTuning, persistScalePositionGridSettings } from './fretboard/state';
 
 // Fallback tuning used only if no active instrument config is available yet.
 const GUITAR_TUNING = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'];
@@ -98,104 +99,17 @@ const DEFAULT_COLORS = {
     text: '#ffffff'
 };
 
-// Row anchors for the Scale Position Grid: string indices (into the active
-// tuning) used as row anchors, plus their display letters. Both are derived
-// from the active instrument tuning by refreshScalePositionTuning() - every
-// string except the highest-pitched one becomes a row, matching what the
-// original hardcoded ['B','A','G','E','D'] (indices 1-5 of standard tuning)
-// already did for 6-string guitar.
-let SCALE_POSITION_ROW_STRINGS = [1, 2, 3, 4, 5];
-let SCALE_POSITION_ROW_LABELS = ['B', 'A', 'G', 'E', 'D'];
-let MINI_SCALE_STRING_TUNING = ['E/4', 'B/3', 'G/3', 'D/3', 'A/2', 'E/2'];
+// Scale Position Grid row anchors/tuning, its persisted display settings,
+// the fretboard instance registry, chord/display state and the scale-change
+// debounce timestamps all live in src/fretboard/state.js (REFACTOR_PLAN.md
+// Phase 3) as `fretboardState`, imported above alongside
+// refreshScalePositionTuning()/persistScalePositionGridSettings(). What's
+// left here is pure, never-reassigned config data for the grid.
 const SCALE_POSITION_DEGREES = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 const MINI_SCALE_FRET_COUNT = 6;
-const SCALE_POSITION_PATTERN_SCALE = 1.5;
 const GENERIC_VISIBLE_FRET_START = 1;
 const GENERIC_ROOT_DISPLAY_COLUMN = 1;
 const SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET = 0;
-
-/**
- * Recompute the Scale Position Grid's row anchors/labels and mini-fretboard
- * tuning from a given tuning (defaults to the active instrument config).
- * Called on load and whenever the active instrument/tuning changes.
- */
-function refreshScalePositionTuning(tuning) {
-    const activeTuning = tuning || getActiveInstrumentConfig().tuning;
-    MINI_SCALE_STRING_TUNING = tuningToSlashFormat(activeTuning);
-
-    // One row per *unique* string pitch class, scanning from the lowest
-    // string upward and keeping the lowest occurrence of each letter - e.g.
-    // standard EADGBE collapses to E-A-D-G-B (high E dropped as a duplicate
-    // of low E), DADGAD collapses to D-A-G, standard 4-string bass EADG has
-    // no duplicates so all four remain.
-    const seenLetters = new Set();
-    const rowIndices = [];
-    for (let index = MINI_SCALE_STRING_TUNING.length - 1; index >= 0; index--) {
-        const letter = notationStripOctave(MINI_SCALE_STRING_TUNING[index]);
-        if (!seenLetters.has(letter)) {
-            seenLetters.add(letter);
-            rowIndices.push(index);
-        }
-    }
-
-    SCALE_POSITION_ROW_STRINGS = rowIndices;
-    SCALE_POSITION_ROW_LABELS = rowIndices.map(
-        index => notationStripOctave(MINI_SCALE_STRING_TUNING[index])
-    );
-}
-refreshScalePositionTuning();
-
-// Persisted Scale Position Grid display settings so users return to where they left off
-const SCALE_POSITION_GRID_SETTINGS_KEY = 'PolySynth-ScalePositionGridSettings';
-
-function loadSavedScalePositionGridSettings() {
-    try {
-        const raw = localStorage.getItem(SCALE_POSITION_GRID_SETTINGS_KEY);
-        return raw ? JSON.parse(raw) : null;
-    } catch (error) {
-        console.warn('Could not load saved Scale Position Grid settings, using defaults', error);
-        return null;
-    }
-}
-
-const savedScalePositionGridSettings = loadSavedScalePositionGridSettings();
-
-function persistScalePositionGridSettings() {
-    try {
-        localStorage.setItem(SCALE_POSITION_GRID_SETTINGS_KEY, JSON.stringify({
-            patternScale: scalePositionPatternScale,
-            useAbsoluteFretLabels: scalePositionUseAbsoluteFretLabels,
-            dotScale: scalePositionDotScale,
-            showChordNames: scalePositionShowChordNames,
-            useInstancedScale: scalePositionUseInstancedScale,
-            useNoteShapes: scalePositionUseNoteShapes,
-            keepColorConstant: scalePositionKeepColorConstant,
-            keepShapeConstant: scalePositionKeepShapeConstant,
-            darkDuplicate: scalePositionDarkDuplicate,
-            stackType: scalePositionStackType,
-            labelMode: scalePositionLabelMode,
-            allLabelsMode: scalePositionAllLabelsMode,
-            showGripLines: scalePositionShowGripLines
-        }));
-    } catch (error) {
-        console.warn('Could not persist Scale Position Grid settings', error);
-    }
-}
-
-let scalePositionPatternScale = savedScalePositionGridSettings?.patternScale ?? SCALE_POSITION_PATTERN_SCALE;
-let scalePositionUseAbsoluteFretLabels = savedScalePositionGridSettings?.useAbsoluteFretLabels ?? false;
-let scalePositionDotScale = savedScalePositionGridSettings?.dotScale ?? 2.5;
-let scalePositionShowChordNames = savedScalePositionGridSettings?.showChordNames ?? false;
-let scalePositionUseInstancedScale = savedScalePositionGridSettings?.useInstancedScale ?? false;
-let scalePositionUseNoteShapes = savedScalePositionGridSettings?.useNoteShapes ?? false;
-let scalePositionKeepColorConstant = savedScalePositionGridSettings?.keepColorConstant ?? false;
-let scalePositionKeepShapeConstant = savedScalePositionGridSettings?.keepShapeConstant ?? false;
-let scalePositionDarkDuplicate = savedScalePositionGridSettings?.darkDuplicate ?? true;
-let scalePositionStackType = savedScalePositionGridSettings?.stackType ?? 'triad';
-let scalePositionHiddenCells = new Set();
-let scalePositionLabelMode = savedScalePositionGridSettings?.labelMode ?? 'none'; // 'none' | 'note' | 'interval' | 'finger' - text label on chord grip dots
-let scalePositionAllLabelsMode = savedScalePositionGridSettings?.allLabelsMode ?? 'interval'; // 'none' | 'note' | 'interval' - text label on every dot (chord cells and the full scale column)
-let scalePositionShowGripLines = savedScalePositionGridSettings?.showGripLines ?? false; // Draw a connecting line between the picked grip's dots
 
 const SCALE_POSITION_STACK_SIZES = { dyad: 2, triad: 3, tetrad: 4 };
 
@@ -831,8 +745,8 @@ class Fretboard {
         this.markers.clear();
         
         // Only remove from scale tracking if not in an automatic update cycle
-        if (!isUpdatingFretboards) {
-            fretboardsShowingScale.delete(this.containerId);
+        if (!fretboardState.isUpdatingFretboards) {
+            fretboardState.fretboardsShowingScale.delete(this.containerId);
         }
     }
     
@@ -1045,7 +959,7 @@ class Fretboard {
         });
         
         // Always add to tracking if showing scale, whether from user action or auto-update
-        fretboardsShowingScale.add(this.containerId);
+        fretboardState.fretboardsShowingScale.add(this.containerId);
     }
     
     /**
@@ -1127,7 +1041,7 @@ class Fretboard {
         
         // Remove from scale tracking since we're showing specific notes
         if (clearFirst) {
-            fretboardsShowingScale.delete(this.containerId);
+            fretboardState.fretboardsShowingScale.delete(this.containerId);
         }
     }
     
@@ -1147,7 +1061,7 @@ class Fretboard {
         
         // Remove from scale tracking since we're showing specific notes
         if (clearFirst) {
-            fretboardsShowingScale.delete(this.containerId);
+            fretboardState.fretboardsShowingScale.delete(this.containerId);
         }
     }
     
@@ -1282,9 +1196,9 @@ class Fretboard {
         }
         
         // Add to chord tracking
-        fretboardsShowingChords.add(this.containerId);
+        fretboardState.fretboardsShowingChords.add(this.containerId);
         // Remove from scale tracking since we're showing chords
-        fretboardsShowingScale.delete(this.containerId);
+        fretboardState.fretboardsShowingScale.delete(this.containerId);
     }
     
     /**
@@ -2194,28 +2108,9 @@ class Fretboard {
     }
 }
 
-// Global fretboard instances
-let fretboardInstances = new Map();
-
-// Track which fretboards are showing the current scale
-let fretboardsShowingScale = new Set();
-
-// Track which fretboards are showing chords
-let fretboardsShowingChords = new Set();
-
-// Track current chord display state
-let currentChordType = 'triads'; // 'triads' or 'sevenths'
-let currentDisplayedChord = null; // Currently displayed chord index (0-6)
-let isInHoverState = false; // Track if we're currently in a temporary hover state
-let mainFretboardLabelMode = 'note'; // 'note' | 'interval' | 'finger' - marker label mode for chord/scale displays
-
-// Track chord grid state
-let currentChordGridSelection = null; // Track permanent chord grid selections {note, chordType}
-let chordFingeringShapes = []; // Playable shapes found for the currently displayed chord
-let selectedFingeringTabIndex = 0; // Which shape/tab is currently rendered
-
-// Flag to prevent infinite update loops
-let isUpdatingFretboards = false;
+// Fretboard instance registry, chord/display state and chord-fingering tab
+// state now live in src/fretboard/state.js as `fretboardState` (imported
+// above) - REFACTOR_PLAN.md Phase 3.
 
 function normalizeIntervalLabel(label) {
     if (!label || label === '?') {
@@ -2248,7 +2143,7 @@ function getIntervalLabelFromRoot(rootNote, targetNote) {
  */
 function createFretboard(containerId, options = {}) {
     const fretboard = new Fretboard(containerId, options);
-    fretboardInstances.set(containerId, fretboard);
+    fretboardState.fretboardInstances.set(containerId, fretboard);
     return fretboard;
 }
 
@@ -2256,7 +2151,7 @@ function createFretboard(containerId, options = {}) {
  * Get an existing fretboard instance
  */
 function getFretboard(containerId) {
-    return fretboardInstances.get(containerId);
+    return fretboardState.fretboardInstances.get(containerId);
 }
 
 /**
@@ -2273,7 +2168,7 @@ function initializeFretboard() {
     createFretboardControls(mainFretboard);
 
     // Set the scale button as active by default and show the scale
-    currentDisplayedChord = 0; // Scale button is index 0
+    fretboardState.currentDisplayedChord = 0; // Scale button is index 0
     showScaleOnFretboard();
     updateChordButtonStyles();
 
@@ -2289,7 +2184,7 @@ function initializeFretboard() {
         mainFretboard.setTuning(config.tuning);
         refreshScalePositionTuning(config.tuning);
         clearFingeringTabs();
-        currentDisplayedChord = 0;
+        fretboardState.currentDisplayedChord = 0;
         showScaleOnFretboard();
         updateChordButtonStyles();
         renderScalePositionGrid();
@@ -2763,15 +2658,15 @@ function createFretboardControls(fretboard) {
     });
     addInteractiveEvent(clearButton, 'click', () => {
         // Clear hover state flag
-        isInHoverState = false;
+        fretboardState.isInHoverState = false;
         
         fretboard.clearMarkers();
         fretboard.clearChordLines();
         // Clear all tracking state
-        fretboardsShowingScale.delete(fretboard.containerId);
-        fretboardsShowingChords.delete(fretboard.containerId);
-        currentDisplayedChord = null;
-        currentChordGridSelection = null; // Clear chord grid selection
+        fretboardState.fretboardsShowingScale.delete(fretboard.containerId);
+        fretboardState.fretboardsShowingChords.delete(fretboard.containerId);
+        fretboardState.currentDisplayedChord = null;
+        fretboardState.currentChordGridSelection = null; // Clear chord grid selection
         clearFingeringTabs();
         // Clear chord info display
         updateChordInfoDisplay();
@@ -2793,7 +2688,7 @@ function createFretboardControls(fretboard) {
         fretboard.markAllNotes();
         clearFingeringTabs();
         // Remove this fretboard from the scale tracking set since it's now showing all notes
-        fretboardsShowingScale.delete(fretboard.containerId);
+        fretboardState.fretboardsShowingScale.delete(fretboard.containerId);
     });
     
     // Show current scale button
@@ -2832,14 +2727,14 @@ function createFretboardControls(fretboard) {
             const scaleNotes = getScaleNotes(rootNote, intervals);
             
             fretboard.markScale(scaleNotes, rootNote, {
-                showIntervals: mainFretboardLabelMode === 'interval'
+                showIntervals: fretboardState.mainFretboardLabelMode === 'interval'
             });
 
             // Track that this fretboard is showing the current scale
-            fretboardsShowingScale.add(fretboard.containerId);
+            fretboardState.fretboardsShowingScale.add(fretboard.containerId);
             
             // Set the Scale button as the current selection
-            currentDisplayedChord = 0;
+            fretboardState.currentDisplayedChord = 0;
             updateChordButtonStyles();
         } catch (error) {
             console.warn('Could not get current scale:', error);
@@ -3343,11 +3238,11 @@ function createFretboardControls(fretboard) {
         margin-right: 8px;
     `;
     chordTypeSelect.addEventListener('change', () => {
-        currentChordType = chordTypeSelect.value;
+        fretboardState.currentChordType = chordTypeSelect.value;
         // Update displayed chord if one is currently shown
-        if (currentDisplayedChord !== null && currentDisplayedChord > 0) {
+        if (fretboardState.currentDisplayedChord !== null && fretboardState.currentDisplayedChord > 0) {
             // Only update if a chord is selected (not scale)
-            showChordOnFretboard(currentDisplayedChord - 1);
+            showChordOnFretboard(fretboardState.currentDisplayedChord - 1);
         }
     });
 
@@ -3377,7 +3272,7 @@ function createFretboardControls(fretboard) {
         <option value="interval">Interval</option>
         <option value="finger">Finger Number</option>
     `;
-    intervalsToggleSelect.value = mainFretboardLabelMode;
+    intervalsToggleSelect.value = fretboardState.mainFretboardLabelMode;
     intervalsToggleSelect.style.cssText = `
         padding: 2px 4px;
         border: 1px solid #ccc;
@@ -3387,14 +3282,14 @@ function createFretboardControls(fretboard) {
     `;
 
     intervalsToggleSelect.addEventListener('change', (e) => {
-        mainFretboardLabelMode = e.target.value;
+        fretboardState.mainFretboardLabelMode = e.target.value;
 
-        if (currentChordGridSelection) {
-            showChordPatternOnFretboard(currentChordGridSelection.note, currentChordGridSelection.chordType, false);
-        } else if (currentDisplayedChord === 0) {
+        if (fretboardState.currentChordGridSelection) {
+            showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);
+        } else if (fretboardState.currentDisplayedChord === 0) {
             showScaleOnFretboard();
-        } else if (currentDisplayedChord !== null && currentDisplayedChord > 0) {
-            showChordOnFretboard(currentDisplayedChord - 1);
+        } else if (fretboardState.currentDisplayedChord !== null && fretboardState.currentDisplayedChord > 0) {
+            showChordOnFretboard(fretboardState.currentDisplayedChord - 1);
         }
     });
 
@@ -3430,11 +3325,11 @@ function createFretboardControls(fretboard) {
         
         // Hover effects
         chordButton.addEventListener('mouseenter', () => {
-            if (currentDisplayedChord !== index) {
+            if (fretboardState.currentDisplayedChord !== index) {
                 chordButton.style.background = 'linear-gradient(to bottom, #e2e6ea, #dae0e5)';
                 chordButton.style.transform = 'translateY(-1px)';
                 // Set hover state flag
-                isInHoverState = true;
+                fretboardState.isInHoverState = true;
                 // Show chord or scale temporarily on hover
                 if (index === 0) {
                     // Scale button
@@ -3447,11 +3342,11 @@ function createFretboardControls(fretboard) {
         });
         
         chordButton.addEventListener('mouseleave', () => {
-            if (currentDisplayedChord !== index) {
+            if (fretboardState.currentDisplayedChord !== index) {
                 chordButton.style.background = 'linear-gradient(to bottom, #f8f9fa, #e9ecef)';
                 chordButton.style.transform = 'translateY(0)';
                 // Clear hover state flag
-                isInHoverState = false;
+                fretboardState.isInHoverState = false;
                 // Use centralized restoration function that handles both Roman numerals and chord grid
                 restoreFretboardState();
             }
@@ -3460,24 +3355,24 @@ function createFretboardControls(fretboard) {
         // Click to toggle chord/scale display
         chordButton.addEventListener('click', () => {
             // Clear hover state flag since we're making a permanent selection
-            isInHoverState = false;
+            fretboardState.isInHoverState = false;
             
             // Clear any chord grid selection since we're now using Roman numerals
-            currentChordGridSelection = null;
+            fretboardState.currentChordGridSelection = null;
             
-            if (currentDisplayedChord === index) {
+            if (fretboardState.currentDisplayedChord === index) {
                 // If this option is already displayed, clear it
-                currentDisplayedChord = null;
+                fretboardState.currentDisplayedChord = null;
                 fretboard.clearMarkers();
                 fretboard.clearChordLines();
-                fretboardsShowingChords.delete(fretboard.containerId);
-                fretboardsShowingScale.delete(fretboard.containerId);
+                fretboardState.fretboardsShowingChords.delete(fretboard.containerId);
+                fretboardState.fretboardsShowingScale.delete(fretboard.containerId);
                 // Clear chord info display
                 updateChordInfoDisplay();
                 updateChordButtonStyles();
             } else {
                 // Display this option
-                currentDisplayedChord = index;
+                fretboardState.currentDisplayedChord = index;
                 if (index === 0) {
                     // Scale button
                     showScaleOnFretboard();
@@ -4206,7 +4101,7 @@ function deriveChordSuffix(chordRoot, chordNotes) {
  * @returns {string}
  */
 function buildDegreeHeaderLabel(roman, chordRoot, chordNotes) {
-    if (!scalePositionShowChordNames) {
+    if (!fretboardState.scalePositionShowChordNames) {
         return roman;
     }
 
@@ -4430,14 +4325,14 @@ function createNoteShapeMarker(x, y, radius, shapeType, fill, stroke, strokeWidt
 
 /**
  * Find the first matching fret at or above a minimum fret for a row root note.
- * @param {number} rowStringIndex - String index (into MINI_SCALE_STRING_TUNING) used as the row anchor
+ * @param {number} rowStringIndex - String index (into fretboardState.MINI_SCALE_STRING_TUNING) used as the row anchor
  * @param {string} rowScaleRootNote - Scale root note used to anchor the row
  * @param {number} minFret - Minimum target fret
  * @returns {number|null} Absolute fret number or null if not found in range
  */
 function findRowRootAbsoluteFret(rowStringIndex, rowScaleRootNote, minFret = SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET) {
     const anchorIndex = rowStringIndex;
-    const anchorOpenMidi = notationNoteToMidi(MINI_SCALE_STRING_TUNING[anchorIndex]);
+    const anchorOpenMidi = notationNoteToMidi(fretboardState.MINI_SCALE_STRING_TUNING[anchorIndex]);
     const rootPitchClass = ((notationNoteToMidi(`${normalizeNote(rowScaleRootNote)}/4`) % 12) + 12) % 12;
 
     for (let fret = Math.max(0, minFret); fret <= FRET_COUNT; fret++) {
@@ -4472,7 +4367,7 @@ function getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn) {
  * @param {Array<string>} scaleNoteNames - Full active scale notes
  * @param {Array<string>} displayedNotes - Notes shown in this specific cell
  * @param {string} referenceRootNote - Reference root used for interval coloring
- * @param {number} rowStringIndex - Target row's string index (into MINI_SCALE_STRING_TUNING)
+ * @param {number} rowStringIndex - Target row's string index (into fretboardState.MINI_SCALE_STRING_TUNING)
  * @param {string} rowScaleRootNote - Scale root used to anchor row-generic fret layout
  * @param {boolean} showOnlyDisplayedNotes - If true, only notes from displayedNotes are rendered
  * @param {boolean} showRelativeFretLabels - If true, show R/-1/+1 labels under fret columns
@@ -4520,9 +4415,9 @@ function createScalePositionMiniFretboard(
     rowStringIndex,
     rowScaleRootNote,
     showOnlyDisplayedNotes = false,
-    patternScale = scalePositionPatternScale,
+    patternScale = fretboardState.scalePositionPatternScale,
     showRelativeFretLabels = true,
-    showAbsoluteFretLabels = scalePositionUseAbsoluteFretLabels
+    showAbsoluteFretLabels = fretboardState.scalePositionUseAbsoluteFretLabels
 ) {
     const wrapper = document.createElement('div');
     wrapper.style.cssText = `
@@ -4541,7 +4436,7 @@ function createScalePositionMiniFretboard(
     // 4-string bass vs 8-string guitar) instead of a fixed value tuned for
     // 6-string guitar, which made bass boards look squashed-tall and extended
     // range boards look cramped.
-    const stringsSpan = (MINI_SCALE_STRING_TUNING.length - 1) * stringGap;
+    const stringsSpan = (fretboardState.MINI_SCALE_STRING_TUNING.length - 1) * stringGap;
     const bottomMargin = showRelativeFretLabels ? (22 * patternScale) : (10 * patternScale);
     const height = Math.round(startY + stringsSpan + bottomMargin);
 
@@ -4559,13 +4454,13 @@ function createScalePositionMiniFretboard(
         line.setAttribute('x1', String(x));
         line.setAttribute('y1', String(startY));
         line.setAttribute('x2', String(x));
-        line.setAttribute('y2', String(startY + (MINI_SCALE_STRING_TUNING.length - 1) * stringGap));
+        line.setAttribute('y2', String(startY + (fretboardState.MINI_SCALE_STRING_TUNING.length - 1) * stringGap));
         line.setAttribute('stroke', '#6c6c6c');
         line.setAttribute('stroke-width', '1');
         svg.appendChild(line);
     }
 
-    for (let stringIndex = 0; stringIndex < MINI_SCALE_STRING_TUNING.length; stringIndex++) {
+    for (let stringIndex = 0; stringIndex < fretboardState.MINI_SCALE_STRING_TUNING.length; stringIndex++) {
         const y = startY + stringIndex * stringGap;
         const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
         line.setAttribute('x1', String(startX));
@@ -4580,8 +4475,8 @@ function createScalePositionMiniFretboard(
     const scaleArray = Array.isArray(scaleNoteNames) ? scaleNoteNames : [];
     const displayedArray = Array.isArray(displayedNotes) ? displayedNotes : [];
     const rowRootAbsoluteFret = findRowRootAbsoluteFret(rowStringIndex, rowScaleRootNote, SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET);
-    const colorReferenceRoot = scalePositionKeepColorConstant ? rowScaleRootNote : referenceRootNote;
-    const shapeReferenceRoot = scalePositionKeepShapeConstant ? rowScaleRootNote : referenceRootNote;
+    const colorReferenceRoot = fretboardState.scalePositionKeepColorConstant ? rowScaleRootNote : referenceRootNote;
+    const shapeReferenceRoot = fretboardState.scalePositionKeepShapeConstant ? rowScaleRootNote : referenceRootNote;
 
     if (rowRootAbsoluteFret === null) {
         wrapper.appendChild(svg);
@@ -4590,8 +4485,8 @@ function createScalePositionMiniFretboard(
 
     const candidates = [];
 
-    for (let stringIndex = 0; stringIndex < MINI_SCALE_STRING_TUNING.length; stringIndex++) {
-        const openMidi = notationNoteToMidi(MINI_SCALE_STRING_TUNING[stringIndex]);
+    for (let stringIndex = 0; stringIndex < fretboardState.MINI_SCALE_STRING_TUNING.length; stringIndex++) {
+        const openMidi = notationNoteToMidi(fretboardState.MINI_SCALE_STRING_TUNING[stringIndex]);
 
         for (let displayColumn = 0; displayColumn <= MINI_SCALE_FRET_COUNT; displayColumn++) {
             const absoluteFret = getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn);
@@ -4619,7 +4514,7 @@ function createScalePositionMiniFretboard(
             const colorSemitone = getSemitoneFromReference(colorReferenceRoot, noteName);
             const shapeSemitone = getSemitoneFromReference(shapeReferenceRoot, noteName);
             let intervalColor = getIntervalColor(colorSemitone);
-            if(scalePositionDarkDuplicate){
+            if(fretboardState.scalePositionDarkDuplicate){
                 // If the note is on an x-position of 4 or higher, darken the color to indicate it's a duplicate note in the scale position grid.
                 if(displayColumn >= 6 && stringIndex != 2){
                     intervalColor = shadeColor(intervalColor, -70);
@@ -4633,8 +4528,8 @@ function createScalePositionMiniFretboard(
             }
 
             const baseRadius = isRoot ? 3.4 : 2.9;
-            const radius = baseRadius * scalePositionDotScale;
-            const shapeType = scalePositionUseNoteShapes
+            const radius = baseRadius * fretboardState.scalePositionDotScale;
+            const shapeType = fretboardState.scalePositionUseNoteShapes
                 ? NOTE_SHAPE_TYPES[shapeSemitone % NOTE_SHAPE_TYPES.length]
                 : 'circle';
 
@@ -4665,13 +4560,13 @@ function createScalePositionMiniFretboard(
         assignFingers(grip);
         gripMembers = new Set(grip);
 
-        if (scalePositionShowGripLines && grip.length > 1) {
+        if (fretboardState.scalePositionShowGripLines && grip.length > 1) {
             const orderedGrip = grip.slice().sort((a, b) => a.string - b.string);
             const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
             polyline.setAttribute('points', orderedGrip.map(c => `${c.x},${c.y}`).join(' '));
             polyline.setAttribute('fill', 'none');
             polyline.setAttribute('stroke', 'rgba(255,255,255,0.65)');
-            polyline.setAttribute('stroke-width', String(Math.max(1, 1.4 * scalePositionDotScale)));
+            polyline.setAttribute('stroke-width', String(Math.max(1, 1.4 * fretboardState.scalePositionDotScale)));
             polyline.setAttribute('stroke-linecap', 'round');
             polyline.setAttribute('stroke-linejoin', 'round');
             svg.appendChild(polyline);
@@ -4692,11 +4587,11 @@ function createScalePositionMiniFretboard(
         );
         svg.appendChild(marker);
 
-        if (scalePositionAllLabelsMode !== 'none') {
+        if (fretboardState.scalePositionAllLabelsMode !== 'none') {
             // Show a single label (note name or interval) on every rendered
             // dot - chord cells and the full scale reference column alike -
             // independent of the picked grip.
-            const allLabelText = scalePositionAllLabelsMode === 'interval' ? candidate.intervalLabel : candidate.noteName;
+            const allLabelText = fretboardState.scalePositionAllLabelsMode === 'interval' ? candidate.intervalLabel : candidate.noteName;
             if (allLabelText) {
                 const allLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 allLabel.setAttribute('x', String(candidate.x));
@@ -4710,8 +4605,8 @@ function createScalePositionMiniFretboard(
                 allLabel.textContent = allLabelText;
                 svg.appendChild(allLabel);
             }
-        } else if (isGripMember && scalePositionLabelMode !== 'none') {
-            const labelText = getFingeringMarkerLabel(candidate, scalePositionLabelMode);
+        } else if (isGripMember && fretboardState.scalePositionLabelMode !== 'none') {
+            const labelText = getFingeringMarkerLabel(candidate, fretboardState.scalePositionLabelMode);
             if (labelText) {
                 const gripLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
                 gripLabel.setAttribute('x', String(candidate.x));
@@ -4729,7 +4624,7 @@ function createScalePositionMiniFretboard(
     });
 
     if (showRelativeFretLabels) {
-        const labelY = startY + (MINI_SCALE_STRING_TUNING.length - 1) * stringGap + (12 * patternScale);
+        const labelY = startY + (fretboardState.MINI_SCALE_STRING_TUNING.length - 1) * stringGap + (12 * patternScale);
         for (let displayColumn = 0; displayColumn <= MINI_SCALE_FRET_COUNT; displayColumn++) {
             const x = startX + displayColumn * fretGap;
             const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -4769,15 +4664,15 @@ function scalePositionCellKey(rowIndex, colIndex) {
 }
 
 function isScalePositionCellVisible(rowIndex, colIndex) {
-    return !scalePositionHiddenCells.has(scalePositionCellKey(rowIndex, colIndex));
+    return !fretboardState.scalePositionHiddenCells.has(scalePositionCellKey(rowIndex, colIndex));
 }
 
 function setScalePositionCellVisible(rowIndex, colIndex, visible) {
     const key = scalePositionCellKey(rowIndex, colIndex);
     if (visible) {
-        scalePositionHiddenCells.delete(key);
+        fretboardState.scalePositionHiddenCells.delete(key);
     } else {
-        scalePositionHiddenCells.add(key);
+        fretboardState.scalePositionHiddenCells.add(key);
     }
 }
 
@@ -4884,7 +4779,7 @@ function styleScalePositionFocusCell(el, visible, isHeader) {
  * @returns {HTMLElement}
  */
 function buildScalePositionFocusMatrix(columnCount) {
-    const rowCount = SCALE_POSITION_ROW_STRINGS.length;
+    const rowCount = fretboardState.SCALE_POSITION_ROW_STRINGS.length;
 
     const wrapper = document.createElement('div');
     wrapper.style.cssText = `
@@ -4957,7 +4852,7 @@ function buildScalePositionFocusMatrix(columnCount) {
 
     for (let row = 0; row < rowCount; row++) {
         const tr = document.createElement('tr');
-        const rowLabel = SCALE_POSITION_ROW_LABELS[row];
+        const rowLabel = fretboardState.SCALE_POSITION_ROW_LABELS[row];
 
         const rowHeader = document.createElement('th');
         rowHeader.textContent = rowLabel;
@@ -5127,14 +5022,14 @@ function renderScalePositionGrid() {
     scaleInput.min = '0.8';
     scaleInput.max = '2.2';
     scaleInput.step = '0.05';
-    scaleInput.value = String(scalePositionPatternScale);
+    scaleInput.value = String(fretboardState.scalePositionPatternScale);
     const scaleValue = document.createElement('span');
     scaleValue.style.cssText = 'min-width: 34px; text-align: right; font-family: monospace;';
-    scaleValue.textContent = `${scalePositionPatternScale.toFixed(2)}x`;
+    scaleValue.textContent = `${fretboardState.scalePositionPatternScale.toFixed(2)}x`;
     scaleInput.addEventListener('input', (event) => {
         const newValue = parseFloat(event.target.value);
         if (!Number.isNaN(newValue)) {
-            scalePositionPatternScale = newValue;
+            fretboardState.scalePositionPatternScale = newValue;
             scaleValue.textContent = `${newValue.toFixed(2)}x`;
             renderScalePositionGrid();
         }
@@ -5160,14 +5055,14 @@ function renderScalePositionGrid() {
     dotInput.min = '0.5';
     dotInput.max = '3';
     dotInput.step = '0.05';
-    dotInput.value = String(scalePositionDotScale);
+    dotInput.value = String(fretboardState.scalePositionDotScale);
     const dotValue = document.createElement('span');
     dotValue.style.cssText = 'min-width: 34px; text-align: right; font-family: monospace;';
-    dotValue.textContent = `${scalePositionDotScale.toFixed(2)}x`;
+    dotValue.textContent = `${fretboardState.scalePositionDotScale.toFixed(2)}x`;
     dotInput.addEventListener('input', (event) => {
         const newValue = parseFloat(event.target.value);
         if (!Number.isNaN(newValue)) {
-            scalePositionDotScale = newValue;
+            fretboardState.scalePositionDotScale = newValue;
             dotValue.textContent = `${newValue.toFixed(2)}x`;
             renderScalePositionGrid();
         }
@@ -5188,12 +5083,12 @@ function renderScalePositionGrid() {
     `;
     const modeToggle = document.createElement('input');
     modeToggle.type = 'checkbox';
-    modeToggle.checked = scalePositionUseAbsoluteFretLabels;
+    modeToggle.checked = fretboardState.scalePositionUseAbsoluteFretLabels;
     const modeLabel = document.createElement('span');
-    modeLabel.textContent = scalePositionUseAbsoluteFretLabels ? 'Fret Labels: Absolute' : 'Fret Labels: Relative';
+    modeLabel.textContent = fretboardState.scalePositionUseAbsoluteFretLabels ? 'Fret Labels: Absolute' : 'Fret Labels: Relative';
     modeToggle.addEventListener('change', (event) => {
-        scalePositionUseAbsoluteFretLabels = event.target.checked;
-        modeLabel.textContent = scalePositionUseAbsoluteFretLabels ? 'Fret Labels: Absolute' : 'Fret Labels: Relative';
+        fretboardState.scalePositionUseAbsoluteFretLabels = event.target.checked;
+        modeLabel.textContent = fretboardState.scalePositionUseAbsoluteFretLabels ? 'Fret Labels: Absolute' : 'Fret Labels: Relative';
         renderScalePositionGrid();
     });
     modeControl.appendChild(modeToggle);
@@ -5217,7 +5112,7 @@ function renderScalePositionGrid() {
         <option value="triad">Triad</option>
         <option value="tetrad">Tetrad</option>
     `;
-    stackSelect.value = scalePositionStackType;
+    stackSelect.value = fretboardState.scalePositionStackType;
     stackSelect.style.cssText = `
         padding: 2px 4px;
         border: 1px solid #666;
@@ -5227,7 +5122,7 @@ function renderScalePositionGrid() {
         color: #e3e3e3;
     `;
     stackSelect.addEventListener('change', (event) => {
-        scalePositionStackType = event.target.value;
+        fretboardState.scalePositionStackType = event.target.value;
         renderScalePositionGrid();
     });
     stackControl.appendChild(stackLabel);
@@ -5252,7 +5147,7 @@ function renderScalePositionGrid() {
         <option value="interval">Interval</option>
         <option value="finger">Finger Number</option>
     `;
-    gripLabelSelect.value = scalePositionLabelMode;
+    gripLabelSelect.value = fretboardState.scalePositionLabelMode;
     gripLabelSelect.style.cssText = `
         padding: 2px 4px;
         border: 1px solid #666;
@@ -5262,7 +5157,7 @@ function renderScalePositionGrid() {
         color: #e3e3e3;
     `;
     gripLabelSelect.addEventListener('change', (event) => {
-        scalePositionLabelMode = event.target.value;
+        fretboardState.scalePositionLabelMode = event.target.value;
         renderScalePositionGrid();
     });
     gripLabelControl.appendChild(gripLabelLabel);
@@ -5286,7 +5181,7 @@ function renderScalePositionGrid() {
         <option value="note">Note Name</option>
         <option value="interval">Interval</option>
     `;
-    allLabelsSelect.value = scalePositionAllLabelsMode;
+    allLabelsSelect.value = fretboardState.scalePositionAllLabelsMode;
     allLabelsSelect.style.cssText = `
         padding: 2px 4px;
         border: 1px solid #666;
@@ -5296,7 +5191,7 @@ function renderScalePositionGrid() {
         color: #e3e3e3;
     `;
     allLabelsSelect.addEventListener('change', (event) => {
-        scalePositionAllLabelsMode = event.target.value;
+        fretboardState.scalePositionAllLabelsMode = event.target.value;
         renderScalePositionGrid();
     });
     allLabelsControl.appendChild(allLabelsLabel);
@@ -5314,11 +5209,11 @@ function renderScalePositionGrid() {
     `;
     const gripLinesToggle = document.createElement('input');
     gripLinesToggle.type = 'checkbox';
-    gripLinesToggle.checked = scalePositionShowGripLines;
+    gripLinesToggle.checked = fretboardState.scalePositionShowGripLines;
     const gripLinesLabel = document.createElement('span');
     gripLinesLabel.textContent = 'Connect Fingered Notes';
     gripLinesToggle.addEventListener('change', (event) => {
-        scalePositionShowGripLines = event.target.checked;
+        fretboardState.scalePositionShowGripLines = event.target.checked;
         renderScalePositionGrid();
     });
     gripLinesControl.appendChild(gripLinesToggle);
@@ -5336,11 +5231,11 @@ function renderScalePositionGrid() {
     `;
     const chordHeaderToggle = document.createElement('input');
     chordHeaderToggle.type = 'checkbox';
-    chordHeaderToggle.checked = scalePositionShowChordNames;
+    chordHeaderToggle.checked = fretboardState.scalePositionShowChordNames;
     const chordHeaderLabel = document.createElement('span');
     chordHeaderLabel.textContent = 'Show Chord Names In Headers';
     chordHeaderToggle.addEventListener('change', (event) => {
-        scalePositionShowChordNames = event.target.checked;
+        fretboardState.scalePositionShowChordNames = event.target.checked;
         renderScalePositionGrid();
     });
     chordHeaderControl.appendChild(chordHeaderToggle);
@@ -5358,11 +5253,11 @@ function renderScalePositionGrid() {
     `;
     const instancedScaleToggle = document.createElement('input');
     instancedScaleToggle.type = 'checkbox';
-    instancedScaleToggle.checked = scalePositionUseInstancedScale;
+    instancedScaleToggle.checked = fretboardState.scalePositionUseInstancedScale;
     const instancedScaleLabel = document.createElement('span');
     instancedScaleLabel.textContent = 'Instanced Scale Labels (Notes)';
     instancedScaleToggle.addEventListener('change', (event) => {
-        scalePositionUseInstancedScale = event.target.checked;
+        fretboardState.scalePositionUseInstancedScale = event.target.checked;
         renderScalePositionGrid();
     });
     instancedScaleControl.appendChild(instancedScaleToggle);
@@ -5380,11 +5275,11 @@ function renderScalePositionGrid() {
     `;
     const shapeToggle = document.createElement('input');
     shapeToggle.type = 'checkbox';
-    shapeToggle.checked = scalePositionUseNoteShapes;
+    shapeToggle.checked = fretboardState.scalePositionUseNoteShapes;
     const shapeLabel = document.createElement('span');
     shapeLabel.textContent = 'Use Note Shapes';
     shapeToggle.addEventListener('change', (event) => {
-        scalePositionUseNoteShapes = event.target.checked;
+        fretboardState.scalePositionUseNoteShapes = event.target.checked;
         renderScalePositionGrid();
     });
     shapeControl.appendChild(shapeToggle);
@@ -5402,11 +5297,11 @@ function renderScalePositionGrid() {
     `;
     const keepColorToggle = document.createElement('input');
     keepColorToggle.type = 'checkbox';
-    keepColorToggle.checked = scalePositionKeepColorConstant;
+    keepColorToggle.checked = fretboardState.scalePositionKeepColorConstant;
     const keepColorLabel = document.createElement('span');
     keepColorLabel.textContent = 'Keep Color Constant';
     keepColorToggle.addEventListener('change', (event) => {
-        scalePositionKeepColorConstant = event.target.checked;
+        fretboardState.scalePositionKeepColorConstant = event.target.checked;
         renderScalePositionGrid();
     });
     keepColorControl.appendChild(keepColorToggle);
@@ -5424,11 +5319,11 @@ function renderScalePositionGrid() {
     `;
     const keepShapeToggle = document.createElement('input');
     keepShapeToggle.type = 'checkbox';
-    keepShapeToggle.checked = scalePositionKeepShapeConstant;
+    keepShapeToggle.checked = fretboardState.scalePositionKeepShapeConstant;
     const keepShapeLabel = document.createElement('span');
     keepShapeLabel.textContent = 'Keep Shape Constant';
     keepShapeToggle.addEventListener('change', (event) => {
-        scalePositionKeepShapeConstant = event.target.checked;
+        fretboardState.scalePositionKeepShapeConstant = event.target.checked;
         renderScalePositionGrid();
     });
     keepShapeControl.appendChild(keepShapeToggle);
@@ -5447,11 +5342,11 @@ function renderScalePositionGrid() {
 
     const darkDuplicate = document.createElement('input');
     darkDuplicate.type = 'checkbox';
-    darkDuplicate.checked = scalePositionDarkDuplicate;
+    darkDuplicate.checked = fretboardState.scalePositionDarkDuplicate;
     const darkDuplicateLabel = document.createElement('span');
     darkDuplicateLabel.textContent = 'Dark Duplicate';
     darkDuplicate.addEventListener('change', (event) => {
-        scalePositionDarkDuplicate = event.target.checked;
+        fretboardState.scalePositionDarkDuplicate = event.target.checked;
         renderScalePositionGrid();
     });
     darkDuplicateControl.appendChild(darkDuplicate);
@@ -5476,7 +5371,7 @@ function renderScalePositionGrid() {
     const workingScale = scaleNoteNames.length > 0 ? scaleNoteNames : fallbackScale;
     const scaleIntervalEntries = getScaleIntervalEntries(workingScale, normalizedRoot);
     const intervalSummary = `${scaleIntervalEntries.map(entry => entry.intervalLabel).join(' - ')} - O`;
-    const noteSummary = scalePositionUseInstancedScale ? ` | Notes: ${workingScale.join(' - ')}` : '';
+    const noteSummary = fretboardState.scalePositionUseInstancedScale ? ` | Notes: ${workingScale.join(' - ')}` : '';
     const scaleDescriptor = getScaleDescriptor(primaryScale);
 
     const selectedScaleTitle = document.createElement('div');
@@ -5487,7 +5382,7 @@ function renderScalePositionGrid() {
         font-weight: bold;
         text-align: center;
     `;
-    const titlePrefix = scalePositionUseInstancedScale ? `${normalizedRoot} ` : '';
+    const titlePrefix = fretboardState.scalePositionUseInstancedScale ? `${normalizedRoot} ` : '';
     selectedScaleTitle.textContent = `${titlePrefix}${scaleDescriptor} | Intervals: ${intervalSummary} ${noteSummary}`;
     infoColumn.appendChild(selectedScaleTitle);
 
@@ -5520,7 +5415,7 @@ function renderScalePositionGrid() {
         iconSvg.setAttribute('height', '12');
         iconSvg.style.cssText = 'display:inline-block;';
 
-        const legendShapeType = scalePositionUseNoteShapes
+        const legendShapeType = fretboardState.scalePositionUseNoteShapes
             ? NOTE_SHAPE_TYPES[entry.semitone % NOTE_SHAPE_TYPES.length]
             : 'circle';
         const legendShape = createNoteShapeMarker(
@@ -5535,7 +5430,7 @@ function renderScalePositionGrid() {
         iconSvg.appendChild(legendShape);
 
         const text = document.createElement('span');
-        text.textContent = scalePositionUseInstancedScale ? entry.note : entry.intervalLabel;
+        text.textContent = fretboardState.scalePositionUseInstancedScale ? entry.note : entry.intervalLabel;
 
         item.appendChild(iconSvg);
         item.appendChild(text);
@@ -5560,7 +5455,7 @@ function renderScalePositionGrid() {
 
     focusColumn.appendChild(buildScalePositionFocusMatrix(columnCount));
 
-    const rowCount = SCALE_POSITION_ROW_STRINGS.length;
+    const rowCount = fretboardState.SCALE_POSITION_ROW_STRINGS.length;
     const showScaleColumn = !isScalePositionColumnFullyHidden(-1, rowCount);
     const visibleDegreeCols = [];
     for (let col = 0; col < columnCount; col++) {
@@ -5599,13 +5494,13 @@ function renderScalePositionGrid() {
             color: #fff;
             padding: 4px;
             font-size: 11px;
-            min-width: ${Math.round(130 * scalePositionPatternScale)}px;
+            min-width: ${Math.round(130 * fretboardState.scalePositionPatternScale)}px;
             text-align: center;
         `;
         headerRow.appendChild(scaleHeader);
     }
 
-    const chordSpan = SCALE_POSITION_STACK_SIZES[scalePositionStackType] || 3;
+    const chordSpan = SCALE_POSITION_STACK_SIZES[fretboardState.scalePositionStackType] || 3;
 
     for (const col of visibleDegreeCols) {
         const colHeader = document.createElement('th');
@@ -5626,7 +5521,7 @@ function renderScalePositionGrid() {
             color: #fff;
             padding: 4px;
             font-size: 11px;
-            min-width: ${Math.round(130 * scalePositionPatternScale)}px;
+            min-width: ${Math.round(130 * fretboardState.scalePositionPatternScale)}px;
             text-align: center;
             white-space: pre-line;
             line-height: 1.2;
@@ -5640,8 +5535,8 @@ function renderScalePositionGrid() {
             continue;
         }
 
-        const rowStringIndex = SCALE_POSITION_ROW_STRINGS[row];
-        const rowLabel = SCALE_POSITION_ROW_LABELS[row];
+        const rowStringIndex = fretboardState.SCALE_POSITION_ROW_STRINGS[row];
+        const rowLabel = fretboardState.SCALE_POSITION_ROW_LABELS[row];
         const tr = document.createElement('tr');
 
         const rowHeader = document.createElement('td');
@@ -5674,9 +5569,9 @@ function renderScalePositionGrid() {
                     rowStringIndex,
                     normalizedRoot,
                     false,
-                    scalePositionPatternScale,
+                    fretboardState.scalePositionPatternScale,
                     true,
-                    scalePositionUseAbsoluteFretLabels
+                    fretboardState.scalePositionUseAbsoluteFretLabels
                 );
                 fullScaleCell.appendChild(fullScaleMini);
             } else {
@@ -5712,9 +5607,9 @@ function renderScalePositionGrid() {
                     rowStringIndex,
                     normalizedRoot,
                     true,
-                    scalePositionPatternScale,
+                    fretboardState.scalePositionPatternScale,
                     true,
-                    scalePositionUseAbsoluteFretLabels
+                    fretboardState.scalePositionUseAbsoluteFretLabels
                 );
                 td.appendChild(mini);
             } else {
@@ -5820,15 +5715,15 @@ function refreshFretboardDisplay() {
             renderScalePositionGrid();
             
             // Then restore the appropriate fretboard display
-            if (currentChordGridSelection) {
+            if (fretboardState.currentChordGridSelection) {
                 // Re-apply chord grid selection with new scale context
-                showChordPatternOnFretboard(currentChordGridSelection.note, currentChordGridSelection.chordType, false);
-            } else if (currentDisplayedChord === 0) {
+                showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);
+            } else if (fretboardState.currentDisplayedChord === 0) {
                 // Show scale
                 showScaleOnFretboard();
-            } else if (currentDisplayedChord !== null && currentDisplayedChord > 0) {
+            } else if (fretboardState.currentDisplayedChord !== null && fretboardState.currentDisplayedChord > 0) {
                 // Show Roman numeral chord
-                showChordOnFretboard(currentDisplayedChord - 1);
+                showChordOnFretboard(fretboardState.currentDisplayedChord - 1);
             } else {
                 // Default to showing scale
                 showScaleOnFretboard();
@@ -5984,8 +5879,8 @@ function renderFingeringShape(fretboard, shape, labelMode) {
  * used whenever the fretboard stops showing a specific chord (scale view, clear).
  */
 function clearFingeringTabs() {
-    chordFingeringShapes = [];
-    selectedFingeringTabIndex = 0;
+    fretboardState.chordFingeringShapes = [];
+    fretboardState.selectedFingeringTabIndex = 0;
     const container = document.getElementById('chord-fingering-tabs');
     if (container) {
         container.innerHTML = '';
@@ -6006,7 +5901,7 @@ function renderFingeringTabs(fretboard, labelMode) {
 
     container.innerHTML = '';
 
-    if (!chordFingeringShapes.length) {
+    if (!fretboardState.chordFingeringShapes.length) {
         container.style.display = 'none';
         return;
     }
@@ -6034,12 +5929,12 @@ function renderFingeringTabs(fretboard, labelMode) {
     `;
     container.appendChild(legendLabel);
 
-    chordFingeringShapes.forEach((shape, index) => {
+    fretboardState.chordFingeringShapes.forEach((shape, index) => {
         const tab = document.createElement('button');
         tab.type = 'button';
         tab.textContent = shape.label;
         tab.title = shape.source === 'predefined' ? `Known shape (${shape.patternName})` : 'Best-effort generated shape';
-        const isActive = index === selectedFingeringTabIndex;
+        const isActive = index === fretboardState.selectedFingeringTabIndex;
         tab.style.cssText = `
             padding: 4px 10px;
             font-size: 11px;
@@ -6050,8 +5945,8 @@ function renderFingeringTabs(fretboard, labelMode) {
             color: #fff;
         `;
         tab.addEventListener('click', () => {
-            selectedFingeringTabIndex = index;
-            renderFingeringShape(fretboard, chordFingeringShapes[index], labelMode);
+            fretboardState.selectedFingeringTabIndex = index;
+            renderFingeringShape(fretboard, fretboardState.chordFingeringShapes[index], labelMode);
             renderFingeringTabs(fretboard, labelMode);
         });
         container.appendChild(tab);
@@ -6117,9 +6012,9 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
     try {
         // If this is a permanent selection, update the tracking state
         if (!isTemporary) {
-            currentChordGridSelection = { note: rootNote, chordType: chordType };
+            fretboardState.currentChordGridSelection = { note: rootNote, chordType: chordType };
             // Clear Roman numeral selection since we're now showing a chord grid selection
-            currentDisplayedChord = null;
+            fretboardState.currentDisplayedChord = null;
             updateChordButtonStyles();
         }
         
@@ -6160,13 +6055,13 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
 
                     // Find playable shapes (predefined first, best-effort fallback) and
                     // render the first one, with a position picker for the rest.
-                    chordFingeringShapes = buildFingeringShapes(fretboard, chordNotes, chordNotes[0], intervalLabelMap, specificPatterns);
-                    selectedFingeringTabIndex = 0;
+                    fretboardState.chordFingeringShapes = buildFingeringShapes(fretboard, chordNotes, chordNotes[0], intervalLabelMap, specificPatterns);
+                    fretboardState.selectedFingeringTabIndex = 0;
 
-                    const labelMode = mainFretboardLabelMode;
-                    if (chordFingeringShapes.length > 0) {
-                        renderFingeringShape(fretboard, chordFingeringShapes[0], labelMode);
-                        console.log(`Displaying ${chordName} with ${chordFingeringShapes.length} playable shape(s) ${isTemporary ? 'temporarily' : 'persistently'}`);
+                    const labelMode = fretboardState.mainFretboardLabelMode;
+                    if (fretboardState.chordFingeringShapes.length > 0) {
+                        renderFingeringShape(fretboard, fretboardState.chordFingeringShapes[0], labelMode);
+                        console.log(`Displaying ${chordName} with ${fretboardState.chordFingeringShapes.length} playable shape(s) ${isTemporary ? 'temporarily' : 'persistently'}`);
                     } else {
                         fretboard.clearMarkers();
                         fretboard.clearChordLines();
@@ -6195,14 +6090,14 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
  */
 function restoreFretboardState() {
     // Check if we have a permanent chord grid selection
-    if (currentChordGridSelection) {
+    if (fretboardState.currentChordGridSelection) {
         // Restore the chord grid selection
-        showChordPatternOnFretboard(currentChordGridSelection.note, currentChordGridSelection.chordType, false);
+        showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);
         return;
     }
     
     // Try to restore the previous Roman numeral state
-    if (currentDisplayedChord === null) {
+    if (fretboardState.currentDisplayedChord === null) {
         // Clear fretboard and chord info display
         const fretboard = getFretboard('fretNotPlaceholder');
         if (fretboard) {
@@ -6211,12 +6106,12 @@ function restoreFretboardState() {
         }
         clearFingeringTabs();
         updateChordInfoDisplay(); // Clear chord info display
-    } else if (currentDisplayedChord === 0) {
+    } else if (fretboardState.currentDisplayedChord === 0) {
         // Show scale
         showScaleOnFretboard();
     } else {
         // Show current chord
-        showChordOnFretboard(currentDisplayedChord - 1);
+        showChordOnFretboard(fretboardState.currentDisplayedChord - 1);
     }
 }
 
@@ -6246,13 +6141,13 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
         const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
         
         // Generate chords
-        const chordLength = currentChordType === 'sevenths' ? 4 : 3;
+        const chordLength = fretboardState.currentChordType === 'sevenths' ? 4 : 3;
         const syntheticChords = generateSyntheticChords({ intervals }, chordLength, rootNote);
         
         if (chordIndex >= 0 && chordIndex < syntheticChords.length) {
             const chord = syntheticChords[chordIndex];
             const romanNumerals = ['I', 'ii', 'iii', 'IV', 'V', 'vi', 'vii°'];
-            const chordName = `${romanNumerals[chordIndex]} (${currentChordType})`;
+            const chordName = `${romanNumerals[chordIndex]} (${fretboardState.currentChordType})`;
             console.log(`Displaying chord: ${chordName} (${chord.join(', ')})`);
             
             // Update chord info display
@@ -6264,13 +6159,13 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
             const chordIntervalLabels = chord.map(note => getIntervalLabelFromRoot(chord[0], note));
             const intervalLabelMap = buildIntervalLabelMap(fretboard, chord, chordIntervalLabels);
 
-            chordFingeringShapes = buildFingeringShapes(fretboard, chord, chord[0], intervalLabelMap, null);
-            selectedFingeringTabIndex = 0;
+            fretboardState.chordFingeringShapes = buildFingeringShapes(fretboard, chord, chord[0], intervalLabelMap, null);
+            fretboardState.selectedFingeringTabIndex = 0;
 
-            const labelMode = mainFretboardLabelMode;
-            if (chordFingeringShapes.length > 0) {
-                renderFingeringShape(fretboard, chordFingeringShapes[0], labelMode);
-                console.log(`Displaying ${chordName} with ${chordFingeringShapes.length} playable shape(s)`);
+            const labelMode = fretboardState.mainFretboardLabelMode;
+            if (fretboardState.chordFingeringShapes.length > 0) {
+                renderFingeringShape(fretboard, fretboardState.chordFingeringShapes[0], labelMode);
+                console.log(`Displaying ${chordName} with ${fretboardState.chordFingeringShapes.length} playable shape(s)`);
             } else {
                 fretboard.clearMarkers();
                 fretboard.clearChordLines();
@@ -6318,13 +6213,13 @@ function showScaleOnFretboard(isTemporary = false) {
         clearFingeringTabs();
 
         fretboard.markScale(scaleNotes, rootNote, {
-            showIntervals: mainFretboardLabelMode === 'interval'
+            showIntervals: fretboardState.mainFretboardLabelMode === 'interval'
         });
 
         if (!isTemporary) {
             // Add to scale tracking only if this is a permanent selection
-            fretboardsShowingScale.add(fretboard.containerId);
-            fretboardsShowingChords.delete(fretboard.containerId);
+            fretboardState.fretboardsShowingScale.add(fretboard.containerId);
+            fretboardState.fretboardsShowingChords.delete(fretboard.containerId);
         }
     } catch (error) {
         console.warn('Could not show scale:', error);
@@ -6374,7 +6269,7 @@ function updateChordButtonStyles() {
     const chordButtons = document.querySelectorAll('[data-chord-index]');
     chordButtons.forEach((button, index) => {
         const chordIndex = parseInt(button.dataset.chordIndex);
-        if (currentDisplayedChord === chordIndex) {
+        if (fretboardState.currentDisplayedChord === chordIndex) {
             button.style.background = 'linear-gradient(to bottom, #007bff, #0056b3)';
             button.style.color = 'white';
             button.style.borderColor = '#0056b3';
@@ -6392,10 +6287,10 @@ function updateChordButtonStyles() {
  */
 function updateFretboardsForScaleChange(scaleData) {
     // Skip if no fretboards are showing scales or chords, or if already updating
-    if ((fretboardsShowingScale.size === 0 && fretboardsShowingChords.size === 0) || isUpdatingFretboards) return;
+    if ((fretboardState.fretboardsShowingScale.size === 0 && fretboardState.fretboardsShowingChords.size === 0) || fretboardState.isUpdatingFretboards) return;
     
     try {
-        isUpdatingFretboards = true;
+        fretboardState.isUpdatingFretboards = true;
         
         const { primaryScale, rootNote, scaleNotes } = scaleData;
         
@@ -6411,32 +6306,32 @@ function updateFretboardsForScaleChange(scaleData) {
         const scaleName = `${rootNote} ${family} (Mode ${mode})`;
         updateChordInfoDisplay(scaleName, scaleNotes);
         // Update all fretboards that are showing the scale
-        fretboardsShowingScale.forEach(containerId => {
-            const fretboard = fretboardInstances.get(containerId);
+        fretboardState.fretboardsShowingScale.forEach(containerId => {
+            const fretboard = fretboardState.fretboardInstances.get(containerId);
             if (fretboard) {
                 fretboard.markScale(scaleNotes, rootNote, {
-                    showIntervals: mainFretboardLabelMode === 'interval'
+                    showIntervals: fretboardState.mainFretboardLabelMode === 'interval'
                 });
             }
         });
         
         // Update all fretboards that are showing chords
-        fretboardsShowingChords.forEach(containerId => {
-            const fretboard = fretboardInstances.get(containerId);
-            if (fretboard && currentDisplayedChord !== null) {
+        fretboardState.fretboardsShowingChords.forEach(containerId => {
+            const fretboard = fretboardState.fretboardInstances.get(containerId);
+            if (fretboard && fretboardState.currentDisplayedChord !== null) {
                 // If we're in a hover state, show the full scale instead of chord
-                if (isInHoverState) {
+                if (fretboardState.isInHoverState) {
                     fretboard.clearMarkers();
                     fretboard.clearChordLines();
                     fretboard.markScale(scaleNotes, rootNote, {
-                        showIntervals: mainFretboardLabelMode === 'interval'
+                        showIntervals: fretboardState.mainFretboardLabelMode === 'interval'
                     });
                     return;
                 }
                 
                 // Re-generate and display the current chord with new scale
                 try {
-                    if (currentDisplayedChord === 0) {
+                    if (fretboardState.currentDisplayedChord === 0) {
                         // Scale is selected, show scale
                         showScaleOnFretboard();
                     } else {
@@ -6448,10 +6343,10 @@ function updateFretboardsForScaleChange(scaleData) {
                             return;
                         }
                         const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
-                        const chordLength = currentChordType === 'sevenths' ? 4 : 3;
+                        const chordLength = fretboardState.currentChordType === 'sevenths' ? 4 : 3;
                         const syntheticChords = generateSyntheticChords({ intervals }, chordLength, rootNote);
                         
-                        const chordIndex = currentDisplayedChord - 1;
+                        const chordIndex = fretboardState.currentDisplayedChord - 1;
                         if (chordIndex >= 0 && chordIndex < syntheticChords.length) {
                             // Use the updated showChordOnFretboard function which includes pattern matching
                             showChordOnFretboard(chordIndex);
@@ -6465,32 +6360,30 @@ function updateFretboardsForScaleChange(scaleData) {
     } catch (error) {
         console.warn('Could not update fretboards for scale change:', error);
     } finally {
-        isUpdatingFretboards = false;
+        fretboardState.isUpdatingFretboards = false;
     }
 }
 
 // Listen for scale change events from the scale generator
-let lastScaleUpdateTime = 0;
-let lastScaleData = null;
 window.addEventListener('scaleChanged', (event) => {
     // Debounce the updates to prevent rapid-fire events
     const now = Date.now();
-    if (now - lastScaleUpdateTime < 200) { // Increased debounce to 200ms
+    if (now - fretboardState.lastScaleUpdateTime < 200) { // Increased debounce to 200ms
         return;
     }
     
     // Check if the scale data has actually changed
     const currentScaleData = event.detail;
     const scaleKey = `${currentScaleData.rootNote}-${currentScaleData.primaryScale}`;
-    const lastScaleKey = lastScaleData ? `${lastScaleData.rootNote}-${lastScaleData.primaryScale}` : null;
+    const lastScaleKey = fretboardState.lastScaleData ? `${fretboardState.lastScaleData.rootNote}-${fretboardState.lastScaleData.primaryScale}` : null;
     
     if (scaleKey === lastScaleKey) {
         // Scale hasn't actually changed, skip update
         return;
     }
     
-    lastScaleUpdateTime = now;
-    lastScaleData = currentScaleData;
+    fretboardState.lastScaleUpdateTime = now;
+    fretboardState.lastScaleData = currentScaleData;
     console.log('Scale changed:', currentScaleData);
     
     updateFretboardsForScaleChange(event.detail);
@@ -6498,8 +6391,8 @@ window.addEventListener('scaleChanged', (event) => {
     renderScalePositionGrid(); // Keep scale position mini-fretboards in sync with current scale
     
     // If there's a current chord grid selection, re-apply it with the new scale context
-    if (currentChordGridSelection) {
-        showChordPatternOnFretboard(currentChordGridSelection.note, currentChordGridSelection.chordType, false);
+    if (fretboardState.currentChordGridSelection) {
+        showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);
     }
 });
 
@@ -6811,7 +6704,7 @@ export {
     analyzeChordScaleCompatibility,
     updateChordGridColors,
     refreshFretboardDisplay,
-    currentDisplayedChord,
+    fretboardState,
     GUITAR_TUNING,
     SCALE_COLORS
 };
@@ -6819,12 +6712,12 @@ export {
 
 
 // Initialize Fretboard - defer until DOM is ready
-let mainFretboard = null;
+// (module-level main-fretboard pointer now lives in fretboardState.mainFretboard)
 
 // Function to initialize fretboard with proper scale display
 function initializeFretboardWithScale() {
     try {
-        mainFretboard = initializeFretboard();
+        fretboardState.mainFretboard = initializeFretboard();
         console.log('Fretboard initialized successfully');
         
         // Force a scale visualization and chord grid color update after initialization
@@ -6863,7 +6756,7 @@ if (document.readyState === 'loading') {
 }
 
 // Make fretboard globally accessible for other modules
-window.mainFretboard = mainFretboard;
+window.mainFretboard = fretboardState.mainFretboard;
 
 // Make search functions globally accessible for console use
 window.searchFretboardNote = searchFretboardNote;

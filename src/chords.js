@@ -3,7 +3,7 @@ import {noteToMidi} from './midi';
 import { CHROMATIC } from './theory/notes';
 import { getPrimaryScale, getPrimaryRootNote } from './scaleGenerator';
 import { HeptatonicScales, getScaleNotes } from './scales';
-import { getFretboard, showChordOnFretboard, showScaleOnFretboard, currentDisplayedChord } from './frets';
+import { getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState } from './frets';
 
 let chordSuffixesCommon = ['Major', 'Minor', '7', '5', 'dim', 'dim7', 'aug', 'sus2', 'sus4', 'maj7', 'm7', '7sus4', '7b9']
 let chordSuffixesTriads = ['M', 'm', '+', 'o', 'b5', 'sus2', 'sus4']
@@ -571,20 +571,20 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
 // Restore fretboard to previous state
 function restoreFretboardState() {
     // Try to restore the previous Roman numeral state
-    if (typeof showScaleOnFretboard === 'function' && typeof currentDisplayedChord !== 'undefined') {
-        if (currentDisplayedChord === null) {
+    if (typeof showScaleOnFretboard === 'function' && typeof fretboardState.currentDisplayedChord !== 'undefined') {
+        if (fretboardState.currentDisplayedChord === null) {
             // Clear fretboard
             const fretboard = getFretboard('fretNotPlaceholder');
             if (fretboard) {
                 fretboard.clearMarkers();
                 fretboard.clearChordLines();
             }
-        } else if (currentDisplayedChord === 0) {
+        } else if (fretboardState.currentDisplayedChord === 0) {
             // Show scale
             showScaleOnFretboard();
         } else {
             // Show current chord
-            showChordOnFretboard(currentDisplayedChord - 1);
+            showChordOnFretboard(fretboardState.currentDisplayedChord - 1);
         }
     }
 }
