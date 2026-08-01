@@ -1,7 +1,22 @@
 # unCAGED Refactor Plan
 
-Status: proposed, not started.
 Baseline measured 2026-07-31 at `09a1b37`.
+
+## Status
+
+**Update this table as part of each phase's commit.** It is how a new
+session finds its place without re-reading the codebase.
+
+| Phase | State | Commit | Notes |
+|---|---|---|---|
+| 0 — Safety net | not started | — | |
+| 1 — Delete | not started | — | |
+| 2 — `src/theory/` | not started | — | |
+| 2b — `src/audio/` | not started | — | |
+| 3 — Split `frets.js` | not started | — | |
+| 4 — Split progression + scales | not started | — | |
+| 5 — Kill the `window` bus | not started | — | |
+| 6 — PolySynth | not started | — | optional, off critical path |
 
 Goal: break the five oversized files into modules that match how the code
 actually divides, and replace the `window`-object module bus with real
@@ -366,3 +381,46 @@ Deliberately out of scope: consolidating the three styling systems,
 migrating the vanilla-JS UI to React, and adding a build step beyond CRA.
 Each is a bigger decision than this plan, and each gets easier once the
 phases above are done.
+
+---
+
+## 6. Session kickoff prompt
+
+Paste this to start or resume the work in a fresh session. It is written to
+keep context cost low: the documents already contain the survey, so the
+agent should not repeat it.
+
+```
+Work on the unCAGED refactor.
+
+Read REFACTOR_PLAN.md first — section 3 has the working rules, section 4
+the phases, and the Status table at the top shows what is already done.
+Read ARCHITECTURE.md if it exists. Read SESSION_MODE_FEASIBILITY.md only
+if the phase touches audio, instruments, or scheduling.
+
+Do NOT re-survey the codebase. Those documents already record the file
+sizes, duplication counts, module contracts and signal paths, and they
+exist specifically so that investigation is not repeated. Trust them. If
+you find something that contradicts them, fix the document as part of your
+work rather than working around it.
+
+Then:
+1. Determine the next phase from the Status table, confirming against
+   `git log --oneline -10`.
+2. Tell me which phase you are starting and your first few steps. Wait for
+   my go-ahead before editing anything.
+3. Do only that phase. Do not begin the next one.
+
+Rules:
+- Restructuring only. No behavior changes unless the phase explicitly
+  calls for them.
+- Vanilla JS + React, no TypeScript, no new dependencies without asking.
+  Match the style of the surrounding code.
+- A phase is done when: tests pass, ARCHITECTURE.md reflects the result,
+  the Status table is updated, and it is one commit.
+- If something makes the plan wrong, update the plan and tell me. Do not
+  silently deviate.
+```
+
+To resume at a specific phase, append a line such as `Start at Phase 2b.`
+To pick up mid-phase, append what was already done and what remains.
