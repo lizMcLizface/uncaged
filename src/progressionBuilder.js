@@ -4595,5 +4595,12 @@ export {
     generateShareableURL,
     copyShareableURL,
     loadSharedStateFromURL,
-    applySharedState
+    applySharedState,
+    // Exported for characterization tests ahead of REFACTOR_PLAN.md Phase 2
+    // (these move to src/theory/roman.js) - not otherwise used outside this
+    // module today.
+    parseChordToken,
+    parseRomanNumeral,
+    romanToDegree,
+    resolveRomanChord
 };

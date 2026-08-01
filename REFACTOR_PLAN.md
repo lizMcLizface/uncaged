@@ -9,7 +9,7 @@ session finds its place without re-reading the codebase.
 
 | Phase | State | Commit | Notes |
 |---|---|---|---|
-| 0 — Safety net | not started | — | |
+| 0 — Safety net | done | this commit | `npm test` fixed (App.test.js + 4 new characterization test files, 28 tests); ARCHITECTURE.md seeded; baseline screenshots in `docs/baseline-screenshots/`; playwright added as devDependency |
 | 1 — Delete | not started | — | |
 | 2 — `src/theory/` | not started | — | |
 | 2b — `src/audio/` | not started | — | |
@@ -60,7 +60,16 @@ Largest single functions:
 
 ~50 distinct globals. Writes: `frets.js` 17, `progressionBuilder.js` 12,
 `index.js` 12, `staves.js` 10, `App.js` 3. `window.polySynthRef` is
-referenced 100 times; `window.gridData` 52; `window.outputNoteArray` 27.
+referenced ~115 times, `window.updateFretboardsForScaleChange` 17.
+
+**Correction (Phase 0, 2026-08-01):** the original count of this section
+also included `window.gridData` (52 refs) and `window.outputNoteArray` (27
+refs) as live traffic. They are not. Every one of those references lives in
+either `src/staves.js` — imported by nothing, see the correction to §2.5
+below — or commented-out code in `index.js`/`progressions.js`. Both globals
+have zero live readers or writers and need no migration in Phase 5; they
+disappear for free when Phase 1 deletes `src/staves.js` and strips
+`index.js`. Full detail in `ARCHITECTURE.md` §5.3.
 
 The vanilla-JS half and the React half communicate exclusively through
 these globals, plus polling loops that wait for the other side to appear
@@ -120,7 +129,11 @@ eye.
 ### 2.5 Dead weight
 
 Imported by nothing: `App_new.js`, `App_backup.js`, `chord-examples.js`,
-`metronome-example.js`, `util/dutyCycleDemo.js`, `components/RouteHelper.js`.
+`metronome-example.js`, `util/dutyCycleDemo.js`, `components/RouteHelper.js`,
+`staves.js` (173 lines — added to this list in Phase 0; its only reference
+anywhere is a commented-out `// import './staves';` in `index.js:17`, so the
+~10 `window.*` writes counted against it in §2.1 are dead code, not live
+module-bus traffic).
 `src/polysynthFull/components/PolySynth/` is an empty directory tree.
 `src/util.js` (78 lines) and `src/util/util.js` (212 lines) are separate
 files. `Untitled-1.ipynb` is a tracked 102 KB notebook.
@@ -218,7 +231,7 @@ seeded.
 Mechanical, near-zero risk. Git history preserves everything.
 
 1. `index.js`: strip commented-out blocks. **5,777 → ~250 lines.**
-2. Remove the six orphan modules listed in 2.5.
+2. Remove the seven orphan modules listed in 2.5 (including `staves.js`).
 3. Remove the empty `src/polysynthFull/` tree.
 4. Remove `Untitled-1.ipynb`.
 5. Merge `src/util.js` into `src/util/util.js`, update importers.
@@ -344,8 +357,11 @@ incremental.
 2. Add `src/core/registry.js` — the few genuine singletons (fretboard
    instance, synth ref).
 3. Migrate one global at a time, highest-traffic first: `polySynthRef`
-   (100 refs), `gridData` (52), `updateFretboardsForScaleChange` (17),
-   `outputNoteArray` (27).
+   (~115 refs, largely subsumed by Phase 2b's dispatcher), then
+   `updateFretboardsForScaleChange` (17). (`gridData` and `outputNoteArray`
+   were originally listed here too but turned out to be dead code, not live
+   globals — see the §2.1 correction and `ARCHITECTURE.md` §5.3. They need
+   no migration; Phase 1 deleting `staves.js` removes them for free.)
 4. Delete the polling loops in `App.js:47-59` and `index.js:5747` as their
    globals are migrated.
 
