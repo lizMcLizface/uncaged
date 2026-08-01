@@ -12,7 +12,8 @@ session finds its place without re-reading the codebase.
 | 0 — Safety net | done | `07a8b12` | `npm test` fixed (App.test.js + 4 new characterization test files, 28 tests); ARCHITECTURE.md seeded; baseline screenshots in `docs/baseline-screenshots/`; playwright added as devDependency |
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
-| 2b — `src/audio/` | not started | — | |
+| 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
+| 2c — `src/audio/` clock + scheduler | not started | — | deferred until drum backing is actually being built |
 | 3 — Split `frets.js` | not started | — | |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
@@ -24,8 +25,8 @@ imports. No behavior changes — every phase below is restructuring only.
 
 Longer-term target: a Rocksmith-style session/scale practice mode with
 synthesized backing and play-along feedback. See `SESSION_MODE_FEASIBILITY.md`.
-That investigation added Phase 2b below and moved Phase 5 onto the critical
-path; nothing else here changed.
+That investigation added Phase 2b below (later split into 2b/2c, 2026-08-01)
+and moved Phase 5 onto the critical path; nothing else here changed.
 
 ---
 
@@ -317,36 +318,27 @@ out to be pre-existing Playwright-timing flakiness in this app, reproducing
 identically on unmodified code, not a regression - see the commit for
 detail if this needs re-verifying later).
 
-### Phase 2b — Extract `src/audio/`: one context, one clock
+### Phase 2b — Extract `src/audio/`: one context, one bus, one dispatcher
 
 Added by the session-mode investigation. Independently worth doing — these
-are live bugs, not just future blockers.
+are live bugs, not just future blockers. Scoped to the foundation only —
+see Phase 2c below for why the clock/scheduler half is split out.
 
 Today there are **two AudioContexts** (`PolySynth.jsx:67` and
 `metronome.js:236/246/570`), bridged by `performanceTimeToAudioTime()` and a
-stored offset that will drift. And sequencing is split across two timing
-models: the metronome's audio-clock lookahead scheduler, versus chained
-`setTimeout` with BPM read from a DOM slider in the progression sequencer
-and arpeggiator (`progressionBuilder.js:155-190`, `PolySynth.jsx:945-1061`).
+stored offset that will drift.
 
 ```
 src/audio/context.js      the single shared AudioContext, created once
-src/audio/clock.js        absolute timebase, lifted from metronome.js
-src/audio/scheduler.js    lookahead scheduling, one queue for all voices
+src/audio/bus.js          master sum -> gain -> analyser tap -> destination
+src/audio/dispatch.js     tagged note event -> channel registry
 ```
 
-Then migrate the progression sequencer and arpeggiator off `setTimeout` onto
-`scheduler`.
-
-Split this by need: `context.js` plus a master bus is the foundation of the
-channel architecture and comes first; `clock.js`/`scheduler.js` are only
-required once something must lock to a grid (drums). See the staging in
-`SESSION_MODE_FEASIBILITY.md` §4.
-
-The same phase should add `src/audio/bus.js` (master sum → gain → analyser
-tap → destination) and `src/audio/dispatch.js` (tagged note event → channel
-registry). The dispatcher subsumes `window.polySynthRef`, the highest-traffic
-global in Phase 5, at ~16 live call sites.
+Migrate `PolySynth.jsx`'s and `metronome.js`'s independent `AudioContext`s
+onto the shared one. `dispatch.js` subsumes `window.polySynthRef`, the
+highest-traffic global in Phase 5, at ~16 live call sites across the three
+entry points (keyboard, mouse, programmatic) documented in
+`ARCHITECTURE.md` §3.
 
 While in here, make the AudioWorklet paths in `noiseGenerator.js:21-23`
 relative via `process.env.PUBLIC_URL`. They currently load from the domain
@@ -356,6 +348,66 @@ silently degrades to `ScriptProcessor` with just a `console.error`.
 
 Do this after Phase 1 and alongside or after Phase 2. It does not depend on
 Phases 3–4.
+
+**Result (2026-08-01):** landed as scoped - `src/audio/context.js`,
+`src/audio/bus.js`, `src/audio/dispatch.js`, plus the `noiseGenerator.js`
+worklet-path fix. `PolySynth.jsx` and `metronome.js` both now import the one
+shared `audioContext` instead of constructing their own; `PolySynth.jsx`'s
+master chain now terminates at `masterBus` instead of `AC.destination`
+directly (a plain unity-gain `GainNode` in between - no audible change).
+The metronome's click intentionally still bypasses the master bus, only the
+context is shared, not the routing - see `ARCHITECTURE.md` §2.2.
+
+Before writing `dispatch.js`, checking the actual `window.polySynthRef` call
+sites (not just the reference count in §2.1) surfaced that it carries two
+unrelated things: a **playback surface** (`playNotes`/`stopNotes`/
+`stopAllNotes`/`isActive`/`activate`/`triggerChord`) used at the three entry
+points this section describes, and a **progression-sequencer-control
+surface** (`getProgressionSequencerState`/`toggleProgressionSequencer`/
+`setProgressionRate`/`setProgressionDuration`/`setProgressionData`/
+`updateProgressionSettings`) used only inside `progressionBuilder.js`'s own
+sequencer UI - one component remote-controlling another's internal feature,
+not note dispatch. Per a mid-phase decision, `dispatch.js` migrated only the
+playback surface (`index.js`'s keyboard/mouse entry points, `frets.js`'s
+`playChordVoicing`, `progressionBuilder.js`'s `triggerChordProgression`,
+`MiniPiano.js`'s `getActivePolySynth`); the sequencer-control surface
+(~40 references) stays on `window.polySynthRef` until `progressionBuilder.js`
+has a real module boundary (Phase 4). `IntervalPractice.jsx`'s
+`getPolySynthRef()` helper (2 references) was also left untouched - it
+bundles playback with a third, unrelated microtonal-tuning surface
+(`getPitchValues`/`setPitchValues`/`resetMicrotonalPitches`) in one function,
+and splitting just the playback half out would have meant duplicating the
+helper for no structural benefit. Full detail in `ARCHITECTURE.md` §3.1 and
+§5.1. `npm test` (28/28) and `npm run build` pass; verified visually via the
+`run-app` skill (fretboard, scale grid, chord progression, synth tabs) with
+zero browser console/page errors, including after exercising the keyboard
+note-play path through the new registry.
+
+### Phase 2c — `src/audio/`: clock + scheduler
+
+Split out of Phase 2b on 2026-08-01: `clock.js`/`scheduler.js` are only
+required once something must lock to a timing grid, and nothing does yet —
+drum backing (`SESSION_MODE_FEASIBILITY.md` Stage 2) is the first thing that
+will. Migrating the sequencer and arpeggiator onto a scheduler with nothing
+to lock to yet would be speculative work for a feature that doesn't exist.
+Defer this phase until drum backing is actually being built.
+
+Sequencing is currently split across two timing models: the metronome's
+audio-clock lookahead scheduler, versus chained `setTimeout` with BPM read
+from a DOM slider in the progression sequencer and arpeggiator
+(`progressionBuilder.js:155-190`, `PolySynth.jsx:945-1061`).
+
+```
+src/audio/clock.js        absolute timebase, lifted from metronome.js
+src/audio/scheduler.js    lookahead scheduling, one queue for all voices
+```
+
+Then migrate the progression sequencer and arpeggiator off `setTimeout` onto
+`scheduler`. Test each migration against the Phase 0 screenshots — this is
+the one part of the `src/audio/` work that can change audible timing
+behavior.
+
+Depends on Phase 2b (shares `context.js`).
 
 ### Phase 3 — Split `frets.js`
 

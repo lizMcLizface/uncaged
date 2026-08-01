@@ -8,6 +8,7 @@
 
 import { stripOctave as notationStripOctave } from '../../theory/notation';
 import { getIntervalColor, getIntervalLabel } from '../../theory/intervals';
+import { getChannel, isChannelEnabled } from '../../audio/dispatch';
 
 // Configuration for mini piano appearance
 const MINI_PIANO_CONFIG = {
@@ -150,13 +151,17 @@ export function getIntervalInfo(rootNote, note) {
 
 // --- Click-to-play wiring ---
 // Mirrors progressionBuilder.js's triggerChordProgression: the synth is a
-// React component mounted elsewhere, reached from this vanilla-JS module
-// only via the globals App.js publishes (window.polySynthRef/polySynthEnabled).
+// React component mounted elsewhere, reached from this vanilla-JS module via
+// the 'synth' channel App.js registers in src/audio/dispatch.js.
 function getActivePolySynth() {
-    if (typeof window === 'undefined' || !window.polySynthEnabled || !window.polySynthRef || !window.polySynthRef.playNotes) {
+    if (!isChannelEnabled('synth')) {
         return null;
     }
-    return window.polySynthRef;
+    const synthChannel = getChannel('synth');
+    if (!synthChannel || !synthChannel.playNotes) {
+        return null;
+    }
+    return synthChannel;
 }
 
 // Fallback register used only when a note carries no octave of its own and

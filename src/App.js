@@ -8,6 +8,7 @@ import { GlobalStyles } from './styles/globalStyles';
 import ThemeSelector from './components/ThemeSelector';
 import ThemeInjector from './components/ThemeInjector';
 import PolySynthWrapper from './components/PolySynthWrapper';
+import { registerChannel, setChannelEnabled } from './audio/dispatch';
 
 function App() {
   const { theme, themes } = useTheme();
@@ -25,8 +26,15 @@ function App() {
     if (polySynthRef.current) {
       window.polySynthRef = polySynthRef.current;
       console.log('PolySynth reference set globally:', polySynthRef.current);
+      // The 'synth' channel, for the playback-only entry points (keyboard,
+      // mouse, programmatic click-to-play) migrated off window.polySynthRef
+      // in Phase 2b - see src/audio/dispatch.js. window.polySynthRef stays
+      // set above for the progression-sequencer-control and microtonal call
+      // sites not yet migrated.
+      registerChannel('synth', polySynthRef.current);
     }
     window.polySynthEnabled = polySynthEnabled;
+    setChannelEnabled('synth', polySynthEnabled);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [polySynthEnabled, synthTabContainer]);
 

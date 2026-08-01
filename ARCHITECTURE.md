@@ -1,9 +1,10 @@
 # unCAGED Architecture
 
 Living document. Updated as `REFACTOR_PLAN.md` phases land — see that file for
-why this exists and the documentation discipline it follows (§3). This
-revision (2026-08-01) is the Phase 0 baseline: the *current*, pre-refactor
-shape, warts included. Sections are not aspirational.
+why this exists and the documentation discipline it follows (§3). Seeded
+2026-08-01 as the Phase 0 baseline (the pre-refactor shape, warts included)
+and updated as Phases 1, 2 and 2b landed the same day. Sections describe the
+*current* shape, not an aspirational one.
 
 ---
 
@@ -24,16 +25,22 @@ neither side can `import` the other without restructuring the load order.
 
 ## 2. Audio signal path
 
-**There are two independent `AudioContext`s today.** This is the single
-most important fact in this document and the reason Phase 2b exists.
+**Fixed in Phase 2b (2026-08-01): there is now one shared `AudioContext`.**
+Until this phase there were two independent ones - `PolySynth.jsx:67` and
+`metronome.js:236/246/570` - with no way to sample-sync them. Both now
+import `audioContext` from `src/audio/context.js`, created once at that
+module's import time. See §2.4 for the new `src/audio/` module layout.
+The rest of this section describes the signal path in its current,
+single-context shape; historical detail on the two-context bug is kept
+where it explains *why* a boundary exists.
 
 ### 2.1 The synth context (`PolySynth.jsx`)
 
-Created once at module scope — `PolySynth.jsx:67`, `const AC = new
-AudioContext();` — not inside a component, so it exists from the moment the
-module is imported, before any user gesture. All synth-related nodes
-(`PolySynth.jsx:69-89`) are created at that same module scope, once, shared
-by every mounted instance of the component (there is only ever one).
+`PolySynth.jsx:67` imports the shared context from `src/audio/context.js`
+(pre-Phase-2b: `const AC = new AudioContext();`, created independently at
+this same module scope). All synth-related nodes (`PolySynth.jsx:69-89`)
+are created at that same module scope, once, shared by every mounted
+instance of the component (there is only ever one).
 
 Signal path, source to destination:
 
@@ -52,7 +59,10 @@ masterLimiter   (Compressor, threshold -6dB, ratio 20)
         v
 masterGain
         v
-AC.destination
+masterBus (src/audio/bus.js - a plain GainNode at unity gain; the seam
+           future instrument channels sum into)
+        v
+audioContext.destination
 ```
 
 Wired in `initSynth()`, `PolySynth.jsx:1410-1470`, called lazily from
@@ -73,63 +83,119 @@ the channel architecture below.
 ### 2.2 The metronome context (`metronome.js`)
 
 The `Metronome` class (`metronome.js:157`) holds `this.audioContext = null`
-until first needed, then lazily creates its own, separate
-`AudioContext`/`webkitAudioContext` (`metronome.js:236,246,568`) — a second,
-independent clock with no relationship to `AC` above. Its click sound is a
-minimal, self-contained path: `osc -> envelope (GainNode) ->
-this.audioContext.destination` (`metronome.js:490,509-510`) — it does not
-route through the synth's master bus at all.
+until first needed, then lazily assigns the shared `audioContext` from
+`src/audio/context.js` (`metronome.js:236,246,570` - pre-Phase-2b, each of
+these lazily constructed its own, separate `AudioContext`/`webkitAudioContext`,
+a second, independent clock with no relationship to `AC` above). Its click
+sound is still a minimal, self-contained path: `osc -> envelope (GainNode)
+-> audioContext.destination` (`metronome.js:490,509-510`) — **deliberately
+left as-is in Phase 2b**: it still does not route through `masterBus`, only
+the context is now shared, not the routing. Folding the click into the
+master bus is unnecessary busywork until something else needs to mix with
+it; the two-context bug (unsyncable clocks) is what Phase 2b was for.
 
-Because the two contexts can't be sample-synced, the metronome bridges
-`performance.now()` time to its own audio-clock time via
-`performanceTimeToAudioTime()` and a stored `audioContextStartTime` offset
-(`metronome.js:243-261`) — a drift-prone workaround for not sharing a clock,
-not a design choice.
+Because the metronome still bridges `performance.now()` time to audio-clock
+time via `performanceTimeToAudioTime()` and a stored `audioContextStartTime`
+offset (`metronome.js:243-261`), that bridging code is unchanged by Phase
+2b — it still works, now computed against the shared context instead of a
+private one. Retiring it in favor of a single authoritative clock is
+Phase 2c's job (§4), not this one's.
 
-**Fix (Phase 2b):** one `AudioContext`, created once in
+**Landed (Phase 2b, 2026-08-01):** one `AudioContext`, created once in
 `src/audio/context.js`, shared by the synth, the metronome, and every future
 channel (guitar, bass, piano, drums per `SESSION_MODE_FEASIBILITY.md`).
 
-### 2.3 AudioWorklets — work, but by coincidence
+### 2.3 AudioWorklets — now PUBLIC_URL-relative
 
-`src/nodes/noiseGenerator.js:21-23` loads
-`/white-noise-processor.js`/`pink-`/`brown-` from the **domain root**, not a
-relative path. It works today only because `liz.moe` root happens to serve
-the same files as `/uncaged/`. If that ever changes, worklets silently
-degrade to a `ScriptProcessor` fallback with just a `console.error`
-(confirmed live in a real Chromium run, 2026-08-01 — see run-app skill
-notes). Fix when touched: `process.env.PUBLIC_URL`-relative paths (Phase 2b).
+**Fixed in Phase 2b (2026-08-01).** `src/nodes/noiseGenerator.js:21-23`
+used to load `/white-noise-processor.js`/`pink-`/`brown-` from the **domain
+root**, not a relative path — it worked only because `liz.moe` root happened
+to serve the same files as `/uncaged/`; if that had ever changed, worklets
+would have silently degraded to a `ScriptProcessor` fallback with just a
+`console.error`. Now loaded via `` `${process.env.PUBLIC_URL}/...` ``, so
+the paths are correct regardless of deployment root.
+
+### 2.4 `src/audio/`, as it landed (Phase 2b, 2026-08-01)
+
+```
+src/audio/context.js    the single shared AudioContext, created once at
+                         import time. Everything else imports `audioContext`
+                         from here instead of constructing its own.
+src/audio/bus.js        masterBus - a plain GainNode between each channel's
+                         output and audioContext.destination. Only
+                         PolySynth's masterGain feeds it today; future
+                         instrument channels sum in here too.
+src/audio/dispatch.js   the channel registry that replaces
+                         window.polySynthRef/window.polySynthEnabled at the
+                         playback entry points - see §3 for the split
+                         between what moved here and what didn't.
+```
+
+`src/audio/clock.js` and `src/audio/scheduler.js` (`REFACTOR_PLAN.md` Phase
+2c) are not part of this: nothing needs a timing grid yet, so lifting the
+metronome's lookahead scheduler out and migrating the progression
+sequencer/arpeggiator off `setTimeout` is deferred until drum backing is
+actually being built.
 
 ---
 
 ## 3. Channel / dispatch model
 
-There is no formal dispatcher yet — this section documents the de facto one,
-which Phase 2b/5 will replace with `src/audio/dispatch.js`.
+**`src/audio/dispatch.js` (Phase 2b, 2026-08-01)** is a channel registry:
+`registerChannel(id, channel)` / `getChannel(id)` / `setChannelEnabled(id,
+bool)` / `isChannelEnabled(id)`. It is deliberately *not* a tagged-event bus
+yet - it relocates the pointer that used to live on `window.polySynthRef`/
+`window.polySynthEnabled`, without changing the shape of what's on the other
+end of it. `App.js` registers PolySynth's imperative handle under the id
+`'synth'` (`App.js:24-33`) in the same effect that still sets
+`window.polySynthRef`/`window.polySynthEnabled`.
 
-**The interface every entry point calls** is the imperative handle PolySynth
-exposes via `useImperativeHandle` (`PolySynth.jsx:1871-1876`):
+**The interface the playback entry points call** is the imperative handle
+PolySynth exposes via `useImperativeHandle` (`PolySynth.jsx:1871-1876`):
 `playNotes(notes, volume, durationMs)`, `stopNotes(notes)`,
-`stopAllNotes()`, `isActive()`, `activate()`. `App.js` stores this ref on
-`window.polySynthRef` (`App.js:24-31`) once the portal has actually mounted
-`PolySynthWrapper` — the highest-traffic global in the app (~115 references
-across 6 files).
+`stopAllNotes()`, `isActive()`, `activate()`, `triggerChord(notes)`.
 
-Three entry points dispatch through it, all going through
-`window.polySynthRef` rather than a shared import:
+### 3.1 Two surfaces were sharing one global — only one moved
+
+Investigating the ~115 references before writing `dispatch.js` surfaced that
+`window.polySynthRef` was carrying two unrelated things:
+
+- **The playback surface** (`playNotes`/`stopNotes`/`stopAllNotes`/
+  `isActive`/`activate`/`triggerChord`) — the three entry points below.
+  **This is what Phase 2b migrated onto `dispatch.js`.**
+- **PolySynth's own progression-sequencer control surface**
+  (`getProgressionSequencerState`, `toggleProgressionSequencer`,
+  `setProgressionData`, `setProgressionRate`, `setProgressionDuration`,
+  `updateProgressionSettings`) — one component (`progressionBuilder.js`)
+  remote-controlling another component's internal sequencer feature. Not
+  note dispatch. **Left on `window.polySynthRef` untouched** - ~40 remaining
+  references, all inside `progressionBuilder.js`'s sequencer UI wiring.
+  Migrating this belongs to a later phase, once `progressionBuilder.js` has
+  a real module boundary (`REFACTOR_PLAN.md` Phase 4).
+
+`IntervalPractice.jsx`'s `getPolySynthRef()` helper (2 references) is
+similarly untouched: it backs both playback (`playNotes`) and a third,
+also-unrelated surface (`getPitchValues`/`setPitchValues`/
+`resetMicrotonalPitches`, microtonal tuning controls), so splitting it
+without touching the microtonal calls would have meant duplicating the
+helper for no structural benefit. Left as one function reading
+`window.polySynthRef`, both surfaces still bundled.
+
+Three entry points now dispatch through the registry:
 
 | Entry point | Where | Note format |
 |---|---|---|
-| Keyboard | `index.js`'s `onKeyPress`, bound via `document.addEventListener('keydown'/'keyup', onKeyPress)` at `index.js:2615`. Maps `event.code` to a note via `keyToNote()` (`keyboard.js:29`). | `"C#4"` (octave suffix, no `/`) |
-| Mouse | `midi.js`'s `initializeMouseInput(playNote2Callback, stopNotes2Callback)`, wired at `index.js:5739`, attaches listeners to elements found via `getElementByMIDI()`. | same |
-| Programmatic | Fretboard (`frets.js:6138-6144`, chord-click handlers) and progression builder/sequencer (`progressionBuilder.js`, PolySynth's own progression sequencer) call `window.polySynthRef.playNotes(...)` directly for preview/playback. | same |
+| Keyboard | `index.js`'s `onKeyPress`, bound via `document.addEventListener('keydown'/'keyup', onKeyPress)`. Maps `event.code` to a note via `keyToNote()` (`keyboard.js:29`). Gates on `isChannelEnabled('synth')`. | `"C#4"` (octave suffix, no `/`) |
+| Mouse | `midi.js`'s `initializeMouseInput(playNote2Callback, stopNotes2Callback)`, wired from `index.js`'s `initializePolySynthMouse()`; the polling loop that waits for the synth to exist now polls `getChannel('synth')` instead of `window.polySynthRef`. | same |
+| Programmatic | `frets.js`'s `playChordVoicing()`, `progressionBuilder.js`'s `triggerChordProgression()` (playback calls only - its `getProgressionSequencerState()` read stays on `window.polySynthRef`, see §3.1), and `MiniPiano.js`'s `getActivePolySynth()`. | same |
 
-There is no tagged event shape (`{ type, note, velocity, channel }` or
-similar) — every call site independently guards `window.polySynthRef &&
-window.polySynthRef.playNotes`. This is what `src/audio/dispatch.js`
-(Phase 2b) formalizes: one tagged note event, one channel registry, these
-three entry points rewired to publish to it instead of reaching into
-`window`.
+Every call site still independently guards `getChannel('synth') &&
+channel.playNotes` (mirroring the old `window.polySynthRef &&
+window.polySynthRef.playNotes` guard exactly) — this phase relocated the
+reference, it did not redesign the calling convention. A real tagged event
+shape (`{ type, note, velocity, channel }`) is future work for when a second
+channel (guitar/bass/piano/drums, `SESSION_MODE_FEASIBILITY.md`) actually
+exists to dispatch to.
 
 ---
 
@@ -151,7 +217,8 @@ Two unrelated timing systems coexist:
   feature that scores the user against a grid.
 
 No code currently schedules against the metronome's clock except the
-metronome's own click sound. Fix (Phase 2b/5, staged per
+metronome's own click sound. Fix (`REFACTOR_PLAN.md` Phase 2c, deferred
+until drum backing is actually being built - staged per
 `SESSION_MODE_FEASIBILITY.md` §4): `src/audio/clock.js` lifts the absolute
 timebase out of `metronome.js`; `src/audio/scheduler.js` generalizes the
 lookahead loop into one queue for all voices; the progression sequencer and
@@ -167,12 +234,14 @@ every global below is equally real — one entry (`window.gridData` /
 have **zero live references**; see the correction note at the end of this
 section.
 
-### 5.1 Live and high-traffic — migrate first (Phase 5 step 3)
+### 5.1 Live and high-traffic — partially migrated (Phase 2b), remainder is Phase 5 step 3
 
-| Global | Writer | Live reference count | Removed by |
+| Global | Writer | Live reference count | Status |
 |---|---|---|---|
-| `window.polySynthRef` | `App.js:26` | ~115, across `index.js`, `progressionBuilder.js`, `frets.js`, `App.js`, `MiniPiano.js`, `IntervalPractice.jsx` | `src/audio/dispatch.js` (Phase 2b), consumed by Phase 5 |
-| `window.polySynthEnabled` | `App.js:29` | small, gates `index.js`'s `onKeyPress` | same |
+| `window.polySynthRef` (playback surface: `playNotes`/`stopNotes`/`stopAllNotes`/`isActive`/`activate`/`triggerChord`) | `App.js:26` | was counted in the ~115 below; now reached via `getChannel('synth')` (`src/audio/dispatch.js`) at every keyboard/mouse/programmatic call site (`index.js`, `frets.js`, `MiniPiano.js`, `progressionBuilder.js`'s `triggerChordProgression`) | **Migrated, Phase 2b (2026-08-01).** |
+| `window.polySynthRef` (progression-sequencer-control surface: `getProgressionSequencerState`/`toggleProgressionSequencer`/`setProgressionData`/`setProgressionRate`/`setProgressionDuration`/`updateProgressionSettings`) | `App.js:26` | ~40, all in `progressionBuilder.js` | **Still live.** Not note dispatch - see §3.1. Migrates once `progressionBuilder.js` has a real module boundary (Phase 4). |
+| `window.polySynthRef` (microtonal surface: `getPitchValues`/`setPitchValues`/`resetMicrotonalPitches`, bundled with a few playback calls in one shared helper) | `App.js:26` | 2 (`IntervalPractice.jsx`'s `getPolySynthRef()`) | **Still live** — see §3.1 for why this one helper wasn't split. |
+| `window.polySynthEnabled` | `App.js:29` | was small; the `index.js`/`progressionBuilder.js`(click-gate)/`MiniPiano.js` reads that gated *playback* now read `isChannelEnabled('synth')` instead | **Migrated, Phase 2b**, except `IntervalPractice.jsx`'s bundled helper (still live, same reason as above). |
 | `window.updateFretboardsForScaleChange` | `frets.js:6920` | 17 (1 write + call in `frets.js`, 16 guarded read/call sites in `scaleGenerator.js:2219-2424`) — verified exactly matches `REFACTOR_PLAN.md`'s count | Phase 5 step 3, or a plain import once `frets.js`/`scaleGenerator.js` don't need load-order independence |
 
 ### 5.2 Live, lower-traffic — remaining Phase 5 work
@@ -218,15 +287,15 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | Folder / file | Owns | May import | Must not import it |
 |---|---|---|---|
 | `src/theory/` *(Phase 2)* | Note names, intervals, scale/chord data, roman numeral parsing. No DOM, with two documented exceptions below. | nothing app-specific, except `roman.js`'s one deliberate exception | everything else may import it |
-| `src/audio/` *(Phase 2b, not yet created)* | The shared `AudioContext`, master bus, clock, lookahead scheduler, note-event dispatch/channel registry. | `src/theory/`, `src/nodes/` | UI modules should depend on it, not the reverse |
+| `src/audio/` *(Phase 2b landed 2026-08-01: `context.js`/`bus.js`/`dispatch.js`; `clock.js`/`scheduler.js` are Phase 2c, deferred)* | The shared `AudioContext`, master bus, note-event/channel registry dispatch. | nothing app-specific today | UI modules should depend on it, not the reverse |
 | `src/nodes/` | Framework-free Web Audio node wrappers (`Gain`, `Filter`, `Distortion`, …), a shared `.getNode()`/`.connect()` interface. | nothing app-specific | — |
 | `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` when Phase 3 splits `frets.js` — noted explicitly in `REFACTOR_PLAN.md` Phase 3 |
 | `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, fret geometry, marker/shape drawing, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content) | — |
 | `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
-| `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` once it exists | — |
-| `index.js` | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `frets.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). | — | — |
-| `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`. | — | — |
+| `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
+| `index.js` | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `frets.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
+| `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`/`window.polySynthEnabled` and registers the `'synth'` channel with `src/audio/dispatch.js` (Phase 2b). | `src/audio/dispatch.js` | — |
 
 ### 6.1 `src/theory/`, as it actually landed (Phase 2, 2026-08-01)
 

@@ -15,6 +15,8 @@ import { getNoteInfo, WAVEFORM, FILTER, REVERB, ENVELOPE_SHAPE, NOISE } from '..
 import { THEMES } from '../../styles/themes';
 import { CHROMATIC } from '../../theory/notes';
 import { metronome } from '../../metronome';
+import { audioContext } from '../../audio/context';
+import { masterBus } from '../../audio/bus';
 
 import {
     ModuleGridContainer,
@@ -65,7 +67,7 @@ const durationStringToInteger = (durationString) => {
     return integerMap[durationString] || 0;
 };
 
-const AC = new AudioContext();
+const AC = audioContext;
 const polyphony = 8;
 const synthArr = Array(polyphony).fill(0).map(_ => new MonoSynth(AC));
 let synthPos = 0;
@@ -1369,7 +1371,7 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
                 
                 // Test the master gain directly with a test signal
                 
-                masterGain.getNode().connect(AC.destination);
+                masterGain.getNode().connect(masterBus);
 
                 console.log('Testing master gain with direct connection...');
                 // try {
@@ -1452,7 +1454,7 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
             masterGain.getNode().disconnect();
             console.log('Master gain disconnected');
             
-            masterGain.connect(AC.destination);
+            masterGain.connect(masterBus);
             // Force master gain to audible level for testing
             masterGain.getNode().gain.setValueAtTime(0.5, AC.currentTime);
             console.log('Master gain connected to destination and set to 0.5');
@@ -1462,7 +1464,7 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
             console.error('Error connecting master gain:', e);
             // Try alternative connection method
             try {
-                masterGain.getNode().connect(AC.destination);
+                masterGain.getNode().connect(masterBus);
                 masterGain.getNode().gain.setValueAtTime(0.5, AC.currentTime);
                 console.log('Master gain reconnected using direct node connection');
             } catch (e2) {

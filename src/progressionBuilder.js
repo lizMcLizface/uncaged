@@ -14,6 +14,7 @@ import {
     getNoteAtStringFret
 } from './tuning';
 import { selectGripFromPositions } from './chordFingering';
+import { getChannel, isChannelEnabled } from './audio/dispatch';
 
 /**
  * Process a chord to get the actual notes based on selected pattern
@@ -125,24 +126,29 @@ function triggerChordProgression(chord, index) {
         // If sequencer is running, this is a timed/sequenced playback
         const isSequencedPlayback = sequencerState && sequencerState.playing;
 
+        // Playback (as opposed to the sequencer-state read above) goes
+        // through the 'synth' channel registered in src/audio/dispatch.js -
+        // see that module's header for why the two are split.
+        const synthChannel = getChannel('synth');
+
         // Stop any currently playing notes
-        if (window.polySynthRef.stopAllNotes) {
-            window.polySynthRef.stopAllNotes();
+        if (synthChannel.stopAllNotes) {
+            synthChannel.stopAllNotes();
         }
 
         // Trigger the chord notes with appropriate duration
-        if (window.polySynthRef.playNotes) {
+        if (synthChannel.playNotes) {
             if (isSequencedPlayback) {
                 // Use the sequencer's duration setting (already converted to ms in the sequencer)
                 const duration = getDurationInMs(sequencerState.duration);
-                window.polySynthRef.playNotes(chordNotes, 70, duration);
+                synthChannel.playNotes(chordNotes, 70, duration);
             } else {
                 // Direct click - play for one beat (quarter note duration)
                 const oneBeatDuration = getOneBeatDuration();
-                window.polySynthRef.playNotes(chordNotes, 70, oneBeatDuration);
+                synthChannel.playNotes(chordNotes, 70, oneBeatDuration);
             }
-        } else if (window.polySynthRef.triggerChord) {
-            window.polySynthRef.triggerChord(chordNotes);
+        } else if (synthChannel.triggerChord) {
+            synthChannel.triggerChord(chordNotes);
         } else {
             console.warn('PolySynth playNotes/triggerChord method not available');
         }
@@ -3224,7 +3230,7 @@ function createChordElement(chord, index) {
 
     // Add click handler for chord triggering
     element.addEventListener('click', () => {
-        if (!chord.isInvalid && window.polySynthEnabled && window.polySynthRef) {
+        if (!chord.isInvalid && isChannelEnabled('synth') && getChannel('synth')) {
             triggerChordProgression(chord, index);
             
             // Visual feedback for click

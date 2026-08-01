@@ -1,4 +1,5 @@
 import $ from 'jquery';
+import { audioContext } from './audio/context';
 
 const animations = document.querySelectorAll('[data-animation');
 
@@ -233,7 +234,7 @@ class Metronome
 
     initializeAudioContext(){
         if (!this.audioContext || this.audioContextStartTime === null) {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.audioContext = audioContext;
             this.updateAudioContextOffset();
             this.setTempo(this.tempo); // Ensure tempo is set after audio context initialization
         }
@@ -242,8 +243,8 @@ class Metronome
     // Convert performance time to audio context time
     performanceTimeToAudioTime(performanceTime)
     {
-        if (!this.audioContext || this.audioContextStartTime === null) {            
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        if (!this.audioContext || this.audioContextStartTime === null) {
+            this.audioContext = audioContext;
             this.updateAudioContextOffset();
         }
         if (!this.audioContext || this.audioContextStartTime === null) {
@@ -567,7 +568,7 @@ class Metronome
 
         if (this.audioContext == null)
         {
-            this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            this.audioContext = audioContext;
         }
 
         this.isRunning = true;
