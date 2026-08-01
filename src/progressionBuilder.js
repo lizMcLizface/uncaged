@@ -15,6 +15,12 @@ import {
 } from './tuning';
 import { selectGripFromPositions } from './chordFingering';
 import { getChannel, isChannelEnabled } from './audio/dispatch';
+import {
+    progressionState,
+    INPUT_DEBOUNCE_DELAY,
+    CHORD_LINE_CONFIG,
+    MINI_FRETBOARD_CONFIG
+} from './progression/state';
 
 /**
  * Process a chord to get the actual notes based on selected pattern
@@ -34,7 +40,7 @@ function getProcessedChordNotes(chord, index) {
     
     // Try to get fret-specific notes from selected pattern first
     // Default to pattern index 0 if no pattern is explicitly selected
-    const selectedPatternIndex = selectedPatternIndexes.get(index) ?? 0;
+    const selectedPatternIndex = progressionState.selectedPatternIndexes.get(index) ?? 0;
     
     if (patterns && patterns[selectedPatternIndex]) {
         const selectedPattern = patterns[selectedPatternIndex];
@@ -71,7 +77,7 @@ function getProcessedChordNotes(chord, index) {
  * @returns {Array} Array of processed chord data with actual notes
  */
 function getProcessedProgression() {
-    return currentProgression.map((chord, index) => {
+    return progressionState.currentProgression.map((chord, index) => {
         const processedNotes = getProcessedChordNotes(chord, index);
         return {
             ...chord,
@@ -230,59 +236,12 @@ function getFretboardForProgression() {
  * - Current scale (human readable, e.g., "Major-1", "Minor-1")
  */
 
-// Global state for chord progression
-let currentProgression = [];
-
-// Expose current progression globally for PolySynth access
-window.currentProgression = currentProgression;
-let hoveredChordIndex = null;
-let selectedPatternIndexes = new Map(); // Map of chord index to selected pattern index
-let showMiniFretboards = true; // Global toggle for mini fretboard visualization
-let showMiniPianos = false; // Global toggle for mini piano visualization
-let showMiniStaves = false; // Global toggle for mini stave visualization
-let staveKey = 'C'; // Global key signature for mini staves
-let staveTheoryMode = false; // Global toggle for theory mode (4th octave notes)
-let useSeventhChords = false; // Global toggle for triads vs seventh chords
-let showFretboardIntervals = false; // Global toggle for showing intervals instead of note names on mini fretboards
-let showArpeggiationNotes = false; // Global toggle for showing arpeggiation notes on mini fretboards
-
-// Caching system for performance optimization
-let parsedTokensCache = []; // Cache of parsed tokens from input
-let lastInputString = ''; // Last processed input string
-let precomputedPatternData = new Map(); // Map of chord index to precomputed pattern data
-
-// Debouncing for input changes
-let inputDebounceTimer = null;
-const INPUT_DEBOUNCE_DELAY = 150; // milliseconds
-
-// Configuration constants
-const CHORD_LINE_CONFIG = {
-    normalWidth: 60,
-    highlightedWidth: 80,
-    normalOpacity: 0.7,
-    highlightedOpacity: 0.9,
-    hoverOpacity: 1.0
-};
-
-// Mini fretboard visualization configuration
-const MINI_FRETBOARD_CONFIG = {
-    width: 100,
-    height: 120,
-    fretCount: 5,
-    stringCount: getActiveInstrumentConfig().stringCount,
-    fretHeight: 20,
-    stringSpacing: 14,
-    noteRadius: 4,
-    fretNumberSize: 10,
-    noteNameSize: 9
-};
-
 // Keep mini fretboards and cached pattern data in sync with the active
 // instrument/tuning (changed via the picker in frets.js's top bar).
 subscribeToInstrumentChanges((config) => {
     MINI_FRETBOARD_CONFIG.stringCount = config.stringCount;
-    precomputedPatternData.clear();
-    selectedPatternIndexes.clear();
+    progressionState.precomputedPatternData.clear();
+    progressionState.selectedPatternIndexes.clear();
     updateProgressionDisplay();
 });
 
@@ -290,15 +249,15 @@ subscribeToInstrumentChanges((config) => {
  * Clear all caches and reset state
  */
 function clearCache() {
-    parsedTokensCache = [];
-    lastInputString = '';
-    precomputedPatternData.clear();
-    selectedPatternIndexes.clear(); // Clear pattern selections
+    progressionState.parsedTokensCache = [];
+    progressionState.lastInputString = '';
+    progressionState.precomputedPatternData.clear();
+    progressionState.selectedPatternIndexes.clear(); // Clear pattern selections
     
     // Clear debounce timer if it exists
-    if (inputDebounceTimer) {
-        clearTimeout(inputDebounceTimer);
-        inputDebounceTimer = null;
+    if (progressionState.inputDebounceTimer) {
+        clearTimeout(progressionState.inputDebounceTimer);
+        progressionState.inputDebounceTimer = null;
     }
 }
 
@@ -389,12 +348,12 @@ function parseProgressionInput(progressionText) {
     const trimmedText = progressionText.trim();
     
     // Check if input hasn't changed
-    if (trimmedText === lastInputString) {
-        return currentProgression;
+    if (trimmedText === progressionState.lastInputString) {
+        return progressionState.currentProgression;
     }
     
     const newTokens = trimmedText.split(/\s+/).filter(token => token.trim());
-    const oldTokens = lastInputString ? lastInputString.split(/\s+/).filter(token => token.trim()) : [];
+    const oldTokens = progressionState.lastInputString ? progressionState.lastInputString.split(/\s+/).filter(token => token.trim()) : [];
     
     // Compare tokens to find what changed
     const changes = compareTokenArrays(oldTokens, newTokens);
@@ -421,10 +380,10 @@ function parseProgressionInput(progressionText) {
     
     // Otherwise, do a full reparse and clear all caches
     clearCache();
-    selectedPatternIndexes.clear(); // Clear pattern selections on full reparse
+    progressionState.selectedPatternIndexes.clear(); // Clear pattern selections on full reparse
     
     const progression = [];
-    parsedTokensCache = [];
+    progressionState.parsedTokensCache = [];
     
     for (let token of newTokens) {
         token = token.trim();
@@ -433,11 +392,11 @@ function parseProgressionInput(progressionText) {
         const chordData = parseChordToken(token);
         if (chordData) {
             progression.push(chordData);
-            parsedTokensCache.push(token);
+            progressionState.parsedTokensCache.push(token);
         }
     }
     
-    lastInputString = trimmedText;
+    progressionState.lastInputString = trimmedText;
     
     // Process default pattern selections after parsing
     processDefaultPatternSelections(progression);
@@ -452,7 +411,7 @@ function parseProgressionInput(progressionText) {
  * @returns {Array} Updated progression
  */
 function updateProgressionIncremental(newTokens, changes) {
-    let updatedProgression = [...currentProgression];
+    let updatedProgression = [...progressionState.currentProgression];
     
     // Handle removed tokens (work backwards to maintain indices)
     for (let i = changes.removed.length - 1; i >= 0; i--) {
@@ -460,15 +419,15 @@ function updateProgressionIncremental(newTokens, changes) {
         if (removeIndex < updatedProgression.length) {
             updatedProgression.splice(removeIndex, 1);
             // Remove cached pattern data
-            precomputedPatternData.delete(removeIndex);
+            progressionState.precomputedPatternData.delete(removeIndex);
             // Remove pattern selection for this index
-            selectedPatternIndexes.delete(removeIndex);
+            progressionState.selectedPatternIndexes.delete(removeIndex);
             
             // Shift pattern data indices down for higher indices
             const newPatternData = new Map();
             const newPatternSelections = new Map();
             
-            for (let [index, data] of precomputedPatternData.entries()) {
+            for (let [index, data] of progressionState.precomputedPatternData.entries()) {
                 if (index > removeIndex) {
                     newPatternData.set(index - 1, data);
                 } else {
@@ -476,7 +435,7 @@ function updateProgressionIncremental(newTokens, changes) {
                 }
             }
             
-            for (let [index, selection] of selectedPatternIndexes.entries()) {
+            for (let [index, selection] of progressionState.selectedPatternIndexes.entries()) {
                 if (index > removeIndex) {
                     newPatternSelections.set(index - 1, selection);
                 } else {
@@ -484,8 +443,8 @@ function updateProgressionIncremental(newTokens, changes) {
                 }
             }
             
-            precomputedPatternData = newPatternData;
-            selectedPatternIndexes = newPatternSelections;
+            progressionState.precomputedPatternData = newPatternData;
+            progressionState.selectedPatternIndexes = newPatternSelections;
         }
     }
     
@@ -497,9 +456,9 @@ function updateProgressionIncremental(newTokens, changes) {
             if (chordData) {
                 updatedProgression[changeIndex] = chordData;
                 // Clear cached pattern data for this index
-                precomputedPatternData.delete(changeIndex);
+                progressionState.precomputedPatternData.delete(changeIndex);
                 // Clear pattern selection for this index since chord changed
-                selectedPatternIndexes.delete(changeIndex);
+                progressionState.selectedPatternIndexes.delete(changeIndex);
             }
         }
     }
@@ -516,7 +475,7 @@ function updateProgressionIncremental(newTokens, changes) {
                 const newPatternData = new Map();
                 const newPatternSelections = new Map();
                 
-                for (let [index, data] of precomputedPatternData.entries()) {
+                for (let [index, data] of progressionState.precomputedPatternData.entries()) {
                     if (index >= addIndex) {
                         newPatternData.set(index + 1, data);
                     } else {
@@ -524,7 +483,7 @@ function updateProgressionIncremental(newTokens, changes) {
                     }
                 }
                 
-                for (let [index, selection] of selectedPatternIndexes.entries()) {
+                for (let [index, selection] of progressionState.selectedPatternIndexes.entries()) {
                     if (index >= addIndex) {
                         newPatternSelections.set(index + 1, selection);
                     } else {
@@ -532,15 +491,15 @@ function updateProgressionIncremental(newTokens, changes) {
                     }
                 }
                 
-                precomputedPatternData = newPatternData;
-                selectedPatternIndexes = newPatternSelections;
+                progressionState.precomputedPatternData = newPatternData;
+                progressionState.selectedPatternIndexes = newPatternSelections;
             }
         }
     }
     
     // Update cache
-    parsedTokensCache = [...newTokens];
-    lastInputString = newTokens.join(' ');
+    progressionState.parsedTokensCache = [...newTokens];
+    progressionState.lastInputString = newTokens.join(' ');
     
     // Process default pattern selections for the updated progression
     processDefaultPatternSelections(updatedProgression);
@@ -558,7 +517,7 @@ function processDefaultPatternSelections(progression) {
             // Resolve the chord if it's a Roman numeral to get the chord info
             let chordToCheck = chord;
             if (chord.type === 'roman') {
-                const resolvedChord = resolveRomanChord(chord, useSeventhChords);
+                const resolvedChord = resolveRomanChord(chord, progressionState.useSeventhChords);
                 if (resolvedChord && resolvedChord.chordInfo) {
                     chordToCheck = resolvedChord;
                 } else {
@@ -573,7 +532,7 @@ function processDefaultPatternSelections(progression) {
             if (patterns && patterns.length > 0) {
                 // Validate that the requested pattern index exists
                 if (chord.defaultPatternIndex < patterns.length) {
-                    selectedPatternIndexes.set(index, chord.defaultPatternIndex);
+                    progressionState.selectedPatternIndexes.set(index, chord.defaultPatternIndex);
                     console.log(`Set default pattern ${chord.defaultPatternIndex + 1} for chord ${index}: ${chord.originalToken}`);
                 } else {
                     console.warn(`Pattern index ${chord.defaultPatternIndex + 1} not available for chord ${chord.originalToken}. Only ${patterns.length} patterns found.`);
@@ -1020,18 +979,18 @@ function updateProgressionDisplayForScaleChange() {
  * Update Roman numeral chords when scale changes
  */
 function updateRomanNumeralChords() {
-    if (currentProgression.length === 0) return;
+    if (progressionState.currentProgression.length === 0) return;
     
     let progressionChanged = false;
     const indicesToInvalidate = [];
     
     // Update each Roman numeral chord in the progression
-    currentProgression.forEach((chord, index) => {
+    progressionState.currentProgression.forEach((chord, index) => {
         if (chord.type === 'roman') {
-            const updatedChord = resolveRomanChord(chord, useSeventhChords);
+            const updatedChord = resolveRomanChord(chord, progressionState.useSeventhChords);
             if (updatedChord && updatedChord.chordInfo) {
                 // Update the chord with new scale context
-                currentProgression[index] = updatedChord;
+                progressionState.currentProgression[index] = updatedChord;
                 progressionChanged = true;
                 indicesToInvalidate.push(index);
                 
@@ -1039,7 +998,7 @@ function updateRomanNumeralChords() {
             } else {
                 console.warn(`Could not resolve Roman numeral ${chord.originalToken} in new scale context`);
                 // Keep the original chord but mark it as potentially invalid
-                currentProgression[index].isInvalid = true;
+                progressionState.currentProgression[index].isInvalid = true;
                 indicesToInvalidate.push(index);
             }
         }
@@ -1048,11 +1007,11 @@ function updateRomanNumeralChords() {
     if (progressionChanged) {
         // Invalidate cached pattern data for changed chords
         indicesToInvalidate.forEach(index => {
-            precomputedPatternData.delete(index);
+            progressionState.precomputedPatternData.delete(index);
         });
         
         // Reset pattern selections for updated chords
-        selectedPatternIndexes.clear();
+        progressionState.selectedPatternIndexes.clear();
         
         // Precompute pattern data for updated chords
         precomputeAllPatternData();
@@ -1061,8 +1020,8 @@ function updateRomanNumeralChords() {
         updateProgressionDisplay();
         
         // Refresh fretboard display
-        if (hoveredChordIndex !== null && currentProgression[hoveredChordIndex]) {
-            displaySingleChordPattern(currentProgression[hoveredChordIndex], hoveredChordIndex, true);
+        if (progressionState.hoveredChordIndex !== null && progressionState.currentProgression[progressionState.hoveredChordIndex]) {
+            displaySingleChordPattern(progressionState.currentProgression[progressionState.hoveredChordIndex], progressionState.hoveredChordIndex, true);
         } else {
             displayAllChordPatterns();
         }
@@ -1207,12 +1166,12 @@ function createInputSection() {
         lastProgressionText = progressionText; // Update the stored value
         
         // Clear any existing timer
-        if (inputDebounceTimer) {
-            clearTimeout(inputDebounceTimer);
+        if (progressionState.inputDebounceTimer) {
+            clearTimeout(progressionState.inputDebounceTimer);
         }
         
         // Set a new timer to delay processing
-        inputDebounceTimer = setTimeout(() => {
+        progressionState.inputDebounceTimer = setTimeout(() => {
             updateProgression(progressionText);
         }, INPUT_DEBOUNCE_DELAY);
     });
@@ -1314,14 +1273,14 @@ function createProgressionControlsSection() {
         window.showScaleContext = scaleToggleCheckbox.checked;
         
         // Refresh the current display
-        if (hoveredChordIndex !== null && currentProgression[hoveredChordIndex]) {
-            displaySingleChordPattern(currentProgression[hoveredChordIndex], hoveredChordIndex, true);
+        if (progressionState.hoveredChordIndex !== null && progressionState.currentProgression[progressionState.hoveredChordIndex]) {
+            displaySingleChordPattern(progressionState.currentProgression[progressionState.hoveredChordIndex], progressionState.hoveredChordIndex, true);
         } else {
             displayAllChordPatterns();
         }
         
         // Also refresh mini pianos and mini staves if they are enabled
-        if (showMiniPianos || showMiniStaves) {
+        if (progressionState.showMiniPianos || progressionState.showMiniStaves) {
             updateProgressionDisplay();
         }
     });
@@ -1350,14 +1309,14 @@ function createProgressionControlsSection() {
     const miniFretboardToggleCheckbox = document.createElement('input');
     miniFretboardToggleCheckbox.type = 'checkbox';
     miniFretboardToggleCheckbox.id = 'chord-progression-mini-fretboard-toggle';
-    miniFretboardToggleCheckbox.checked = showMiniFretboards;
+    miniFretboardToggleCheckbox.checked = progressionState.showMiniFretboards;
     miniFretboardToggleCheckbox.style.cssText = `
         transform: scale(1.2);
     `;
     
     // Add change event listener to refresh display
     miniFretboardToggleCheckbox.addEventListener('change', (e) => {
-        showMiniFretboards = e.target.checked;
+        progressionState.showMiniFretboards = e.target.checked;
         fretboardIntervalsToggleContainer.style.display = e.target.checked ? 'flex' : 'none';
         arpeggiationToggleContainer.style.display = e.target.checked ? 'flex' : 'none';
         updateProgressionDisplay(); // Refresh the entire display to show/hide mini fretboards
@@ -1379,7 +1338,7 @@ function createProgressionControlsSection() {
     // Mini fretboard intervals toggle (only show when mini fretboards are enabled)
     const fretboardIntervalsToggleContainer = document.createElement('div');
     fretboardIntervalsToggleContainer.style.cssText = `
-        display: ${showMiniFretboards ? 'flex' : 'none'};
+        display: ${progressionState.showMiniFretboards ? 'flex' : 'none'};
         align-items: center;
         gap: 8px;
         margin-left: 16px;
@@ -1388,14 +1347,14 @@ function createProgressionControlsSection() {
     const fretboardIntervalsToggleCheckbox = document.createElement('input');
     fretboardIntervalsToggleCheckbox.type = 'checkbox';
     fretboardIntervalsToggleCheckbox.id = 'chord-progression-fretboard-intervals-toggle';
-    fretboardIntervalsToggleCheckbox.checked = showFretboardIntervals;
+    fretboardIntervalsToggleCheckbox.checked = progressionState.showFretboardIntervals;
     fretboardIntervalsToggleCheckbox.style.cssText = `
         transform: scale(1.2);
     `;
     
     // Add change event listener to refresh display
     fretboardIntervalsToggleCheckbox.addEventListener('change', (e) => {
-        showFretboardIntervals = e.target.checked;
+        progressionState.showFretboardIntervals = e.target.checked;
         updateProgressionDisplay(); // Refresh to show intervals or note names
     });
     
@@ -1415,7 +1374,7 @@ function createProgressionControlsSection() {
     // Arpeggiation notes toggle (only show when mini fretboards are enabled)
     const arpeggiationToggleContainer = document.createElement('div');
     arpeggiationToggleContainer.style.cssText = `
-        display: ${showMiniFretboards ? 'flex' : 'none'};
+        display: ${progressionState.showMiniFretboards ? 'flex' : 'none'};
         align-items: center;
         gap: 8px;
         margin-left: 16px;
@@ -1424,14 +1383,14 @@ function createProgressionControlsSection() {
     const arpeggiationToggleCheckbox = document.createElement('input');
     arpeggiationToggleCheckbox.type = 'checkbox';
     arpeggiationToggleCheckbox.id = 'chord-progression-arpeggiation-toggle';
-    arpeggiationToggleCheckbox.checked = showArpeggiationNotes;
+    arpeggiationToggleCheckbox.checked = progressionState.showArpeggiationNotes;
     arpeggiationToggleCheckbox.style.cssText = `
         transform: scale(1.2);
     `;
     
     // Add change event listener to refresh display
     arpeggiationToggleCheckbox.addEventListener('change', (e) => {
-        showArpeggiationNotes = e.target.checked;
+        progressionState.showArpeggiationNotes = e.target.checked;
         updateProgressionDisplay(); // Refresh to show/hide arpeggiation notes
     });
     
@@ -1459,14 +1418,14 @@ function createProgressionControlsSection() {
     const miniPianoToggleCheckbox = document.createElement('input');
     miniPianoToggleCheckbox.type = 'checkbox';
     miniPianoToggleCheckbox.id = 'chord-progression-mini-piano-toggle';
-    miniPianoToggleCheckbox.checked = showMiniPianos;
+    miniPianoToggleCheckbox.checked = progressionState.showMiniPianos;
     miniPianoToggleCheckbox.style.cssText = `
         transform: scale(1.2);
     `;
     
     // Add change event listener to refresh display
     miniPianoToggleCheckbox.addEventListener('change', (e) => {
-        showMiniPianos = e.target.checked;
+        progressionState.showMiniPianos = e.target.checked;
         updateProgressionDisplay(); // Refresh the entire display to show/hide mini pianos
     });
     
@@ -1494,14 +1453,14 @@ function createProgressionControlsSection() {
     const miniStavesToggleCheckbox = document.createElement('input');
     miniStavesToggleCheckbox.type = 'checkbox';
     miniStavesToggleCheckbox.id = 'chord-progression-mini-staves-toggle';
-    miniStavesToggleCheckbox.checked = showMiniStaves;
+    miniStavesToggleCheckbox.checked = progressionState.showMiniStaves;
     miniStavesToggleCheckbox.style.cssText = `
         transform: scale(1.2);
     `;
     
     // Add change event listener to refresh display
     miniStavesToggleCheckbox.addEventListener('change', (e) => {
-        showMiniStaves = e.target.checked;
+        progressionState.showMiniStaves = e.target.checked;
         updateProgressionDisplay(); // Refresh the entire display to show/hide mini staves
     });
     
@@ -1521,7 +1480,7 @@ function createProgressionControlsSection() {
     // Stave key selector (only show when mini staves are enabled)
     const staveKeyContainer = document.createElement('div');
     staveKeyContainer.style.cssText = `
-        display: ${showMiniStaves ? 'flex' : 'none'};
+        display: ${progressionState.showMiniStaves ? 'flex' : 'none'};
         align-items: center;
         gap: 8px;
     `;
@@ -1568,13 +1527,13 @@ function createProgressionControlsSection() {
         const optionElement = document.createElement('option');
         optionElement.value = option.value;
         optionElement.textContent = option.label;
-        optionElement.selected = option.value === staveKey;
+        optionElement.selected = option.value === progressionState.staveKey;
         staveKeyDropdown.appendChild(optionElement);
     });
     
     staveKeyDropdown.addEventListener('change', (e) => {
-        staveKey = e.target.value;
-        if (showMiniStaves) {
+        progressionState.staveKey = e.target.value;
+        if (progressionState.showMiniStaves) {
             updateProgressionDisplay(); // Refresh display with new key signature
         }
     });
@@ -1590,7 +1549,7 @@ function createProgressionControlsSection() {
     // Theory mode toggle for mini staves
     const staveTheoryModeContainer = document.createElement('div');
     staveTheoryModeContainer.style.cssText = `
-        display: ${showMiniStaves ? 'flex' : 'none'};
+        display: ${progressionState.showMiniStaves ? 'flex' : 'none'};
         align-items: center;
         gap: 8px;
     `;
@@ -1598,14 +1557,14 @@ function createProgressionControlsSection() {
     const staveTheoryModeCheckbox = document.createElement('input');
     staveTheoryModeCheckbox.type = 'checkbox';
     staveTheoryModeCheckbox.id = 'chord-progression-stave-theory-mode';
-    staveTheoryModeCheckbox.checked = staveTheoryMode;
+    staveTheoryModeCheckbox.checked = progressionState.staveTheoryMode;
     staveTheoryModeCheckbox.style.cssText = `
         transform: scale(1.2);
     `;
     
     staveTheoryModeCheckbox.addEventListener('change', (e) => {
-        staveTheoryMode = e.target.checked;
-        if (showMiniStaves) {
+        progressionState.staveTheoryMode = e.target.checked;
+        if (progressionState.showMiniStaves) {
             updateProgressionDisplay(); // Refresh display with new mode
         }
     });
@@ -1640,14 +1599,14 @@ function createProgressionControlsSection() {
     const chordsToggleCheckbox = document.createElement('input');
     chordsToggleCheckbox.type = 'checkbox';
     chordsToggleCheckbox.id = 'chord-progression-sevenths-toggle';
-    chordsToggleCheckbox.checked = useSeventhChords;
+    chordsToggleCheckbox.checked = progressionState.useSeventhChords;
     chordsToggleCheckbox.style.cssText = `
         transform: scale(1.2);
     `;
     
     // Add change event listener to reprocess progression
     chordsToggleCheckbox.addEventListener('change', (e) => {
-        useSeventhChords = e.target.checked;
+        progressionState.useSeventhChords = e.target.checked;
         
         // Reprocess the current progression to apply the toggle
         const inputElement = document.getElementById('chord-progression-input');
@@ -1881,7 +1840,7 @@ function createProgressionControlsSection() {
             return;
         }
         
-        if (currentProgression.length === 0) {
+        if (progressionState.currentProgression.length === 0) {
             alert('Please create a progression first');
             return;
         }
@@ -2222,16 +2181,16 @@ function updateProgression(progressionText) {
     // Resolve Roman numerals to actual chords
     const resolvedProgression = parsedProgression.map(chord => {
         if (chord.type === 'roman') {
-            return resolveRomanChord(chord, useSeventhChords) || chord;
+            return resolveRomanChord(chord, progressionState.useSeventhChords) || chord;
         }
         return chord;
     });
     
     // Reset hover state when progression changes
-    hoveredChordIndex = null;
+    progressionState.hoveredChordIndex = null;
     
-    currentProgression = resolvedProgression;
-    window.currentProgression = currentProgression; // Update global reference
+    progressionState.currentProgression = resolvedProgression;
+    window.currentProgression = progressionState.currentProgression; // Update global reference
     
     // Also provide processed progression for sequencer
     window.processedProgression = getProcessedProgression();
@@ -2262,21 +2221,21 @@ function updateProgression(progressionText) {
 function precomputeAllPatternData() {
     // Clear any pattern data for indices that exceed the current progression length
     const indicesToRemove = [];
-    for (let index of precomputedPatternData.keys()) {
-        if (index >= currentProgression.length) {
+    for (let index of progressionState.precomputedPatternData.keys()) {
+        if (index >= progressionState.currentProgression.length) {
             indicesToRemove.push(index);
         }
     }
     indicesToRemove.forEach(index => {
-        precomputedPatternData.delete(index);
-        selectedPatternIndexes.delete(index);
+        progressionState.precomputedPatternData.delete(index);
+        progressionState.selectedPatternIndexes.delete(index);
     });
     
     // Compute pattern data for all current chords
-    currentProgression.forEach((chord, index) => {
+    progressionState.currentProgression.forEach((chord, index) => {
         // Always recompute to ensure fresh data
         const patternData = precomputePatternData(chord, index);
-        precomputedPatternData.set(index, patternData);
+        progressionState.precomputedPatternData.set(index, patternData);
     });
 }
 
@@ -2290,7 +2249,7 @@ function updateProgressionDisplay(currentChordIndex = -1) {
     
     displaySection.innerHTML = '';
     
-    if (currentProgression.length === 0) {
+    if (progressionState.currentProgression.length === 0) {
         const placeholder = document.createElement('div');
         placeholder.textContent = 'Enter a chord progression above to see it displayed here';
         placeholder.style.cssText = `
@@ -2312,7 +2271,7 @@ function updateProgressionDisplay(currentChordIndex = -1) {
         gap: 15px;
     `;
     
-    currentProgression.forEach((chord, index) => {
+    progressionState.currentProgression.forEach((chord, index) => {
         const chordElement = createChordElement(chord, index);
         
         // Highlight current chord if specified (without scaling to avoid UI shifts)
@@ -2343,7 +2302,7 @@ function highlightCurrentChord(chordIndex) {
         element.style.transform = '';
         
         // Restore original border based on chord status
-        const chord = currentProgression[idx];
+        const chord = progressionState.currentProgression[idx];
         if (chord) {
             let borderColor = '#666'; // Default
             if (chord.isInvalid) {
@@ -2778,7 +2737,7 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
     });
     
     // Draw arpeggiation notes if toggle is enabled
-    if (showArpeggiationNotes && pattern.arpeggiationNotes && pattern.arpeggiationNotes.length > 0) {
+    if (progressionState.showArpeggiationNotes && pattern.arpeggiationNotes && pattern.arpeggiationNotes.length > 0) {
         pattern.arpeggiationNotes.forEach(arpNote => {
             const { string: stringNum, fret, note, interval } = arpNote;
             
@@ -2860,7 +2819,7 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
                 svg.appendChild(arpCircle);
                 
                 // Store arpeggiation note for display below fretboard
-                // if (showFretboardIntervals && interval && interval !== '?') {
+                // if (progressionState.showFretboardIntervals && interval && interval !== '?') {
                 //     stringIntervals.set(stringIndex, interval);
                 // } else {
                 //     stringNotes.set(stringIndex, note);
@@ -2875,7 +2834,7 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
         const y = startY + config.fretCount * fretHeight + 15;
         
         let displayText = '';
-        if (showFretboardIntervals && stringIntervals.has(stringIndex)) {
+        if (progressionState.showFretboardIntervals && stringIntervals.has(stringIndex)) {
             // Show interval if intervals toggle is enabled and we have interval data
             displayText = stringIntervals.get(stringIndex);
         } else if (stringNotes.has(stringIndex)) {
@@ -3055,7 +3014,7 @@ function createChordElement(chord, index) {
         element.appendChild(notesDisplay);
         
         // Add mini piano visualization if enabled
-        if (showMiniPianos) {
+        if (progressionState.showMiniPianos) {
             const scaleToggleCheckbox = document.getElementById('chord-progression-scale-toggle');
             const showScaleContext = scaleToggleCheckbox && scaleToggleCheckbox.checked;
             
@@ -3103,12 +3062,12 @@ function createChordElement(chord, index) {
         }
         
         // Add mini stave visualization if enabled
-        if (showMiniStaves) {
+        if (progressionState.showMiniStaves) {
             // Choose notes based on theory mode
             let notesToUse;
             let theoreticalNotes = null; // For enharmonic correction reference
             
-            if (staveTheoryMode) {
+            if (progressionState.staveTheoryMode) {
                 // Theory mode: use chord theory notes in 4th octave
                 if (chord.chordInfo && chord.chordInfo.notes) {
                     theoreticalNotes = chord.chordInfo.notes; // Keep original theory notes for reference
@@ -3159,19 +3118,19 @@ function createChordElement(chord, index) {
                         const scaleNotesNoOctave = currentScaleNotes.map(note => notationStripOctave(note));
                         
                         // Create mixed stave showing both chord and scale
-                        miniStave = createMixedStave(notesNoOctave, scaleNotesNoOctave, notesNoOctave[0] || notes[0], staveKey, theoreticalNotes);
+                        miniStave = createMixedStave(notesNoOctave, scaleNotesNoOctave, notesNoOctave[0] || notes[0], progressionState.staveKey, theoreticalNotes);
                     } catch (error) {
                         console.warn('Error creating mixed stave:', error);
                         // Fallback to chord-only display
-                        miniStave = createChordStave(notesToUse, notesToUse[0] || notes[0], staveKey, theoreticalNotes, currentScaleNotes);
+                        miniStave = createChordStave(notesToUse, notesToUse[0] || notes[0], progressionState.staveKey, theoreticalNotes, currentScaleNotes);
                     }
                 } else {
                     // Fallback to chord-only display
-                    miniStave = createChordStave(notesToUse, notesToUse[0] || notes[0], staveKey, theoreticalNotes, currentScaleNotes);
+                    miniStave = createChordStave(notesToUse, notesToUse[0] || notes[0], progressionState.staveKey, theoreticalNotes, currentScaleNotes);
                 }
             } else {
                 // Show chord only
-                miniStave = createChordStave(notesToUse, notesToUse[0] || notes[0], staveKey, theoreticalNotes, currentScaleNotes);
+                miniStave = createChordStave(notesToUse, notesToUse[0] || notes[0], progressionState.staveKey, theoreticalNotes, currentScaleNotes);
             }
             
             if (miniStave) {
@@ -3216,7 +3175,7 @@ function createChordElement(chord, index) {
         if (!chord.isInvalid) {
             element.style.borderColor = '#4CAF50';
             element.style.background = '#555';
-            hoveredChordIndex = index;
+            progressionState.hoveredChordIndex = index;
             displaySingleChordPattern(chord, index, true); // Highlight when hovered
         }
     });
@@ -3224,7 +3183,7 @@ function createChordElement(chord, index) {
     element.addEventListener('mouseleave', () => {
         element.style.borderColor = borderColor; // Restore original border color
         element.style.background = '#444';
-        hoveredChordIndex = null;
+        progressionState.hoveredChordIndex = null;
         displayAllChordPatterns();
     });
 
@@ -3236,7 +3195,7 @@ function createChordElement(chord, index) {
             // Visual feedback for click
             element.style.background = '#4CAF50';
             setTimeout(() => {
-                element.style.background = hoveredChordIndex === index ? '#555' : '#444';
+                element.style.background = progressionState.hoveredChordIndex === index ? '#555' : '#444';
             }, 200);
         }
     });
@@ -3264,7 +3223,7 @@ function getChordDisplayName(chord, chordIndex = null) {
     // If a default pattern was specified and it's still the currently selected pattern, 
     // include it in the display name
     if (chord.defaultPatternIndex !== undefined && chordIndex !== null) {
-        const currentSelectedPattern = selectedPatternIndexes.get(chordIndex);
+        const currentSelectedPattern = progressionState.selectedPatternIndexes.get(chordIndex);
         const isStillDefaultPattern = currentSelectedPattern === chord.defaultPatternIndex;
         
         if (isStillDefaultPattern) {
@@ -3286,11 +3245,11 @@ function createPatternSelector(chord, index) {
     container.className = 'pattern-selector-container';
     
     // Use precomputed pattern data if available
-    let patternData = precomputedPatternData.get(index);
+    let patternData = progressionState.precomputedPatternData.get(index);
     if (!patternData || !patternData.chord || patternData.chord !== chord) {
         // Fallback to computing on demand, or recompute if chord has changed
         patternData = precomputePatternData(chord, index);
-        precomputedPatternData.set(index, patternData);
+        progressionState.precomputedPatternData.set(index, patternData);
     }
     
     const { patterns } = patternData;
@@ -3309,7 +3268,7 @@ function createPatternSelector(chord, index) {
     
     // Create mini fretboard visualization container (will be populated later)
     let miniFretboardContainer = null;
-    if (showMiniFretboards) {
+    if (progressionState.showMiniFretboards) {
         miniFretboardContainer = document.createElement('div');
         miniFretboardContainer.className = 'mini-fretboard-container';
         miniFretboardContainer.style.cssText = `
@@ -3423,7 +3382,7 @@ function createPatternSelector(chord, index) {
     
     // Function to update mini fretboard visualization
     const updateMiniFretboard = () => {
-        if (!showMiniFretboards || !miniFretboardContainer) return;
+        if (!progressionState.showMiniFretboards || !miniFretboardContainer) return;
         
         const patternIndex = parseInt(select.value) || 0;
         if (patternIndex >= patterns.length) return;
@@ -3470,24 +3429,24 @@ function createPatternSelector(chord, index) {
     });
     
     // Set initial selection
-    const initialSelection = selectedPatternIndexes.get(index) ?? 0;
+    const initialSelection = progressionState.selectedPatternIndexes.get(index) ?? 0;
     select.value = initialSelection;
     
     // Ensure the initial selection is stored in the map if not already present
-    if (!selectedPatternIndexes.has(index)) {
-        selectedPatternIndexes.set(index, initialSelection);
+    if (!progressionState.selectedPatternIndexes.has(index)) {
+        progressionState.selectedPatternIndexes.set(index, initialSelection);
     }
 
     // Add change event listener with improved highlighting
     select.addEventListener('change', (e) => {
         const patternIndex = parseInt(e.target.value);
-        selectedPatternIndexes.set(index, patternIndex);
+        progressionState.selectedPatternIndexes.set(index, patternIndex);
         
         console.log(`🎯 Pattern selected for chord ${index}: pattern ${patternIndex} (${patterns[patternIndex]?.name || 'Unknown'})`);
-        console.log('Updated selectedPatternIndexes Map:', selectedPatternIndexes);
+        console.log('Updated progressionState.selectedPatternIndexes Map:', progressionState.selectedPatternIndexes);
         
         // Invalidate cached pattern data to force display name update
-        precomputedPatternData.delete(index);
+        progressionState.precomputedPatternData.delete(index);
         
         // Update button states
         updateButtonStates();
@@ -3518,15 +3477,15 @@ function createPatternSelector(chord, index) {
         }, 300);
         
         // Immediately update the display without temporary highlighting to avoid conflicts
-        if (hoveredChordIndex === index) {
+        if (progressionState.hoveredChordIndex === index) {
             // If this chord is currently hovered, show it highlighted
             displaySingleChordPattern(chord, index, true);
-        } else if (hoveredChordIndex === null) {
+        } else if (progressionState.hoveredChordIndex === null) {
             // If no chord is hovered, show all patterns
             displayAllChordPatterns();
         } else {
             // If another chord is hovered, show that one
-            displaySingleChordPattern(currentProgression[hoveredChordIndex], hoveredChordIndex, true);
+            displaySingleChordPattern(progressionState.currentProgression[progressionState.hoveredChordIndex], progressionState.hoveredChordIndex, true);
         }
     });
 
@@ -3570,11 +3529,11 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
     if (!fretboard) return;
     
     // Use precomputed pattern data if available
-    let patternData = precomputedPatternData.get(index);
+    let patternData = progressionState.precomputedPatternData.get(index);
     if (!patternData || !patternData.chord || patternData.chord !== chord) {
         // Fallback to computing on demand, or recompute if chord has changed
         patternData = precomputePatternData(chord, index);
-        precomputedPatternData.set(index, patternData);
+        progressionState.precomputedPatternData.set(index, patternData);
     }
     
     // Clear only chord lines, keep scale context if enabled
@@ -3601,7 +3560,7 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
         clearFirst: false,
         showLines: false,
         showScaleContext: showScaleContext,
-        showIntervals: showFretboardIntervals,
+        showIntervals: progressionState.showFretboardIntervals,
         intervalLabels: chordIntervalLabels
     };
     
@@ -3625,7 +3584,7 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
     // Regular chord display for chords with patterns
     fretboard.displayChord(chordNotes, displayName, chordDisplayOptions);
     
-    const selectedPatternIndex = selectedPatternIndexes.get(index) || 0;
+    const selectedPatternIndex = progressionState.selectedPatternIndexes.get(index) || 0;
     if (selectedPatternIndex >= patterns.length) return;
     
     const pattern = patterns[selectedPatternIndex];
@@ -3698,7 +3657,7 @@ function displayAllChordPatterns() {
         fretboard.clearMarkers();
     }
     
-    if (currentProgression.length === 0) return;
+    if (progressionState.currentProgression.length === 0) return;
     
     // Color cycle for different chords
     const colors = [
@@ -3714,19 +3673,19 @@ function displayAllChordPatterns() {
         '#17becf'  // cyan
     ];
     
-    currentProgression.forEach((chord, index) => {
+    progressionState.currentProgression.forEach((chord, index) => {
         // Use precomputed pattern data if available
-        let patternData = precomputedPatternData.get(index);
+        let patternData = progressionState.precomputedPatternData.get(index);
         if (!patternData || !patternData.chord || patternData.chord !== chord) {
             // Fallback to computing on demand, or recompute if chord has changed
             patternData = precomputePatternData(chord, index);
-            precomputedPatternData.set(index, patternData);
+            progressionState.precomputedPatternData.set(index, patternData);
         }
         
         const { patterns } = patternData;
         if (!patterns.length) return;
         
-        const selectedPatternIndex = selectedPatternIndexes.get(index) || 0;
+        const selectedPatternIndex = progressionState.selectedPatternIndexes.get(index) || 0;
         if (selectedPatternIndex >= patterns.length) return;
         
         const pattern = patterns[selectedPatternIndex];
@@ -3755,10 +3714,10 @@ function displayAllChordPatterns() {
  * Clear the current progression and default to scale display
  */
 function clearProgression() {
-    currentProgression = [];
-    window.currentProgression = currentProgression; // Update global reference
-    hoveredChordIndex = null;
-    selectedPatternIndexes.clear();
+    progressionState.currentProgression = [];
+    window.currentProgression = progressionState.currentProgression; // Update global reference
+    progressionState.hoveredChordIndex = null;
+    progressionState.selectedPatternIndexes.clear();
     
     // Clear caches
     clearCache();
@@ -3805,9 +3764,9 @@ function clearProgression() {
 function buildShareableState() {
     const state = {
         // Chord progression with selected patterns
-        progression: currentProgression.map((chord, index) => {
+        progression: progressionState.currentProgression.map((chord, index) => {
             const baseToken = chord.originalToken ? chord.originalToken.replace(/-\d+$/, '') : '';
-            const selectedPattern = selectedPatternIndexes.get(index);
+            const selectedPattern = progressionState.selectedPatternIndexes.get(index);
             
             if (selectedPattern !== undefined && selectedPattern !== null) {
                 return `${baseToken}-${selectedPattern + 1}`;
@@ -3820,10 +3779,10 @@ function buildShareableState() {
             const scaleToggle = document.getElementById('chord-progression-scale-toggle');
             return scaleToggle ? scaleToggle.checked : (window.showScaleContext || true); // Default to true if no checkbox found
         })(),
-        showMiniFretboards: showMiniFretboards,
-        showFretboardIntervals: showFretboardIntervals,
-        showMiniPianos: showMiniPianos,
-        useSeventhChords: useSeventhChords,
+        showMiniFretboards: progressionState.showMiniFretboards,
+        showFretboardIntervals: progressionState.showFretboardIntervals,
+        showMiniPianos: progressionState.showMiniPianos,
+        useSeventhChords: progressionState.useSeventhChords,
         
         // Scale settings (human readable)
         rootNote: getPrimaryRootNote() || 'C',
@@ -4024,7 +3983,7 @@ function applySharedState(state) {
     }
     
     if (state.showMiniFretboards !== undefined) {
-        showMiniFretboards = state.showMiniFretboards;
+        progressionState.showMiniFretboards = state.showMiniFretboards;
         const miniFretboardToggle = document.getElementById('chord-progression-mini-fretboard-toggle');
         if (miniFretboardToggle) {
             miniFretboardToggle.checked = state.showMiniFretboards;
@@ -4037,7 +3996,7 @@ function applySharedState(state) {
     }
     
     if (state.showFretboardIntervals !== undefined) {
-        showFretboardIntervals = state.showFretboardIntervals;
+        progressionState.showFretboardIntervals = state.showFretboardIntervals;
         const fretboardIntervalsToggle = document.getElementById('chord-progression-fretboard-intervals-toggle');
         if (fretboardIntervalsToggle) {
             fretboardIntervalsToggle.checked = state.showFretboardIntervals;
@@ -4045,7 +4004,7 @@ function applySharedState(state) {
     }
     
     if (state.showMiniPianos !== undefined) {
-        showMiniPianos = state.showMiniPianos;
+        progressionState.showMiniPianos = state.showMiniPianos;
         const miniPianoToggle = document.getElementById('chord-progression-mini-piano-toggle');
         if (miniPianoToggle) {
             miniPianoToggle.checked = state.showMiniPianos;
@@ -4053,7 +4012,7 @@ function applySharedState(state) {
     }
     
     if (state.useSeventhChords !== undefined) {
-        useSeventhChords = state.useSeventhChords;
+        progressionState.useSeventhChords = state.useSeventhChords;
         const seventhsToggle = document.getElementById('chord-progression-sevenths-toggle');
         if (seventhsToggle) {
             seventhsToggle.checked = state.useSeventhChords;
@@ -4110,8 +4069,6 @@ export {
     parseProgressionInput,
     updateProgression,
     clearProgression,
-    currentProgression,
-    selectedPatternIndexes,
     generateShareableURL,
     copyShareableURL,
     loadSharedStateFromURL,
