@@ -13,7 +13,6 @@ session finds its place without re-reading the codebase.
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
-| 2c — `src/audio/` clock + scheduler | not started | — | deferred until drum backing is actually being built |
 | 3 — Split `frets.js` | not started | — | |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
@@ -25,8 +24,12 @@ imports. No behavior changes — every phase below is restructuring only.
 
 Longer-term target: a Rocksmith-style session/scale practice mode with
 synthesized backing and play-along feedback. See `SESSION_MODE_FEASIBILITY.md`.
-That investigation added Phase 2b below (later split into 2b/2c, 2026-08-01)
-and moved Phase 5 onto the critical path; nothing else here changed.
+That investigation added Phase 2b below and moved Phase 5 onto the critical
+path. Phase 2b originally sketched a follow-on "Phase 2c" (clock +
+scheduler); that work has since moved entirely into
+`SESSION_MODE_FEASIBILITY.md` (2026-08-01) as part of a larger Timing Grid
+feature (Stage 2) — it's new user-facing behavior, not restructuring, so it
+doesn't belong in this plan's phase list. Nothing else here changed.
 
 ---
 
@@ -322,7 +325,8 @@ detail if this needs re-verifying later).
 
 Added by the session-mode investigation. Independently worth doing — these
 are live bugs, not just future blockers. Scoped to the foundation only —
-see Phase 2c below for why the clock/scheduler half is split out.
+the clock/scheduler half moved to `SESSION_MODE_FEASIBILITY.md` (see the
+result note below for why).
 
 Today there are **two AudioContexts** (`PolySynth.jsx:67` and
 `metronome.js:236/246/570`), bridged by `performanceTimeToAudioTime()` and a
@@ -383,31 +387,16 @@ helper for no structural benefit. Full detail in `ARCHITECTURE.md` §3.1 and
 zero browser console/page errors, including after exercising the keyboard
 note-play path through the new registry.
 
-### Phase 2c — `src/audio/`: clock + scheduler
-
-Split out of Phase 2b on 2026-08-01: `clock.js`/`scheduler.js` are only
-required once something must lock to a timing grid, and nothing does yet —
-drum backing (`SESSION_MODE_FEASIBILITY.md` Stage 2) is the first thing that
-will. Migrating the sequencer and arpeggiator onto a scheduler with nothing
-to lock to yet would be speculative work for a feature that doesn't exist.
-Defer this phase until drum backing is actually being built.
-
-Sequencing is currently split across two timing models: the metronome's
-audio-clock lookahead scheduler, versus chained `setTimeout` with BPM read
-from a DOM slider in the progression sequencer and arpeggiator
-(`progressionBuilder.js:155-190`, `PolySynth.jsx:945-1061`).
-
-```
-src/audio/clock.js        absolute timebase, lifted from metronome.js
-src/audio/scheduler.js    lookahead scheduling, one queue for all voices
-```
-
-Then migrate the progression sequencer and arpeggiator off `setTimeout` onto
-`scheduler`. Test each migration against the Phase 0 screenshots — this is
-the one part of the `src/audio/` work that can change audible timing
-behavior.
-
-Depends on Phase 2b (shares `context.js`).
+`clock.js`/`scheduler.js` were originally sketched here as a follow-on
+"Phase 2c," deferred until something needed a timing grid. On 2026-08-01
+that "something" got a concrete shape — a Timing Grid tab (BPM/time
+signature/bar count, a moving playhead, per-instrument lanes fillable
+manually or from the Chord Progression tab) — which is new user-facing
+behavior, not restructuring, so it doesn't belong in this plan's phase list.
+That work, including `clock.js`/`scheduler.js` and the `setTimeout`
+migration, now lives entirely in `SESSION_MODE_FEASIBILITY.md`'s Stage 2.
+`src/audio/` gets no further phases in *this* plan — Phase 2b's foundation
+is what the rest of the refactor (Phases 3-5) needed from it.
 
 ### Phase 3 — Split `frets.js`
 

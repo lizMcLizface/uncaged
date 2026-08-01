@@ -269,19 +269,17 @@ fine. Two caveats, both in section 3.
 These are prerequisites, not nice-to-haves. Three of the four are latent
 bugs that already affect the app today.
 
-### 3.1 There are two AudioContexts
+### 3.1 There are two AudioContexts — fixed
 
-`PolySynth.jsx:67` creates a module-level `const AC = new AudioContext()`.
-`metronome.js:236/246/570` creates its own, separately.
-
-Two AudioContexts have independent clocks and cannot be sample-synced. The
-metronome already works around this with `performanceTimeToAudioTime()` and
-a stored `audioContextStartTime` offset — a bridge between `performance.now()`
-and audio time that will drift.
-
-A backing track where drums, bass and chords must lock together requires
-**one AudioContext, created once, shared**. This is the single most
-important structural prerequisite.
+**Fixed in `REFACTOR_PLAN.md` Phase 2b (2026-08-01).** `PolySynth.jsx` and
+`metronome.js` used to each create their own, independent `AudioContext`
+(`PolySynth.jsx:67`, `metronome.js:236/246/570`) — un-sample-syncable
+clocks. Both now import the one shared `audioContext` from
+`src/audio/context.js`. The metronome's `performanceTimeToAudioTime()`
+bridge (`audioContextStartTime` offset between `performance.now()` and audio
+time) still exists and still works, now computed against the shared context
+— retiring it in favor of `src/audio/clock.js`'s single authoritative
+timebase is §4 Stage 2's job, not this prerequisite's.
 
 ### 3.2 Sequencing runs on `setTimeout`, not the audio clock
 
@@ -303,22 +301,16 @@ detection is eventually built. The `"homepage": "http://liz.moe/uncaged"` in
 `package.json` is cosmetically stale but harmless — worth changing to
 `https://` when convenient, nothing depends on it.
 
-### 3.4 AudioWorklet paths work, but by coincidence
+### 3.4 AudioWorklet paths — fixed
 
-*Checked 2026-08-01.* `noiseGenerator.js:21-23` loads
-`/white-noise-processor.js` from the domain root. Both
-`https://liz.moe/white-noise-processor.js` and
-`https://liz.moe/uncaged/white-noise-processor.js` currently serve the file,
-so the worklets do load and there is no fallback error — consistent with
-what you're seeing in the console.
-
-This is a robustness nit rather than a bug: the absolute path only works
-because `liz.moe` root happens to serve these files as well as
-`/uncaged/`. If the root deployment ever changes, every worklet silently
-degrades to the `ScriptProcessor` fallback with only a `console.error` to
-show for it. Since drum and string synthesis will both depend on worklets,
-switch the paths to `process.env.PUBLIC_URL` when touching this code, and
-consider promoting that catch from `console.error` to something visible.
+**Fixed in `REFACTOR_PLAN.md` Phase 2b (2026-08-01).** `noiseGenerator.js`
+used to load `/white-noise-processor.js`/`pink-`/`brown-` from the domain
+root — it worked only because `liz.moe` root happened to also serve
+`/uncaged/`'s files; if that had ever changed, every worklet would have
+silently degraded to the `ScriptProcessor` fallback with just a
+`console.error`. Now loaded via `` `${process.env.PUBLIC_URL}/...` ``, so
+drum and string synthesis (both worklet-dependent) build on a correct path
+regardless of deployment root.
 
 ---
 
@@ -351,17 +343,67 @@ Deliverable: pick an instrument from a sub-tab; chord and scale playback
 sounds like it. Steps 1–3 are the architecture and are worth doing on their
 own — at that point PolySynth is just the first of N channels.
 
-### Stage 2 — Drum backing
+### Stage 2 — The Timing Grid + drum backing
 
-1. **Audio-clock scheduling** (§3.2) — the rest of the audio core. Required
-   here, because drums must lock to a grid.
-2. Drum voices per §2.1 + a pattern bank (rock/blues/funk/shuffle at
-   minimum), tempo from the existing metronome.
-3. Bass line generation on top, from the progression the app already builds.
-4. Tempo/key/scale selection wired to the existing scale UI.
+*Expanded 2026-08-01.* This used to be scoped as just "drum backing." It's
+bigger than that: everything sequenced needs a place to be arranged and
+watched play back, and that place is one shared tab, not a separate ad hoc
+UI per instrument.
 
-Deliverable: play-along backing tracks. This is the practice tool, and it
-needs no microphone.
+1. **Audio-clock scheduling** — the rest of the audio core that
+   `REFACTOR_PLAN.md` Phase 2b deliberately left out (that phase landed only
+   the shared `AudioContext` + master bus + dispatch registry; see its
+   result note). Required here because the grid below needs a real
+   sample-accurate playhead, not `setTimeout`:
+   ```
+   src/audio/clock.js        absolute timebase, lifted from metronome.js's
+                              getTimeForBeat/getNextNoteTime/scheduleOnNextBeat
+   src/audio/scheduler.js    lookahead scheduling, one queue for all voices
+   ```
+   Then migrate the progression sequencer (`progressionBuilder.js:155-190`)
+   and PolySynth's arpeggiator (`PolySynth.jsx:945-1061`) off `setTimeout`
+   onto it. This is the one part of `src/audio/` that can change audible
+   timing behavior — test each migration against baseline screenshots/audio.
+
+2. **The Timing Grid tab.** New UI, sitting beside the existing tabs
+   (Fretboard, Scale Information, Chord Progression, Synthesizer, …):
+   - **Global controls:** BPM (extends today's `bpmSlider`), time signature
+     (beats per bar + note value), number of bars. These replace the
+     "tempo/key/scale selection wired to the existing scale UI" item the
+     plan used to list separately — this tab *is* that wiring.
+   - **Visual grid:** one column per subdivision, rows scoped by bar; each
+     column marked up-beat vs down-beat (metronome parity - reuses
+     `metronome.js`'s `beatsPerBar`/`timePerBeat` concepts once ported onto
+     `clock.js`); a playhead element that moves through the grid in sync
+     with `clock.js`'s absolute timebase (`referenceTime +
+     beatNumber * timePerBeat`), not a `requestAnimationFrame` guess.
+   - **Multi-lane from the start** (decided 2026-08-01): one lane per
+     instrument channel — Synth today (the only channel that exists, per
+     `REFACTOR_PLAN.md` Phase 2b's `dispatch.js` registry), Guitar/Bass/Piano/
+     Drums once Stage 1 builds them. Each lane owns its own timed events
+     independently; the grid's data model is `{ laneId, position, event }[]`
+     from day one rather than a single flat list, even though only one lane
+     has content until Stage 1 lands.
+   - **Filling a lane, two ways:**
+     - *Manually* — an entry syntax mirroring the Chord Progression tab's
+       (`I vi IV V` / literal chord tokens), but placed at explicit grid
+       positions instead of one-chord-per-bar linear order.
+     - *Programmatically* — pulled from the Chord Progression tab's existing
+       progression. That tab's linear one-chord-per-bar sequence maps onto
+       one lane's cells directly (each chord becomes one grid-aligned event),
+       so "build a progression, then see/edit it as a lane" is closer to a
+       view transform than new logic.
+     - Drum lanes are the exception: filled from the pattern bank (below),
+       since a drum event is a voice id + velocity, not a pitch/voicing.
+
+3. Drum voices per §2.1 + a pattern bank (rock/blues/funk/shuffle at
+   minimum) feeding the Drums lane.
+4. Bass line generation on top, from the progression the app already builds,
+   feeding the Bass lane once that channel exists (Stage 1).
+
+Deliverable: play-along backing tracks, arranged on a real timeline,
+editable per-lane, sample-synced across channels via the Stage 1 dispatch
+registry. This is the practice tool, and it needs no microphone.
 
 ### Stage 3 — Input detection (long run)
 
@@ -380,17 +422,27 @@ for doing this last, once there is something worth playing along to.
 
 ## 5. Effect on the refactor plan
 
-The north star sharpens `REFACTOR_PLAN.md` rather than conflicting with it:
+*Updated 2026-08-01 as Phase 2b landed and Stage 2 grew into the Timing
+Grid.* The north star sharpens `REFACTOR_PLAN.md` rather than conflicting
+with it:
 
-- **A new phase belongs in the plan: `src/audio/` — one context, one clock,
-  one scheduler.** It splits across the stages above: the shared
-  `AudioContext` is needed for Stage 1, the clock and scheduler for Stage 2.
-  Both are fixes worth making regardless.
-- **Phase 5 (kill the `window` bus) partly happens for free in Stage 1.**
-  The channel dispatcher replaces `window.polySynthRef` at its ~16 live call
-  sites, which is the single highest-traffic global (100 references). The
-  rest of Phase 5 is still needed by Stage 2, where a scheduler must
-  sample-align drums, bass and chords.
+- **`src/audio/` foundation landed as `REFACTOR_PLAN.md` Phase 2b** — one
+  shared `AudioContext` (`context.js`), a master bus (`bus.js`), and a
+  channel registry (`dispatch.js`) replacing `window.polySynthRef` at the
+  playback entry points. See `ARCHITECTURE.md` §2.4/§3 for what actually
+  landed, including the two non-playback surfaces of `window.polySynthRef`
+  that stayed put (§3.1).
+- **The clock/scheduler half is *not* a `REFACTOR_PLAN.md` phase.**
+  `src/audio/clock.js`/`scheduler.js` and the `setTimeout` migration now
+  live entirely in this document's Stage 2 (§4), because building them is
+  inseparable from building the Timing Grid tab that consumes them — new
+  user-facing behavior, not restructuring. `REFACTOR_PLAN.md`'s phase list
+  ends its involvement with `src/audio/` at Phase 2b.
+- **Phase 5 (kill the `window` bus) partly happened for free in Phase 2b.**
+  The channel registry replaced `window.polySynthRef`'s playback surface at
+  its entry points. The rest of Phase 5 (the progression-sequencer-control
+  surface, `updateFretboardsForScaleChange`, and the lower-traffic globals)
+  is unaffected and still needed — see `ARCHITECTURE.md` §5.
 - **Phase 6 (PolySynth teardown) drops off the critical path entirely.**
   Under the channel architecture PolySynth is wrapped, not opened. It can be
   refactored whenever, or never.
@@ -401,8 +453,9 @@ The north star sharpens `REFACTOR_PLAN.md` rather than conflicting with it:
   domain, not fretboard UI helpers**, when Phase 3 splits `frets.js`. The
   synthesis engine will depend on them.
 
-Nothing in the refactor plan needs to be undone. Two things need reordering,
-and one phase needs adding.
+Nothing in `REFACTOR_PLAN.md` needs to be undone. Its phase list is smaller
+than originally sketched, not larger — the Timing Grid is real scope, but it
+belongs here, not there.
 
 ---
 

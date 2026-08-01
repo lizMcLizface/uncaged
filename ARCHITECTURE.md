@@ -99,7 +99,8 @@ time via `performanceTimeToAudioTime()` and a stored `audioContextStartTime`
 offset (`metronome.js:243-261`), that bridging code is unchanged by Phase
 2b — it still works, now computed against the shared context instead of a
 private one. Retiring it in favor of a single authoritative clock is
-Phase 2c's job (§4), not this one's.
+`SESSION_MODE_FEASIBILITY.md` Stage 2's job (§4), not this one's — see the
+note there for why that work isn't a `REFACTOR_PLAN.md` phase.
 
 **Landed (Phase 2b, 2026-08-01):** one `AudioContext`, created once in
 `src/audio/context.js`, shared by the synth, the metronome, and every future
@@ -131,11 +132,12 @@ src/audio/dispatch.js   the channel registry that replaces
                          between what moved here and what didn't.
 ```
 
-`src/audio/clock.js` and `src/audio/scheduler.js` (`REFACTOR_PLAN.md` Phase
-2c) are not part of this: nothing needs a timing grid yet, so lifting the
-metronome's lookahead scheduler out and migrating the progression
-sequencer/arpeggiator off `setTimeout` is deferred until drum backing is
-actually being built.
+`src/audio/clock.js` and `src/audio/scheduler.js` are not part of this: they
+belong to the Timing Grid feature tracked in `SESSION_MODE_FEASIBILITY.md`
+Stage 2 (new user-facing behavior, not restructuring, so it isn't a
+`REFACTOR_PLAN.md` phase) — lifting the metronome's lookahead scheduler out
+and migrating the progression sequencer/arpeggiator off `setTimeout` happens
+there, once that tab is actually being built.
 
 ---
 
@@ -217,12 +219,11 @@ Two unrelated timing systems coexist:
   feature that scores the user against a grid.
 
 No code currently schedules against the metronome's clock except the
-metronome's own click sound. Fix (`REFACTOR_PLAN.md` Phase 2c, deferred
-until drum backing is actually being built - staged per
-`SESSION_MODE_FEASIBILITY.md` §4): `src/audio/clock.js` lifts the absolute
-timebase out of `metronome.js`; `src/audio/scheduler.js` generalizes the
-lookahead loop into one queue for all voices; the progression sequencer and
-arpeggiator migrate onto it.
+metronome's own click sound. Fix (`SESSION_MODE_FEASIBILITY.md` Stage 2,
+the Timing Grid feature, deferred until that tab is actually being built):
+`src/audio/clock.js` lifts the absolute timebase out of `metronome.js`;
+`src/audio/scheduler.js` generalizes the lookahead loop into one queue for
+all voices; the progression sequencer and arpeggiator migrate onto it.
 
 ---
 
@@ -287,7 +288,7 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | Folder / file | Owns | May import | Must not import it |
 |---|---|---|---|
 | `src/theory/` *(Phase 2)* | Note names, intervals, scale/chord data, roman numeral parsing. No DOM, with two documented exceptions below. | nothing app-specific, except `roman.js`'s one deliberate exception | everything else may import it |
-| `src/audio/` *(Phase 2b landed 2026-08-01: `context.js`/`bus.js`/`dispatch.js`; `clock.js`/`scheduler.js` are Phase 2c, deferred)* | The shared `AudioContext`, master bus, note-event/channel registry dispatch. | nothing app-specific today | UI modules should depend on it, not the reverse |
+| `src/audio/` *(Phase 2b landed 2026-08-01: `context.js`/`bus.js`/`dispatch.js`; `clock.js`/`scheduler.js` belong to `SESSION_MODE_FEASIBILITY.md` Stage 2's Timing Grid, not a `REFACTOR_PLAN.md` phase)* | The shared `AudioContext`, master bus, note-event/channel registry dispatch. | nothing app-specific today | UI modules should depend on it, not the reverse |
 | `src/nodes/` | Framework-free Web Audio node wrappers (`Gain`, `Filter`, `Distortion`, …), a shared `.getNode()`/`.connect()` interface. | nothing app-specific | — |
 | `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` when Phase 3 splits `frets.js` — noted explicitly in `REFACTOR_PLAN.md` Phase 3 |
 | `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, fret geometry, marker/shape drawing, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content) | — |
