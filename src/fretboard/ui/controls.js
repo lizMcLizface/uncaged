@@ -1,22 +1,23 @@
 // The persistent top bar (title + instrument/tuning picker), the tabbed
 // panel shell, the hotkey footer, and the "Other Controls" tab's button
-// panel - the pieces of frets.js that build UI chrome around a Fretboard
-// instance rather than the fretboard itself, its geometry, its markers, or
-// its patterns (those are ../geometry.js, ../markers.js, ../patterns.js,
-// ../Fretboard.js).
+// panel - the pieces of the original frets.js that build UI chrome around a
+// Fretboard instance rather than the fretboard itself, its geometry, its
+// markers, or its patterns (those are ../geometry.js, ../markers.js,
+// ../patterns.js, ../Fretboard.js).
 //
 // createFretboardControls is the entry point (called once, from
-// initializeFretboard() in frets.js): it builds the "Other Controls" panel,
-// the top bar, and the full tabbed layout (Scale Information / Chord
-// Progression / Scale Position Grid / Scale Selection / Other Controls /
-// Synthesizer), then wires in the chord grid and scale position grid, both
-// their own ui/*.js modules by this point.
+// initializeFretboard() in ../index.js, the src/fretboard/ barrel): it
+// builds the "Other Controls" panel, the top bar, and the full tabbed
+// layout (Scale Information / Chord Progression / Scale Position Grid /
+// Scale Selection / Other Controls / Synthesizer), then wires in the chord
+// grid and scale position grid, both their own ui/*.js modules by this
+// point.
 //
-// This creates a two-way import between this file and frets.js: frets.js
+// This creates a two-way import between this file and ../index.js: it
 // imports createFretboardControls from here, and the button handlers below
 // import glue functions (showChordOnFretboard, showChordPatternOnFretboard,
 // restoreFretboardState, updateChordButtonStyles, updateChordInfoDisplay)
-// back from frets.js. This is safe the same way the pre-existing chords.js
+// back from there. This is safe the same way the pre-existing chords.js
 // <-> theory/chords.js cycle is (see ARCHITECTURE.md §6.1): every
 // cross-import here is only touched inside a function body invoked later (a
 // click handler or initializeFretboard() itself), never at module
@@ -24,7 +25,9 @@
 // first.
 //
 // Lifted from src/frets.js as part of REFACTOR_PLAN.md Phase 3, step 6/8
-// (chordGrid.js import added in step 7/8, scalePositionGrid.js in step 8/8).
+// (chordGrid.js import added in step 7/8, scalePositionGrid.js in step
+// 8/8; frets.js itself folded into ../index.js as the barrel in the same
+// step).
 
 import { fretboardState } from '../state';
 import { addInteractiveEvent } from '../Fretboard';
@@ -43,7 +46,7 @@ import {
     restoreFretboardState,
     updateChordButtonStyles,
     updateChordInfoDisplay
-} from '../../frets';
+} from '..';
 import {
     clearFingeringTabs,
     createChordButtonGrid,

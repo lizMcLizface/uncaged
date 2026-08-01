@@ -13,7 +13,7 @@ session finds its place without re-reading the codebase.
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
-| 3 — Split `frets.js` | in progress | this commit | Steps 1-8/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7, the class itself), `ui/controls.js` (§6.8, top bar/tab shell/hotkey footer/"Other Controls" panel), `ui/chordGrid.js` (§6.9, Chord Pattern Grid + fingering-shape pipeline), `ui/scalePositionGrid.js` (§6.10, Scale Position Grid). `frets.js` is now pure glue. Remaining: the barrel (`src/fretboard/index.js`). |
+| 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
@@ -585,6 +585,42 @@ unaffected) show zero console errors. This closes Phase 3's
 function-extraction work - `frets.js` is now pure glue. Remaining: the
 barrel (`src/fretboard/index.js`).
 
+**Progress (2026-08-01), final step - the barrel, `src/fretboard/index.js`:**
+`frets.js`'s remaining ~1,120 lines of glue moved verbatim (import paths
+only) into `src/fretboard/index.js`, and `src/frets.js` was deleted - not
+kept as a re-export shim, since the plan names the barrel as the eighth and
+final target, not a ninth file. This is the one point in Phase 3 where
+import sites outside `src/fretboard/` had to change, by design (every
+earlier step kept `frets.js`'s own export list stable specifically so nothing
+outside it needed touching until this step): `src/chords.js`, `src/index.js`
+(the app entry point - a different file from this barrel despite the shared
+basename) and the Phase 0 characterization test file all now import `from
+'./fretboard'`; the test file was also renamed `frets.test.js` →
+`fretboard.test.js` since the file it was named after no longer exists.
+`ui/controls.js` and `ui/chordGrid.js`'s cross-imports of glue functions
+repointed from `'../../frets'` to `'..'` (this barrel) - same two-way-import
+shape as before, just a new target name; `ui/scalePositionGrid.js` needed no
+change since it never imported from `frets.js` directly. Historical `Lifted
+from src/frets.js` provenance comments in the already-extracted modules were
+left alone (accurate statements about where code came from, not about where
+it lives now); a handful of comments describing *current* relationships were
+updated where they'd otherwise mislead - full list in `ARCHITECTURE.md`
+§6.11, which also covers why a few `frets.js` mentions in files this phase
+never touched were left as pre-existing, out-of-scope quirks. `npm test`
+(28/28) and plain `npm run build` pass - total warning count unchanged at
+219, `src/fretboard/index.js` carries exactly the two pre-existing
+`frets.js` warnings that moved with the glue code, zero new warnings
+anywhere. `run-app` screenshots of all six tabs show zero console errors,
+including the Synthesizer tab specifically - the one place a documented
+historical race (React's portal mount into `#fretNotPlaceholder` vs.
+`initializeFretboard()`'s re-run) lived, so confirming it still mounts
+cleanly after this much import-graph surgery was the highest-value check
+available.
+
+**Phase 3 is complete.** `src/frets.js` (originally 6,974 lines, 5,837 live)
+is now nine files under `src/fretboard/`, and every external consumer
+imports the folder as a unit.
+
 ### Phase 4 — Split the other two
 
 Same treatment, same barrel trick.
@@ -701,11 +737,12 @@ To pick up mid-phase, append what was already done and what remains.
 
 ### 6.1 Resuming Phase 3 at step 6/8 (the UI-builder split)
 
-**Superseded 2026-08-01: steps 6/8 (`ui/controls.js`) and 7/8
-(`ui/chordGrid.js`) are now done too** - see the Phase 3 Result notes above
-and `ARCHITECTURE.md` §6.8/§6.9. Remaining: scale position grid, then the
-barrel (step 8). The block below is kept for its steps-1-5 insights (still
-applicable) but its step-6/7-specific categorization is historical.
+**Superseded 2026-08-01: Phase 3 is complete** - all 8 steps landed, see the
+Phase 3 Result notes above and `ARCHITECTURE.md` §6.3-6.11. This whole
+section is now historical (kept for the resume-prompt insights below, which
+are still generally useful technique - live-binding exports, checking for
+local shadowing before bulk renames, the delegate-method convention - for
+whoever tackles Phase 4 or 5 next), not something to act on.
 
 Steps 1-5 (`state.js`, `geometry.js`, `markers.js`, `patterns.js`,
 `Fretboard.js`) are done, one commit each, `ARCHITECTURE.md` §6.3-6.7 and

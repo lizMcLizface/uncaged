@@ -14,11 +14,13 @@
  * GUITAR_TUNING/FRET_COUNT (constructor defaults) and SCALE_COLORS/
  * DEFAULT_COLORS (marker coloring) live here rather than in geometry.js or
  * markers.js because they're Fretboard-specific, not generic math/drawing -
- * frets.js imports GUITAR_TUNING/FRET_COUNT/SCALE_COLORS back for its own
- * remaining UI code and barrel export. addInteractiveEvent is a generic
- * DOM helper that happened to live next to this class before Phase 3;
- * it has no better home yet among today's modules, so it moved here too,
- * and frets.js's UI builders import it back the same way.
+ * src/fretboard/index.js (the barrel) imports GUITAR_TUNING/SCALE_COLORS
+ * back for its own glue code and public re-export, and
+ * ui/scalePositionGrid.js imports FRET_COUNT. addInteractiveEvent is a
+ * generic DOM helper that happened to live next to this class before Phase
+ * 3; it has no better home yet among today's modules, so it moved here
+ * too, and ui/controls.js's and ui/chordGrid.js's button/hover handlers
+ * import it back the same way.
  */
 
 import { HeptatonicScales, getScaleNotes } from '../scales';

@@ -3,7 +3,7 @@ import {noteToMidi} from './midi';
 import { CHROMATIC } from './theory/notes';
 import { getPrimaryScale, getPrimaryRootNote } from './scaleGenerator';
 import { HeptatonicScales, getScaleNotes } from './scales';
-import { getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState } from './frets';
+import { getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState } from './fretboard';
 
 let chordSuffixesCommon = ['Major', 'Minor', '7', '5', 'dim', 'dim7', 'aug', 'sus2', 'sus4', 'maj7', 'm7', '7sus4', '7b9']
 let chordSuffixesTriads = ['M', 'm', '+', 'o', 'b5', 'sus2', 'sus4']
