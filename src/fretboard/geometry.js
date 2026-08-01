@@ -9,7 +9,8 @@
  * that forward to these, so its public API is unchanged.
  */
 
-import { noteToMidi, midiToNote, stripOctave, areEnharmonicEquivalent } from '../theory/notation';
+import { noteToMidi, midiToNote, stripOctave, areEnharmonicEquivalent, normalizeNote } from '../theory/notation';
+import { INTERVAL_LABELS } from '../theory/intervals';
 
 // Calculate fret positions using the rule of 18 (each fret divides remaining string length by 18)
 export function calculateFretPositions(fretCount) {
@@ -108,6 +109,31 @@ export function getNoteAt(tuning, fretCount, stringIndex, fret) {
         return null;
     }
     return calculateNote(tuning[stringIndex], fret);
+}
+
+/**
+ * Interval label (from src/theory/intervals.js's INTERVAL_LABELS) between
+ * a root note and a target note, ignoring octave. Used by both the
+ * Fretboard class and frets.js's chord-grid/scale-info UI code, so it
+ * lives here rather than in either.
+ */
+export function getIntervalLabelFromRoot(rootNote, targetNote) {
+    if (!rootNote || !targetNote) {
+        return '';
+    }
+
+    try {
+        const normalizedRoot = stripOctave(normalizeNote(rootNote));
+        const normalizedTarget = stripOctave(normalizeNote(targetNote));
+
+        const rootMidi = noteToMidi(`${normalizedRoot}/4`);
+        const targetMidi = noteToMidi(`${normalizedTarget}/4`);
+        const semitoneDistance = (targetMidi - rootMidi + 12) % 12;
+
+        return INTERVAL_LABELS[semitoneDistance] || '';
+    } catch (error) {
+        return '';
+    }
 }
 
 /**
