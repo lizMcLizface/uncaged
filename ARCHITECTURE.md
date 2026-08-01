@@ -305,7 +305,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/progression/parse.js` *(Phase 4, second step, landed 2026-08-01)* | The tokenize -> parse -> fretboard-pattern-match pipeline: `parseProgressionInput`, `updateProgressionIncremental`, `compareTokenArrays`, `precomputePatternData`, `processDefaultPatternSelections`, `getChordPatternMatches`, `collectArpeggiationNotes`, `clearCache`. Roman-numeral parsing/resolution itself stays in `theory/roman.js` (Phase 2). | `theory/roman`, `theory/notation`, `tuning.js`, `chordFingering.js`, `src/progression/state`, and (cross-import, see §6.13) `getChordDisplayName`/`getFretboardForProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js` - see §6.13, same shape as `src/fretboard/ui/{controls,chordGrid}.js` <-> `src/fretboard/index.js` in Phase 3 §6.8) |
 | `src/progression/share.js` *(Phase 4, third step, landed 2026-08-01)* | URL-based sharing: `buildShareableState`/`encodeStateToURLParams`/`decodeStateFromURLParams` (human-readable format), `encodeStateToURL`/`decodeStateFromURL` (legacy Base64 fallback), `generateShareableURL`, `copyShareableURL`, `applySharedState`, `loadSharedStateFromURL`. | `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`/`setPrimaryRootNote`/`setPrimaryScale`), `src/progression/state`, and (cross-import, see §6.14) `updateProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.8/§6.13) |
 | `src/progression/playback.js` *(Phase 4, fourth step, landed 2026-08-01)* | Turns a chord into concrete notes and plays them: `getProcessedChordNotes` (resolves the selected fretboard pattern, or falls back to chord theory), `getProcessedProgression`, `triggerChordProgression` (dispatches through the `'synth'` channel). | `theory/notation`, `tuning.js`, `audio/dispatch.js`, `src/progression/state`, `src/progression/parse` (`getChordPatternMatches`), and (cross-import, see §6.15) `getChordDisplayName` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13/§6.14) |
-| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`), `src/progression/state.js`, `src/progression/parse.js`, `src/progression/share.js`, `src/progression/playback.js` | — |
+| `src/progression/scaleSync.js` *(Phase 4, fifth step, landed 2026-08-01)* | Keeps the progression in sync with the active scale/root: `setupScaleChangeListener` (event + polling-fallback listener), `initializeScaleNotesDisplay`, `updateScaleNotesDisplay`, `generateFallbackScaleNotes`, `updateProgressionDisplayForScaleChange`, `updateRomanNumeralChords` (re-resolves Roman-numeral chords against the new scale). | `scaleGenerator.js`, `scales.js`, `theory/notes`, `theory/roman`, `src/progression/state`, and (cross-import, see §6.16) `precomputeAllPatternData`/`updateProgressionDisplay`/`displaySingleChordPattern`/`displayAllChordPatterns` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13-§6.15) |
+| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`), `src/progression/state.js`, `src/progression/parse.js`, `src/progression/share.js`, `src/progression/playback.js`, `src/progression/scaleSync.js` | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
@@ -1156,6 +1157,51 @@ console errors. Remaining Phase 4 work: `scaleSync.js`,
 `fretboardDisplay.js`, the chord-card cluster, `progressionList.js`,
 `input.js`, `controls.js`, then the barrel; `scaleGenerator.js`/`scales.js`
 -> `src/scales/` after that.
+
+### 6.16 `src/progression/scaleSync.js` (Phase 4, fifth step, 2026-08-01)
+
+Another contiguous block (`setupScaleChangeListener` through
+`updateRomanNumeralChords`, right after `getFretboardForProgression` and
+before `createInputSection`), straight cut-and-paste. Of the six functions,
+only `setupScaleChangeListener` and `initializeScaleNotesDisplay` have
+callers outside the block (both from `createChordProgressionUI`, which
+hasn't moved), so those two are this module's export list;
+`updateScaleNotesDisplay`/`generateFallbackScaleNotes`/
+`updateProgressionDisplayForScaleChange`/`updateRomanNumeralChords` stay
+private, called only from within this file.
+
+This module needed four cross-imports back into `progressionBuilder.js` -
+`precomputeAllPatternData`, `updateProgressionDisplay`,
+`displaySingleChordPattern`, `displayAllChordPatterns` - all of which
+belong to clusters (progression-list, fretboard-display) that haven't
+moved out yet, so all four were plain internal functions with no export
+before this step. Added to `progressionBuilder.js`'s export list, same
+treatment `getChordDisplayName`/`getFretboardForProgression` got in §6.13.
+
+`npm test` (28/28) and plain `npm run build` pass - 219 warnings,
+unchanged, one line-number shift for a warning that moved with its code.
+Verification here needed an extra step beyond the usual `run-app` check: a
+first attempt to confirm the scale-notes display (`#scaleNotesDisplay`)
+updates after a root-note change found it stuck on the hardcoded default
+text (`"C D E F G A B"`) or a `"Loading..."` fallback, which looked like a
+regression. Checking against the pre-this-step commit (`git stash` the
+edit, not the new file, then re-run the identical Playwright script)
+reproduced the **exact same stuck text on unmodified code** - a
+pre-existing display bug (in the same family as the "pre-existing
+Playwright-timing flakiness" Phase 2's result note already documented for
+this app), not something this step introduced. The console log trail
+(`Scale change detected via event` -> `Progression display updated for
+scale change`, both exact strings from the moved code) confirmed the
+underlying logic ran correctly regardless. A stronger, non-flaky check
+gave conclusive confirmation instead: changing the root-note dropdown from
+E to A correctly re-resolved every Roman-numeral chord in a live
+progression (`I (Em)` -> `I (Am)`, `IV (Am)` -> `IV (Dm)`, `V (Bm)` -> `V
+(Em)`, `vi (CM)` -> `vi (FM)`) and their mini-fretboard voicings, end to
+end through `updateRomanNumeralChords` -> `precomputeAllPatternData` ->
+`updateProgressionDisplay`. Zero console errors throughout. Remaining
+Phase 4 work: `fretboardDisplay.js`, the chord-card cluster,
+`progressionList.js`, `input.js`, `controls.js`, then the barrel;
+`scaleGenerator.js`/`scales.js` -> `src/scales/` after that.
 
 ---
 
