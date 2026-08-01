@@ -13,7 +13,7 @@ session finds its place without re-reading the codebase.
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
-| 3 — Split `frets.js` | in progress | this commit | Steps 1-5/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7, the class itself). Remaining: the three UI builders, the barrel. |
+| 3 — Split `frets.js` | in progress | this commit | Steps 1-6/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7, the class itself), `ui/controls.js` (§6.8, top bar/tab shell/hotkey footer/"Other Controls" panel). Remaining: chord grid, scale position grid, the barrel. |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
@@ -498,6 +498,31 @@ instances came back with zero console errors, main fretboard pixel-identical
 to every prior checkpoint. Remaining steps: the three UI builders, then the
 barrel.
 
+**Progress (2026-08-01), step 6/8 - `src/fretboard/ui/controls.js`:** landed
+as five functions moved together (`createTabbedPanel`, `attachHotkeyFooter`,
+`createInstrumentTuningPicker`, `createTopBar`, `createFretboardControls`) -
+none were called from outside this cluster, so unlike earlier steps this one
+needed no external call-site updates, just `frets.js`'s `initializeFretboard()`
+switching to an import. `createFretboardControls` (1,137 lines) was split
+per control group into `buildDisplayControls`/`buildNoteMarkingControls`/
+`buildNoteSearchControls`/`buildChordVisualizationControls`/
+`buildChordPatternDemoControls`/`buildOtherControlsPanel`, matching the
+source's own comment-delimited groups rather than a guessed split - reading
+the function end-to-end first showed most of those groups build buttons that
+are never appended to the DOM (dead code kept exactly as inert as it already
+was, not cleaned up). This step introduced a real two-way import between
+`frets.js` and `controls.js` (button handlers need glue functions that stay
+in `frets.js`; `frets.js` needs `createFretboardControls` back) - safe for
+the same reason the pre-existing `chords.js`/`theory/chords.js` cycle is
+(nothing is read at module top-level), not a new pattern, but worth flagging
+since steps 1-5 didn't need one. Full detail, including the exact
+cross-imported name list, in `ARCHITECTURE.md` §6.8. `npm test` (28/28) and
+plain `npm run build` pass with the identical 200 pre-existing warnings
+(diffed line-by-line, zero new ones); `run-app` screenshots (default load,
+Other Controls tab, Scale Position Grid tab) show zero console errors and
+correct rendering. Remaining steps: chord grid, scale position grid, then
+the barrel.
+
 ### Phase 4 — Split the other two
 
 Same treatment, same barrel trick.
@@ -611,3 +636,158 @@ Rules:
 
 To resume at a specific phase, append a line such as `Start at Phase 2b.`
 To pick up mid-phase, append what was already done and what remains.
+
+### 6.1 Resuming Phase 3 at step 6/8 (the UI-builder split)
+
+**Superseded 2026-08-01: step 6/8 (`ui/controls.js`) is now done too** - see
+the Phase 3 Result notes above and `ARCHITECTURE.md` §6.8. Remaining:
+chord grid, scale position grid, then the barrel (steps 7-8). The block
+below is kept for its steps-1-5 insights (still applicable) but its
+step-6-specific categorization is historical.
+
+Steps 1-5 (`state.js`, `geometry.js`, `markers.js`, `patterns.js`,
+`Fretboard.js`) are done, one commit each, `ARCHITECTURE.md` §6.3-6.7 and
+the Result notes above cover what landed and why. What remains is the
+largest, most interconnected part of Phase 3. Paste the block below to
+resume it in a fresh session - it distills what steps 1-5 learned the hard
+way, so step 6 doesn't repeat the same mistakes.
+
+```
+Resume REFACTOR_PLAN.md Phase 3 at step 6/8 - the UI-builder split.
+
+Read REFACTOR_PLAN.md (Phase 3's Result notes, steps 1-5) and
+ARCHITECTURE.md §6.3-6.7 first. Steps 1-5 already extracted state.js,
+geometry.js, markers.js, patterns.js and Fretboard.js from frets.js,
+each its own commit, each tests+build verified. Do NOT re-derive that
+work or re-survey those files - trust the docs.
+
+frets.js is now ~4,600 lines (was 6,940), all vanilla-JS UI construction
+that mounts Fretboard instances and wires them to the DOM. The plan's
+Phase 3 sketch names three targets:
+
+    src/fretboard/ui/controls.js        the control panel builders
+    src/fretboard/ui/chordGrid.js
+    src/fretboard/ui/scalePositionGrid.js
+    src/fretboard/index.js              barrel, re-exports today's
+                                         exports unchanged
+
+A first-pass categorization of frets.js's current top-level functions
+(by line number, as of the step-5 commit) - verify this before trusting
+it, it was made by scanning function names/line ranges, not by tracing
+every call graph:
+
+- Control panel: createTabbedPanel, attachHotkeyFooter,
+  createInstrumentTuningPicker, createTopBar, createFretboardControls
+  (the ~1,137-line one - split it per control group as the plan says,
+  don't move it as one function)
+- Chord grid: createChordButtonGrid, analyzeChordScaleCompatibility,
+  getCurrentScaleNoteNames, getScaleIntervalEntries, deriveChordSuffix,
+  buildDegreeHeaderLabel, getScaleDescriptor, getSemitoneFromReference,
+  updateChordGridColors, buildIntervalLabelMap, buildFingeringShapes,
+  getFingeringMarkerLabel, renderFingeringShape, clearFingeringTabs,
+  renderFingeringTabs
+- Scale Position Grid: findRowRootAbsoluteFret,
+  getAbsoluteFretForDisplayColumn, shadeColor, getContrastTextColor,
+  createScalePositionMiniFretboard, scalePositionCellKey and the ~12
+  toggle/visibility helpers next to it, styleScalePositionFocusCell,
+  buildScalePositionFocusMatrix, createScalePositionPlaceholderCell,
+  renderScalePositionGrid, createScalePositionGrid
+- Likely glue that stays close to the barrel rather than belonging to
+  one UI builder (called from index.js/chords.js/progressionBuilder.js,
+  not just from one panel): getChordVoicingNotes, playChordVoicing,
+  showChordPatternOnFretboard, restoreFretboardState,
+  showChordOnFretboard, showScaleOnFretboard, updateChordInfoDisplay,
+  updateChordButtonStyles, updateFretboardsForScaleChange,
+  searchFretboardNote(s), quickSearchAndMark, getFretboardNotes,
+  analyzeFretboardNotes, createSubscaleBoxPattern, displayChordPatterns,
+  showAllChordPatterns, quickChordPattern, createFretboard, getFretboard,
+  initializeFretboard(WithScale) - check REFACTOR_PLAN.md Phase 3's note
+  that the barrel must re-export today's public names unchanged before
+  moving any of these.
+
+Insights from steps 1-5, apply them here:
+
+1. fretboardState is a mutable OBJECT (fretboardState.foo), not
+   individual `let`s - ES module named exports are live bindings
+   importers can't reassign, which is why state.js was built that way.
+   Every new ui/*.js file reads/writes fretboardState.foo directly, same
+   as frets.js does today - don't reintroduce bare module-level `let`s
+   for anything that's actually shared state.
+
+2. Before any bulk mechanical rename (e.g. if a helper moves and its
+   call sites need updating across hundreds of lines), grep for
+   `window.<name>` first. A naive word-boundary regex rename doesn't
+   distinguish a bare identifier from a property access after `.` -
+   step 1 shipped a bug where `window.mainFretboard` got rewritten to
+   `window.fretboardState.mainFretboard` this way, caught before commit
+   by grepping `window\.fretboardState\.` afterward. Do the same grep
+   for any name you rename in bulk.
+
+3. Check for local shadowing before bulk-renaming a name: a `const`/
+   `let` inside a function body can share a name with something at
+   module scope (step 1 found `initializeFretboard()`'s own local
+   `const mainFretboard`, unrelated to the module-level one an the same
+   name). `grep -c "\b(let|const|var)\s+<name>\b"` across the file - if
+   it's more than 1, find the second declaration before renaming.
+
+4. Before moving any function currently in frets.js's `export { ... }`
+   barrel block, `grep -rn "from '\.\./frets'\|from '\./frets'" src` to
+   find every external file importing it directly (not just via
+   `window.*`). If the moved thing stops being a plain re-exportable
+   binding (e.g. it becomes a property on some object), those external
+   files need updating too - this happened once already:
+   `currentDisplayedChord` became `fretboardState.currentDisplayedChord`,
+   and chords.js/index.js both had to switch from importing the bare
+   name to importing `fretboardState` and reading the property. Full
+   writeup in ARCHITECTURE.md §6.3.
+
+5. If a function is needed by two files that must not import each other
+   (e.g. two sibling ui/*.js files, or a ui/*.js file and frets.js's own
+   remaining glue), it needs a third home - don't guess, grep both
+   sides' usage first. getIntervalLabelFromRoot needed this treatment
+   in step 5 (moved to geometry.js since both frets.js and Fretboard.js
+   needed it and neither could import the other) - full writeup in
+   ARCHITECTURE.md §6.7.
+
+6. Verify with `npm test` and plain `npm run build` - NOT `CI=true npm
+   run build`. This repo has dozens of pre-existing ESLint warnings
+   (unused imports, no-loop-func, eqeqeq, default-case, etc.) unrelated
+   to this refactor; `CI=true` turns every warning into a build failure,
+   which makes it look like the phase broke something when it didn't.
+   Plain `npm run build` exits 0 with warnings printed - diff the
+   frets.js/fretboard/* section of that warning list before vs. after
+   your change to confirm you introduced nothing new (a genuinely new
+   `no-unused-vars` hit almost always means an import that should have
+   moved or been dropped).
+
+7. The codebase already has a delegate-method convention for exactly
+   this situation (a class/object method whose logic moved to a
+   module-level function of the same name): `method(x) { return
+   sameNameFunction(x); }`. It works because a bare identifier inside a
+   method body resolves via lexical/module scope, not `this` - reuse it
+   rather than inventing a different shim.
+
+8. For DOM-heavy pieces, Playwright button/tab clicks in a run-app
+   check are worth attempting but selectors here are fiddly - chord
+   grid buttons aren't always plain <button> text matches, and
+   `getByText(..., {exact:true})` can resolve to a hidden `<select>`
+   `<option>` sharing the same text. If a selector fights back, prefer:
+   (a) the existing unit tests, which already assert exact structured
+   output for the pattern-matching path and are stronger evidence than
+   a screenshot; (b) a zero-console-error page-load check plus a
+   pixel-diff against the previous checkpoint's screenshot, which has
+   caught every real regression so far without needing per-button
+   interaction tests.
+
+Work in the same checkpoint style as steps 1-5: one commit per module
+(controls.js, then chordGrid.js, then scalePositionGrid.js, then the
+barrel - or a different split if your verification of the categorization
+above suggests otherwise), tests + build green before each commit,
+ARCHITECTURE.md and the Status table updated per-checkpoint not just at
+the end. Tell me your categorization and first steps before editing
+anything, the same way the last session did.
+```
+
+To pick up mid-checkpoint within step 6 (e.g. controls.js half-done),
+append what was already extracted and what remains, same as any other
+mid-phase resume.
