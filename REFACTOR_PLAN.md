@@ -200,6 +200,35 @@ below it, delete the comment.
 No phase is complete until `ARCHITECTURE.md` reflects its result. Treat this
 as part of the phase's exit criteria, alongside the tests and screenshots.
 
+### 3.6 Verification tooling — where the baseline lives, how to run it
+
+Every phase step needs the same three checks: tests pass, the build gained
+no new warnings, and the UI still renders. Repo-tracked scripts do all
+three so their Bash invocations stay stable across sessions (fixed repo
+path, not a new scratch-directory path every time) and their permissions
+can be allowlisted once instead of re-approved per session:
+
+- `npm test -- --watchAll=false` — unit tests (28 as of Phase 3).
+- `bash scripts/check-build.sh` — runs `npm run build`, diffs the ESLint
+  warnings block against the committed baseline at
+  **`docs/build-baseline.txt`**, and reports what changed. See the
+  `check-build` skill for the full workflow, including how and when to
+  refresh the baseline (`bash scripts/check-build.sh --update-baseline`,
+  committed alongside the change it validates). The baseline currently
+  reflects the tree as of the Phase 3 barrel step (219 warnings,
+  2026-08-01) — every phase after that should leave it unchanged unless a
+  warning genuinely moved or was cleaned up.
+- `bash scripts/dev-server.sh {start|stop|status}` +
+  `node scripts/screenshot.js --out <dir> --tabs "..."` — starts/stops the
+  CRA dev server and drives it with Playwright to screenshot the UI. See
+  the `run-app` skill. `docs/baseline-screenshots/` holds the Phase 0
+  reference screenshots (fretboard, scale table, progression builder, synth
+  tab) that later phases were verified against by eye.
+
+Scratch output from both scripts (build logs, one-off screenshots) goes to
+`.tmp/` (gitignored) — don't commit anything from there; commit
+`docs/build-baseline.txt` itself when it's intentionally updated.
+
 ---
 
 ## 4. Phases

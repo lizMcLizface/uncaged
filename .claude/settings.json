@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node scripts/screenshot.js *)",
+      "Bash(bash scripts/dev-server.sh *)",
+      "Bash(bash scripts/check-build.sh *)",
+      "Bash(npm run build)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)"
+    ]
+  }
+}
