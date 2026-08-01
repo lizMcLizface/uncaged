@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 2/? - `src/progression/state.js` and `parse.js` landed (`ARCHITECTURE.md` §6.12/§6.13). Remaining: `share.js`, the `ui/*.js` split, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | Step 3/? - `src/progression/state.js`, `parse.js`, `share.js` landed (`ARCHITECTURE.md` §6.12-§6.14). Remaining: the `ui/*.js` split, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -715,6 +715,22 @@ pattern-selector dropdown to confirm `precomputePatternData`/
 `getChordPatternMatches` still drive the displayed voicing correctly -
 zero console errors. Remaining steps: `share.js`, the `ui/*.js` split, then
 the barrel.
+
+**Progress (2026-08-01), step 3 - `src/progression/share.js`:** landed as
+planned - the nine URL-sharing functions were another contiguous block (the
+file's tail, right before the export statement), so another straight
+cut-and-paste. Only `updateProgression` needed a cross-import back into
+`progressionBuilder.js`, for `applySharedState`'s one fallback call site.
+Two now-dead imports (`setPrimaryRootNote`/`setPrimaryScale`) fell out of
+`progressionBuilder.js` the same way step 2's did - caught by
+`scripts/check-build.sh`'s diff, not left in. Full detail in
+`ARCHITECTURE.md` §6.14. `npm test` (28/28) and plain `npm run build` pass -
+219 warnings, unchanged. Verified via `run-app` with a real round trip this
+step's own code made possible: built a progression, toggled a UI flag,
+clicked Share, then navigated to the resulting URL fresh in the same
+browser session and confirmed the progression, pattern selections, and
+toggle all restored correctly - zero console errors. Remaining steps: the
+`ui/*.js` split, then the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 
