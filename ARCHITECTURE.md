@@ -295,7 +295,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/fretboard/geometry.js` *(Phase 3, in progress, landed 2026-08-01)* | Pure fret-position and note-at-position math: `calculateFretPositions`, `calculateFretPosition`, `calculateNote`, `extractNoteName`, `extractOctave`, `getNoteAt`, `findNotePositions`. No DOM, no class instance - takes plain data (tuning array, fret count, fret-position table) in, plain data out. The `Fretboard` class keeps same-named methods that delegate to these (e.g. `calculateNote(a, b) { return geometryCalculateNote(a, b); }`), so its public API is unchanged. | `theory/notation` | — |
 | `src/fretboard/markers.js` *(Phase 3, in progress, landed 2026-08-01)* | `createNoteShapeMarker` - builds one detached SVG shape element (circle/square/diamond/triangle/pentagon/hexagon/star/plus/cross) for a Scale Position Grid dot. Touches the DOM (`document.createElementNS`) but no app state - not framework-free the way `geometry.js` is, just state-free. | nothing app-specific | — |
 | `src/fretboard/patterns.js` *(Phase 3, in progress, landed 2026-08-01)* | CAGED chord-pattern matching and generic fingering-shape scoring: `calculateChordPatternPositions`, `findChordPatternMatches`, `findOptimalChordShape`. Takes tuning/fretCount as parameters instead of reading `this.*`; calls `geometry.js`'s functions directly. Not framework-free - depends on `chordPatterns.js`'s canned shape library and `tuning.js`'s `isStandardGuitarTuning`. The `Fretboard` class keeps same-named delegate methods, matching the Phase 0 characterization tests that call them as instance methods. | `chordPatterns.js`, `tuning.js`, `theory/notation`, `src/fretboard/geometry.js` | — |
-| `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class (now delegating its geometry/marker/pattern methods), the fretboard control panels, scale position grid, chord grid - the DOM-touching display logic (`displayChordWithPatterns`, `showAllChordPatterns` and friends) that calls into the pattern-matching above. State, geometry math, marker drawing and pattern matching moved to `src/fretboard/state.js`/`geometry.js`/`markers.js`/`patterns.js` (see above); the rest is still one file, pending the remaining Phase 3 steps. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), `src/fretboard/state.js`, `src/fretboard/geometry.js`, `src/fretboard/markers.js`, `src/fretboard/patterns.js` | — |
+| `src/fretboard/Fretboard.js` *(Phase 3, in progress, landed 2026-08-01)* | The `Fretboard` class itself - DOM rendering (neck/fret grid, note/scale/chord marking, subscale boxes, chord-shape lines, CAGED/fingering display) for one fretboard instance. Also owns `GUITAR_TUNING`/`FRET_COUNT` (constructor defaults), `SCALE_COLORS`/`DEFAULT_COLORS` (marker coloring) and `addInteractiveEvent` (a generic DOM helper with no better home yet) - `frets.js` imports the first three plus the helper back for its own remaining UI code. | theory, `chordFingering`/`chordPatterns`, `tuning.js`, `src/fretboard/state.js`, `geometry.js`, `patterns.js` | must not import `frets.js` (would be circular - `frets.js` imports `Fretboard` from here) |
+| `frets.js` (→ `src/fretboard/` in Phase 3) | The fretboard control panels, scale position grid, chord grid - all still-vanilla-JS UI construction that mounts `Fretboard` instances and wires them to the DOM. State, geometry math, marker drawing, pattern matching and the class itself moved to `src/fretboard/state.js`/`geometry.js`/`markers.js`/`patterns.js`/`Fretboard.js` (see above); the rest is still one file, pending the UI-builder split and the barrel. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), all of `src/fretboard/*` above | — |
 | `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
@@ -445,6 +446,10 @@ Verified via `npm test` (28/28, including the Phase 0 `calculateNote`/
 module through the class delegates), `npm run build`, and a `run-app`
 screenshot pixel-identical to the pre-checkpoint baseline.
 
+**Addendum (Phase 3 step 5, `Fretboard.js`):** `getIntervalLabelFromRoot`
+(root note + target note -> `INTERVAL_LABELS` entry) joined this module -
+see §6.7 for why it landed here rather than in `Fretboard.js` itself.
+
 ### 6.5 `src/fretboard/markers.js` (Phase 3, third step, 2026-08-01)
 
 A single function, `createNoteShapeMarker`, moved verbatim - it was already
@@ -489,6 +494,59 @@ check (zero console errors on load; interactive chord-button clicks weren't
 screenshotted this round - the characterization tests already assert exact
 structured output for this module, which is stronger coverage than a visual
 diff would add here).
+
+### 6.7 `src/fretboard/Fretboard.js` (Phase 3, fifth step, 2026-08-01)
+
+The class (1,719 lines) moved verbatim - by this point in Phase 3 its
+geometry/marker/pattern methods were already thin delegates to the four
+modules above, so this step was mechanical: cut the class out, give it its
+own import list, paste it into a new file.
+
+**One real gap the mechanical move surfaced:** `getIntervalLabelFromRoot`, a
+small pure helper (root note + target note -> interval label via
+`INTERVAL_LABELS`), was defined in `frets.js` right after the class and
+called from *both* the class and two of `frets.js`'s own remaining
+functions (chord-grid/scale-info display). Since `Fretboard.js` can't
+import from `frets.js` (that would be circular - `frets.js` imports
+`Fretboard` from here), the helper moved to `src/fretboard/geometry.js`
+instead (it's pure note-math, the same shape as everything else already
+there), and both `frets.js` and `Fretboard.js` now import it from there.
+`npm run build`'s `no-undef` ESLint rule caught the miss immediately (a
+build error, not a silent bug) - the same rule that would catch any future
+case like this.
+
+**What moved into `Fretboard.js` alongside the class, and why:**
+`GUITAR_TUNING`/`FRET_COUNT` (constructor defaults) and `SCALE_COLORS`/
+`DEFAULT_COLORS` (marker colors) were already class-adjacent constants with
+no other logical home; `addInteractiveEvent` is a generic DOM
+enter/leave/click helper that happened to sit next to the class before
+Phase 3 and has no better home among today's modules (not fret math, not
+marker drawing, not pattern matching, not shared mutable state). All four
+are still needed by `frets.js`'s own remaining UI-builder code
+(`GUITAR_TUNING`/`SCALE_COLORS` are also in the public barrel export), so
+`frets.js` imports them back from `Fretboard.js` rather than duplicating
+them - the one-way dependency direction (`frets.js` -> `Fretboard.js`,
+never the reverse) is what keeps this from being circular. Revisit this if
+a later phase gives `addInteractiveEvent` a real home (e.g. a small
+DOM-utils module shared across the eventual `src/fretboard/ui/*` split).
+
+One `no-unused-vars` case fell out cleanly: `INTERVAL_LABELS` was only
+still imported in `frets.js` for `getIntervalLabelFromRoot`'s sake; once
+that moved, the import was dead and was removed (`getIntervalColor`, the
+other name in that import, stays - still used).
+
+The pre-existing `default-case` ESLint warning on `addInteractiveEvent`'s
+switch statement (no `default:` branch) moved from `frets.js` to
+`Fretboard.js` along with the function - same warning, new address, not a
+regression.
+
+Verified via `npm test` (28/28, including `frets.test.js`'s `import {
+Fretboard } from './frets'`, proving the re-export chain works), `npm run
+build`, and `run-app` screenshots of three tabs that each exercise a
+different `Fretboard` instance/code path (main fretboard + Scale Position
+Grid, Scale Information, Chord Progression's own mini-fretboard) - zero
+console errors, main-fretboard screenshot pixel-identical to every prior
+checkpoint's baseline.
 
 ---
 

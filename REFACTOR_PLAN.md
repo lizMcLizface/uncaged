@@ -13,7 +13,7 @@ session finds its place without re-reading the codebase.
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
-| 3 — Split `frets.js` | in progress | this commit | Steps 1-4/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6, CAGED matching + fingering-shape scoring). Remaining: the `Fretboard` class, the three UI builders, the barrel. |
+| 3 — Split `frets.js` | in progress | this commit | Steps 1-5/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7, the class itself). Remaining: the three UI builders, the barrel. |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
@@ -480,6 +480,23 @@ removed rather than left to warn. Full detail in `ARCHITECTURE.md` §6.6.
 tests) and `npm run build` pass; zero console errors on a `run-app` load
 check. Remaining steps: the `Fretboard` class, the three UI builders, then
 the barrel.
+
+**Progress (2026-08-01), step 5/8 - `Fretboard.js`:** the class (1,719
+lines) moved verbatim - by this point its geometry/marker/pattern methods
+were already thin delegates, so this was mechanical. One real gap
+surfaced: `getIntervalLabelFromRoot`, needed by both the class and two of
+`frets.js`'s own functions, couldn't live in either file without creating
+a circular import, so it moved to `geometry.js` instead (caught immediately
+by `npm run build`'s `no-undef` check, not a silent bug). `GUITAR_TUNING`/
+`FRET_COUNT`/`SCALE_COLORS`/`DEFAULT_COLORS`/`addInteractiveEvent` moved
+into `Fretboard.js` alongside the class since they had no better home;
+`frets.js` imports the four it still needs back from there. Full detail,
+including why this one-way dependency direction isn't circular, in
+`ARCHITECTURE.md` §6.7. `npm test` (28/28) and `npm run build` pass;
+`run-app` screenshots of three tabs exercising different `Fretboard`
+instances came back with zero console errors, main fretboard pixel-identical
+to every prior checkpoint. Remaining steps: the three UI builders, then the
+barrel.
 
 ### Phase 4 — Split the other two
 
