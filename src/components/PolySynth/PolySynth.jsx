@@ -13,6 +13,7 @@ import Select from './../Select';
 import presetData from '../../util/presetData';
 import { getNoteInfo, WAVEFORM, FILTER, REVERB, ENVELOPE_SHAPE, NOISE } from '../../util/util';
 import { THEMES } from '../../styles/themes';
+import { CHROMATIC } from '../../theory/notes';
 import { metronome } from '../../metronome';
 
 import {
@@ -1744,7 +1745,7 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
         
         // Convert enharmonic equivalents to standard sharp notation
         const convertToStandardNotation = (letter, accidental) => {
-            const noteOrder = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            const noteOrder = CHROMATIC;
             const letterToIndex = { 'C': 0, 'D': 2, 'E': 4, 'F': 5, 'G': 7, 'A': 9, 'B': 11 };
             
             let semitoneOffset = 0;
@@ -1760,8 +1761,8 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
         };
         
         const standardNoteName = convertToStandardNotation(baseLetter, accidental);
-        
-        let noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+
+        let noteNames = CHROMATIC;
         let baseFrequency = 261.63; // Default base frequency for C4
         let baseFrequencies = [baseFrequency]
         for(let i = 1; i < noteNames.length; i++) {
@@ -1806,8 +1807,8 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
             return null;
         }
 
-        const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-        
+        const noteNames = CHROMATIC;
+
         // Calculate base frequencies for each note in octave 4 using current pitch environment
         let baseFrequency = 261.63; // Default base frequency for C4
         let baseFrequencies = [baseFrequency];

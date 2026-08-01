@@ -1,5 +1,22 @@
-import {scales, getScaleNotes} from './scales';
-import { chords } from './chords';
+/**
+ * Chord spelling and resolution engine: chord-name parsing, interval
+ * derivation, and note-name generation. Framework-free except for the
+ * `chords` import below.
+ *
+ * Moved from src/intervals.js (Phase 2). One unused import was dropped in
+ * the move - `scales` (only referenced in commented-out code). `chords`
+ * (the chord-suffix-list data from src/chords.js, a DOM-heavy file) looked
+ * like the same kind of dead weight at first glance - it's shadowed by
+ * matchChord's own `chords` parameter everywhere matchChord is defined -
+ * but identifySyntheticChords calls `matchChord(chord, chords, ...)` using
+ * this exact module-level binding as the argument, so it's live. Importing
+ * it means merely importing this engine also runs chords.js's module-scope
+ * `document.getElementById('chordPlaceholderContent')` - pre-existing
+ * behavior (src/intervals.js already imported chords.js the same way),
+ * not something this move introduced.
+ */
+import { getScaleNotes } from '../scales';
+import { chords } from '../chords';
 import { areArraysEnharmonicEquivalent, normalizeNote, noteToMidi as notationNoteToMidi, midiToNote as notationMidiToNote } from './notation';
 
 function intervalToSemitones(interval) {

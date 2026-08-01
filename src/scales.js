@@ -1,14 +1,14 @@
 import { noteToMidi, noteToName } from './midi';
-import { 
-    midiToNote as notationMidiToNote, 
+import {
+    midiToNote as notationMidiToNote,
     noteToMidi as notationNoteToMidi,
     setScaleContext,
     getScaleContext,
     translateNotes,
     generateProperScale,
     stripOctave
-} from './notation';
-import { identifySyntheticChords } from './intervals';
+} from './theory/notation';
+import { identifySyntheticChords } from './theory/chords';
 
 // Cache for precomputed chords
 let scaleChordCache = new Map();

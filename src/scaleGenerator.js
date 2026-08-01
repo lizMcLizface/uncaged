@@ -1,6 +1,6 @@
 import $ from 'jquery';
 import {HeptatonicScales, scales, highlightKeysForScales, getScaleNotes, precomputeScaleChords, getChordsForScale, translateNotes, stripOctave} from './scales';
-import {identifySyntheticChords, matchChord} from './intervals';
+import {identifySyntheticChords, matchChord} from './theory/chords';
 import {chords} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
 import { createScalePiano, createIntervalPiano, getIntervalInfo, getSynthBaseOctave, DEFAULT_BASE_OCTAVE } from './components/MiniPiano/MiniPiano';

@@ -1,5 +1,6 @@
 import { Oscillator, Gain, Filter, NoiseGenerator, OscNoiseMixer, StereoPanner } from '../../nodes';
 import { clamp, minTime } from '../../util/util';
+import { CHROMATIC } from '../../theory/notes';
 
 // Monophonic Synth Class with Voice Spreading Support
 class MonoSynth {
@@ -1193,7 +1194,7 @@ class MonoSynth {
         
         const { noteName, octave } = this.currentNoteInfo;
         
-        let noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        let noteNames = CHROMATIC;
         let baseFrequency = 261.63; // Default base frequency for C4
         let baseFrequencies = [baseFrequency]
         for(let i = 1; i < noteNames.length; i++) {

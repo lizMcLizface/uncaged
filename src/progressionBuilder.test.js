@@ -1,11 +1,9 @@
-import { parseChordToken, parseRomanNumeral, romanToDegree, resolveRomanChord } from './progressionBuilder';
+import { parseChordToken, parseRomanNumeral, romanToDegree, resolveRomanChord } from './theory/roman';
 
 // Characterization tests written ahead of REFACTOR_PLAN.md Phase 2, which
-// lifts roman-numeral parsing/resolution into src/theory/roman.js (see
-// progressionBuilder.js:549-1073 in the plan). Pins today's behavior so the
-// move can be verified, not a spec of correctness. These four functions
-// were not previously exported from progressionBuilder.js - the export was
-// added solely to make them reachable from a test file.
+// lifted roman-numeral parsing/resolution into src/theory/roman.js (done -
+// this import was updated from './progressionBuilder'). Pins today's
+// behavior so the move can be verified, not a spec of correctness.
 
 describe('romanToDegree', () => {
   test('maps roman numerals I-VII to 1-7, case-insensitively', () => {

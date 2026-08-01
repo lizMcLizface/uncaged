@@ -1,92 +1,9 @@
-function normalizeNote2(note) {
-    if (typeof note !== 'string') return note;
-    
-    return note.trim()
-        .replace(/♯/g, '#')
-        .replace(/♭/g, 'b')
-        .replace(/𝄪/g, '##')
-        .replace(/𝄫/g, 'bb')
-        .replace(/♮/g, ''); // Natural symbol cancels accidentals
-}
-
-function noteToMidi(note){
-    var pitch = note[0].toLowerCase();
-    var octave = parseInt(note.slice(-1));
-    var normalizedNote = normalizeNote2(note);
-    var sliced = normalizedNote.slice(1,-2);
-    // console.log('pos:', pitch, octave, sliced);
-    var offset = 0;
-    switch(sliced){
-        default: break;
-        case '#' : offset = 1; break;
-        case '##': offset = 2; break;
-        case 'b' : offset = -1; break;
-        case 'bb': offset = -2; break;
-    }
-    // console.log('accidental offset:', sliced, offset)
-    var key = 0;
-    switch(pitch){
-        case 'c': key = 0; break;
-        case 'd': key = 2; break;
-        case 'e': key = 4; break;
-        case 'f': key = 5; break;
-        case 'g': key = 7; break;
-        case 'a': key = 9; break;
-        case 'b': key = 11; break;
-    }
-    // console.log('key:', pitch, key)
-    return (octave * 12) + key + offset;
-}
-// // noteToMidi('E/4')
-// // noteToMidi('E#/4')
-// // noteToMidi('Ebb/4')
-
-function noteToName(input){
-    var octave = String(Math.floor(input / 12) - 1);
-    var note = input % 12;
-    var noteName = 'C';
-    switch(note){
-        case 0:
-            noteName = 'C';
-            break;
-        case 1:
-            noteName = 'C#';
-            break;
-        case 2:
-            noteName = 'D';
-            break;
-        case 3:
-            noteName = 'D#';
-            break;
-        case 4:
-            noteName = 'E';
-            break;
-        case 5:
-            noteName = 'F';
-            break;
-        case 6:
-            noteName = 'F#';
-            break;
-        case 7:
-            noteName = 'G';
-            break;
-        case 8:
-            noteName = 'G#';
-            break;
-        case 9:
-            noteName = 'A';
-            break;
-        case 10:
-            noteName = 'A#';
-            break;
-        case 11:
-            noteName = 'B';
-            break;
-    }
-    return noteName + '/' + octave;
-
-}
-
+// noteToMidi/noteToName moved to src/theory/notes.js (REFACTOR_PLAN.md
+// Phase 2) and re-exported here unchanged so this file's own DOM-touching
+// code (keys/getElementByMIDI/initializeMouseInput below) stays out of
+// src/theory/, while every existing importer of these two names from
+// './midi' keeps working without a path change.
+import { noteToMidi, noteToName } from './theory/notes';
 
 const getElementByNote = (note) =>
   note && document.querySelector(`[note="${note}"]`);

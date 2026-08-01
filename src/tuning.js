@@ -8,8 +8,8 @@
  * frets.js's GUITAR_TUNING already used.
  */
 
-const NOTE_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-const SHARP_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+import { NOTE_TO_SEMITONE } from './theory/notation';
+import { CHROMATIC as SHARP_NAMES } from './theory/notes';
 
 /**
  * Parse 'E4', 'F#1' or slash-form 'E/4' into { letter, offset, octave }.

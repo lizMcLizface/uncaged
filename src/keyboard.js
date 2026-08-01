@@ -17,7 +17,7 @@ import { context,
     tempoControl,
     tempo,
     isPlaying} from './synth';
-import {processChord} from './intervals';
+import {processChord} from './theory/chords';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
 import {createHeptatonicScaleTable, selectedRootNote, selectedScales} from './scaleGenerator';
 import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';

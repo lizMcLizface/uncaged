@@ -1,10 +1,17 @@
 /**
  * Musical Notation System with Proper Enharmonic Handling
- * 
+ *
  * This module provides functions for converting between MIDI numbers and
  * musically correct note names, with proper enharmonic handling and
  * scale-context-aware notation.
+ *
+ * Its noteToMidi/noteToName/midiToNote are a separate system from
+ * ./notes.js's noteToMidi/noteToName - different MIDI-number convention
+ * (this one is standard: MIDI 60 = C/4), not interchangeable. See
+ * notes.js's header for why both exist side by side.
  */
+
+import { CHROMATIC, normalize } from './notes';
 
 // Musical symbols for proper notation
 const SYMBOLS = {
@@ -21,6 +28,9 @@ const CHROMATIC_FLAT = ['C', 'D♭', 'D', 'E♭', 'E', 'F', 'G♭', 'G', 'A♭',
 
 // Note name order for proper enharmonic spelling
 const NOTE_NAMES = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+// Natural note letter -> semitone (no accidentals applied)
+const NOTE_TO_SEMITONE = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
 
 // Scale degree patterns for common scale types
 const SCALE_PATTERNS = {
@@ -40,12 +50,11 @@ function basicMidiToNote(midiNote) {
     if (typeof midiNote !== 'number' || midiNote < 0 || midiNote > 127) {
         throw new Error("MIDI note must be between 0 and 127");
     }
-    
+
     const octave = Math.floor(midiNote / 12) - 1;
     const semitone = midiNote % 12;
-    
-    const noteNames = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-    const noteName = noteNames[semitone];
+
+    const noteName = CHROMATIC[semitone];
     return `${noteName}/${octave}`;
 }
 
@@ -56,9 +65,9 @@ function basicNoteToMidi(note) {
     if (typeof note !== 'string') {
         throw new Error("Note must be a string");
     }
-    
+
     note = note.trim();
-    
+
     // Replace unicode symbols with ASCII equivalents for processing
     note = note
         .replace(/♯/g, '#')
@@ -66,36 +75,34 @@ function basicNoteToMidi(note) {
         .replace(/𝄪/g, '##')
         .replace(/𝄫/g, 'bb')
         .replace(/♮/g, ''); // Natural symbol cancels accidentals
-    
+
     let octave = 4; // Default octave
-    
+
     // Extract octave if present
     if (note.includes('/')) {
         const parts = note.split('/');
         note = parts[0];
         octave = parseInt(parts[1], 10);
     }
-    
+
     // Extract base note and accidentals
     const baseNote = note.charAt(0).toUpperCase();
     const accidentals = note.slice(1);
-    
+
     // Get base MIDI value
-    const noteToSemitone = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-    
-    if (!(baseNote in noteToSemitone)) {
+    if (!(baseNote in NOTE_TO_SEMITONE)) {
         throw new Error(`Invalid base note: ${baseNote}`);
     }
-    
-    const baseSemitone = noteToSemitone[baseNote];
+
+    const baseSemitone = NOTE_TO_SEMITONE[baseNote];
     const accidentalOffset = getAccidentalOffset(accidentals);
-    
+
     const midiNote = (octave + 1) * 12 + baseSemitone + accidentalOffset;
-    
+
     if (midiNote < 0 || midiNote > 127) {
         throw new Error(`MIDI note out of range: ${midiNote}`);
     }
-    
+
     return midiNote;
 }
 
@@ -111,14 +118,14 @@ function getBaseNote(noteName) {
  */
 function getAccidentalOffset(accidentals) {
     if (!accidentals) return 0;
-    
+
     // Handle various accidental notations
     const normalized = accidentals
         .replace(/♯/g, '#')
         .replace(/♭/g, 'b')
         .replace(/𝄪/g, '##')
         .replace(/𝄫/g, 'bb');
-    
+
     let offset = 0;
     for (const char of normalized) {
         if (char === '#') offset += 1;
@@ -131,8 +138,7 @@ function getAccidentalOffset(accidentals) {
  * Get the chromatic distance between two note names
  */
 function getNoteDistance(from, to) {
-    const noteToSemitone = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-    return (noteToSemitone[to] - noteToSemitone[from] + 12) % 12;
+    return (NOTE_TO_SEMITONE[to] - NOTE_TO_SEMITONE[from] + 12) % 12;
 }
 
 /**
@@ -144,7 +150,7 @@ function createAccidental(offset) {
     if (offset === -1) return SYMBOLS.FLAT;
     if (offset === 2) return SYMBOLS.DOUBLE_SHARP;
     if (offset === -2) return SYMBOLS.DOUBLE_FLAT;
-    
+
     // For larger offsets, use multiple accidentals
     if (offset > 0) {
         const doubleSharp = Math.floor(offset / 2);
@@ -167,33 +173,32 @@ function generateProperScale(rootNote, intervals) {
         console.error('generateProperScale: Invalid intervals array:', intervals);
         return [rootNote]; // Return just the root note as fallback
     }
-    
+
     // For scales with fewer than 7 notes, use a different approach
     if (intervals.length < 6) {
         return generateProperScaleNonHeptatonic(rootNote, intervals);
     }
-    
+
     const rootBase = getBaseNote(rootNote);
     const rootAccidentals = rootNote.slice(1);
     const rootOffset = getAccidentalOffset(rootAccidentals);
-    
+
     // Get the root's position in the chromatic scale
-    const noteToSemitone = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-    let currentSemitone = (noteToSemitone[rootBase] + rootOffset + 12) % 12;
-    
+    let currentSemitone = (NOTE_TO_SEMITONE[rootBase] + rootOffset + 12) % 12;
+
     // Start with the root note
     const scale = [rootNote];
-    
+
     // Track which note names we've used (one letter per scale degree)
     const noteNameOrder = [...NOTE_NAMES];
     let rootIndex = noteNameOrder.indexOf(rootBase);
     let currentNoteIndex = rootIndex;
-    
+
     // Generate each scale degree using intervals
     for (let i = 0; i < intervals.length; i++) {
         const interval = intervals[i];
         let semitoneStep = 0;
-        
+
         // Convert interval notation to semitones
         switch (interval) {
             case 'H': semitoneStep = 1; break;  // Half step
@@ -202,26 +207,26 @@ function generateProperScale(rootNote, intervals) {
             case 'P': semitoneStep = 4; break;  // Perfect step (used in some scales)
             default: semitoneStep = 1; break;
         }
-        
+
         currentSemitone = (currentSemitone + semitoneStep) % 12;
         currentNoteIndex = (currentNoteIndex + 1) % 7;
-        
+
         // Get the target note name (next in alphabetical order)
         const targetNoteName = noteNameOrder[currentNoteIndex];
-        
+
         // Calculate what accidental is needed
-        const naturalSemitone = noteToSemitone[targetNoteName];
+        const naturalSemitone = NOTE_TO_SEMITONE[targetNoteName];
         const neededOffset = (currentSemitone - naturalSemitone + 12) % 12;
-        
+
         // Handle the case where we need to go backwards (e.g., Cb instead of B)
         const actualOffset = neededOffset > 6 ? neededOffset - 12 : neededOffset;
-        
+
         const accidental = createAccidental(actualOffset);
         const noteName = targetNoteName + accidental;
-        
+
         scale.push(noteName);
     }
-    
+
     return scale;
 }
 
@@ -233,20 +238,19 @@ function generateProperScaleNonHeptatonic(rootNote, intervals) {
     const rootBase = getBaseNote(rootNote);
     const rootAccidentals = rootNote.slice(1);
     const rootOffset = getAccidentalOffset(rootAccidentals);
-    
+
     // Get the root's position in the chromatic scale
-    const noteToSemitone = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
-    let currentSemitone = (noteToSemitone[rootBase] + rootOffset + 12) % 12;
-    
+    let currentSemitone = (NOTE_TO_SEMITONE[rootBase] + rootOffset + 12) % 12;
+
     // Start with the root note
     const scale = [rootNote];
     const usedNoteNames = new Set([rootBase]);
-    
+
     // Generate each scale degree using intervals
     for (let i = 0; i < intervals.length; i++) {
         const interval = intervals[i];
         let semitoneStep = 0;
-        
+
         // Convert interval notation to semitones
         switch (interval) {
             case 'H': semitoneStep = 1; break;  // Half step
@@ -255,15 +259,15 @@ function generateProperScaleNonHeptatonic(rootNote, intervals) {
             case 'P': semitoneStep = 4; break;  // Perfect step (used in some scales)
             default: semitoneStep = 1; break;
         }
-        
+
         currentSemitone = (currentSemitone + semitoneStep) % 12;
-        
+
         // Find the best note name for this semitone
         const bestNoteName = findBestNoteName(currentSemitone, usedNoteNames);
         usedNoteNames.add(getBaseNote(bestNoteName));
         scale.push(bestNoteName);
     }
-    
+
     return scale;
 }
 
@@ -271,7 +275,6 @@ function generateProperScaleNonHeptatonic(rootNote, intervals) {
  * Find the best note name for a given semitone, avoiding already used note names when possible
  */
 function findBestNoteName(semitone, usedNoteNames) {
-    const noteToSemitone = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
     const semitoneToNotes = {
         0: ['C'],
         1: ['C#', 'Db'],
@@ -286,14 +289,14 @@ function findBestNoteName(semitone, usedNoteNames) {
         10: ['A#', 'Bb'],
         11: ['B']
     };
-    
+
     const possibleNotes = semitoneToNotes[semitone];
-    
+
     // If there's only one option, use it
     if (possibleNotes.length === 1) {
         return possibleNotes[0];
     }
-    
+
     // For enharmonic equivalents, prefer the one that hasn't been used
     for (const note of possibleNotes) {
         const baseName = getBaseNote(note);
@@ -301,7 +304,7 @@ function findBestNoteName(semitone, usedNoteNames) {
             return note;
         }
     }
-    
+
     // If all base names are used, prefer sharps over flats for consistency
     return possibleNotes[0];
 }
@@ -312,12 +315,12 @@ function findBestNoteName(semitone, usedNoteNames) {
 function createScaleTranslationTable(rootNote, intervals) {
     const properScale = generateProperScale(rootNote, intervals);
     const translationTable = new Map();
-    
+
     // Create mapping from MIDI numbers to proper note names
     for (let i = 0; i < properScale.length - 1; i++) { // -1 to exclude octave
         const noteName = properScale[i];
         const midiBase = basicNoteToMidi(noteName + '/4');
-        
+
         // Map all octaves of this note
         for (let octave = 0; octave <= 8; octave++) {
             const midi = midiBase + (octave - 4) * 12;
@@ -326,7 +329,7 @@ function createScaleTranslationTable(rootNote, intervals) {
             }
         }
     }
-    
+
     return translationTable;
 }
 
@@ -337,16 +340,16 @@ function midiToNoteWithScale(midiNote, scaleContext = null) {
     if (typeof midiNote !== 'number' || midiNote < 0 || midiNote > 127) {
         throw new Error("MIDI note must be between 0 and 127");
     }
-    
+
     if (scaleContext && scaleContext.translationTable) {
         const scaleName = scaleContext.translationTable.get(midiNote);
         if (scaleName) return scaleName;
     }
-    
+
     // Fallback to chromatic spelling
     const octave = Math.floor(midiNote / 12) - 1;
     const semitone = midiNote % 12;
-    
+
     // Default to sharp spelling for chromatic notes
     const noteName = CHROMATIC_SHARP[semitone];
     return `${noteName}/${octave}`;
@@ -365,18 +368,18 @@ function noteToMidiEnhanced(note) {
 function createScaleContext(rootNote, intervals) {
     const translationTable = createScaleTranslationTable(rootNote, intervals);
     const properScale = generateProperScale(rootNote, intervals);
-    
+
     return {
         rootNote,
         intervals,
         properScale,
         translationTable,
-        
+
         // Method to get proper note name for a MIDI number
         getNoteName: function(midiNote) {
             return midiToNoteWithScale(midiNote, this);
         },
-        
+
         // Method to translate an array of notes
         translateNotes: function(notes) {
             return notes.map(note => {
@@ -488,17 +491,14 @@ function addOctave(noteName, octave = 4) {
 }
 
 /**
- * Normalize note representation by converting all accidental symbols to a standard form
+ * Normalize note representation by converting all accidental symbols to a
+ * standard form. Same implementation as ./notes.js's normalize (verified
+ * byte-identical); kept as its own export here since this module's own
+ * functions (stripOctave, findEnharmonicMatch, ...) already call it as
+ * normalizeNote and that's the public name other modules import.
  */
 function normalizeNote(note) {
-    if (typeof note !== 'string') return note;
-    
-    return note.trim()
-        .replace(/♯/g, '#')
-        .replace(/♭/g, 'b')
-        .replace(/𝄪/g, '##')
-        .replace(/𝄫/g, 'bb')
-        .replace(/♮/g, ''); // Natural symbol cancels accidentals
+    return normalize(note);
 }
 
 /**
@@ -506,16 +506,16 @@ function normalizeNote(note) {
  */
 function areEnharmonicEquivalent(note1, note2) {
     if (!note1 || !note2) return false;
-    
+
     try {
         // Normalize and strip octaves for comparison
         const n1 = stripOctave(normalizeNote(note1));
         const n2 = stripOctave(normalizeNote(note2));
-        
+
         // Convert both to MIDI (same octave) and compare
         const midi1 = basicNoteToMidi(n1 + '/4');
         const midi2 = basicNoteToMidi(n2 + '/4');
-        
+
         return midi1 === midi2;
     } catch (e) {
         return false;
@@ -528,9 +528,9 @@ function areEnharmonicEquivalent(note1, note2) {
 function areArraysEnharmonicEquivalent(array1, array2) {
     if (!Array.isArray(array1) || !Array.isArray(array2)) return false;
     if (array1.length !== array2.length) return false;
-    
+
     // Check if every note in array1 has an enharmonic equivalent in array2
-    return array1.every(note1 => 
+    return array1.every(note1 =>
         array2.some(note2 => areEnharmonicEquivalent(note1, note2))
     );
 }
@@ -540,10 +540,10 @@ function areArraysEnharmonicEquivalent(array1, array2) {
  */
 function findEnharmonicMatch(targetNote, noteArray) {
     if (!targetNote || !Array.isArray(noteArray)) return null;
-    
+
     // Normalize the target note
     const normalizedTarget = normalizeNote(targetNote);
-    
+
     return noteArray.find(note => areEnharmonicEquivalent(normalizedTarget, note)) || null;
 }
 
@@ -554,7 +554,7 @@ function matchEnharmonicSpelling(notesToConvert, referenceNotes) {
     if (!Array.isArray(notesToConvert) || !Array.isArray(referenceNotes)) {
         return notesToConvert;
     }
-    
+
     return notesToConvert.map(note => {
         const match = findEnharmonicMatch(note, referenceNotes);
         return match || note;
@@ -566,10 +566,10 @@ function matchEnharmonicSpelling(notesToConvert, referenceNotes) {
  */
 function noteArrayContains(noteArray, targetNote) {
     if (!Array.isArray(noteArray) || !targetNote) return false;
-    
+
     // Normalize the target note
     const normalizedTarget = normalizeNote(targetNote);
-    
+
     return noteArray.some(note => areEnharmonicEquivalent(note, normalizedTarget));
 }
 
@@ -580,7 +580,7 @@ function filterEnharmonicMatches(notesToFilter, referenceNotes) {
     if (!Array.isArray(notesToFilter) || !Array.isArray(referenceNotes)) {
         return notesToFilter;
     }
-    
+
     return notesToFilter.filter(note => noteArrayContains(referenceNotes, note));
 }
 
@@ -590,19 +590,19 @@ export {
     noteToMidi,
     noteToName,
     translateNotes,
-    
+
     // Scale context functions
     createScaleContext,
     setScaleContext,
     getScaleContext,
     clearScaleContext,
-    
+
     // Utility functions
     generateProperScale,
     stripOctave,
     addOctave,
     normalizeNote,
-    
+
     // Enharmonic matching functions
     areEnharmonicEquivalent,
     areArraysEnharmonicEquivalent,
@@ -610,15 +610,16 @@ export {
     matchEnharmonicSpelling,
     noteArrayContains,
     filterEnharmonicMatches,
-    
+
     // Enhanced functions
     midiToNoteWithScale,
     noteToMidiEnhanced,
-    
+
     // Constants
     SYMBOLS,
     CHROMATIC_SHARP,
     CHROMATIC_FLAT,
     NOTE_NAMES,
+    NOTE_TO_SEMITONE,
     SCALE_PATTERNS
 };

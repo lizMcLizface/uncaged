@@ -6,7 +6,8 @@
  * Can be used for chords, scales, or any collection of notes.
  */
 
-import { stripOctave as notationStripOctave } from '../../notation';
+import { stripOctave as notationStripOctave } from '../../theory/notation';
+import { getIntervalColor, getIntervalLabel } from '../../theory/intervals';
 
 // Configuration for mini piano appearance
 const MINI_PIANO_CONFIG = {
@@ -111,51 +112,15 @@ function normalizeNoteName(note) {
     return enharmonicMap[normalizedNote] || normalizedNote;
 }
 
-// Interval-color palette keyed by semitone distance from a reference root
-// (0-11). Mirrors the palette used throughout the Scale Position Grid
-// (frets.js's getIntervalColor) so a given scale tone reads as the same
-// color everywhere in the app - the scale piano, every chord piano, and
-// the fretboard all agree on what color "the b7" is.
-const INTERVAL_COLORS = [
-    '#ff4d4d', // R
-    '#ff8a3d', // b2
-    '#ffb347', // 2
-    '#ffd34f', // b3
-    '#d2f25f', // 3
-    '#8fdc5b', // 4
-    '#4dd6b8', // b5
-    '#45b6ff', // 5
-    '#5a88ff', // b6
-    '#7a6cff', // 6
-    '#a46cff', // b7
-    '#d26bff'  // 7
-];
+// Interval-color palette and label table moved to src/theory/intervals.js
+// (Phase 2) - imported above. Mirrors the palette used throughout the Scale
+// Position Grid (frets.js's getIntervalColor) so a given scale tone reads
+// as the same color everywhere in the app - the scale piano, every chord
+// piano, and the fretboard all agree on what color "the b7" is.
 
 const CHROMATIC_SEMITONES = {
     C: 0, 'C#': 1, D: 2, 'D#': 3, E: 4, F: 5, 'F#': 6, G: 7, 'G#': 8, A: 9, 'A#': 10, B: 11
 };
-
-/**
- * Color for a given interval, matching the Scale Position Grid's palette.
- * @param {number} semitone - Interval distance from the reference root (0-11)
- * @returns {string} Hex color
- */
-export function getIntervalColor(semitone) {
-    return INTERVAL_COLORS[((semitone % 12) + 12) % 12];
-}
-
-// Standard interval names by semitone distance, matching frets.js's
-// SEMITONE_TO_INTERVAL_LABEL so labels agree everywhere in the app.
-const INTERVAL_LABELS = ['R', 'm2', 'M2', 'm3', 'M3', 'P4', 'd5', 'P5', 'm6', 'M6', 'm7', 'M7'];
-
-/**
- * Standard interval name for a given semitone distance (0-11).
- * @param {number} semitone
- * @returns {string}
- */
-export function getIntervalLabel(semitone) {
-    return INTERVAL_LABELS[((semitone % 12) + 12) % 12];
-}
 
 /**
  * Semitone distance of a note from a reference root (both plain note names;

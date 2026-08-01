@@ -217,16 +217,103 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 
 | Folder / file | Owns | May import | Must not import it |
 |---|---|---|---|
-| `src/theory/` *(Phase 2, not yet created)* | Note names, intervals, scale/chord data, roman numeral parsing. No DOM. | nothing app-specific | everything else may import it |
+| `src/theory/` *(Phase 2)* | Note names, intervals, scale/chord data, roman numeral parsing. No DOM, with two documented exceptions below. | nothing app-specific, except `roman.js`'s one deliberate exception | everything else may import it |
 | `src/audio/` *(Phase 2b, not yet created)* | The shared `AudioContext`, master bus, clock, lookahead scheduler, note-event dispatch/channel registry. | `src/theory/`, `src/nodes/` | UI modules should depend on it, not the reverse |
 | `src/nodes/` | Framework-free Web Audio node wrappers (`Gain`, `Filter`, `Distortion`, …), a shared `.getNode()`/`.connect()` interface. | nothing app-specific | — |
 | `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` when Phase 3 splits `frets.js` — noted explicitly in `REFACTOR_PLAN.md` Phase 3 |
 | `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, fret geometry, marker/shape drawing, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content) | — |
-| `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing, progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
-| `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4, data half to `src/theory/`) | Scale selection state + persistence, scale/root-note tables. | theory | — |
+| `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
+| `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` once it exists | — |
 | `index.js` | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `frets.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). | — | — |
 | `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`. | — | — |
+
+### 6.1 `src/theory/`, as it actually landed (Phase 2, 2026-08-01)
+
+```
+src/theory/notes.js       CHROMATIC (canonical 12-note sharp array) + normalize
+                           + noteToMidi/noteToName, moved from src/midi.js.
+src/theory/notation.js    moved from src/notation.js (already framework-free).
+                           Its own, separate noteToMidi/noteToName/midiToNote -
+                           see the correction below for why these don't share
+                           notes.js's names.
+src/theory/chords.js      moved from src/intervals.js: chord-name parsing,
+                           interval derivation, note generation, chord
+                           matching (processChord, resolveChord, matchChord,
+                           identifySyntheticChords, ...).
+src/theory/intervals.js   INTERVAL_COLORS/INTERVAL_LABELS + getIntervalColor/
+                           getIntervalLabel - the semitone -> label/color
+                           table shared by the fretboard and every mini piano.
+src/theory/roman.js       roman-numeral parsing/resolution, lifted from
+                           progressionBuilder.js:549-1073.
+```
+
+**Two deliberate exceptions to "no app-specific imports":**
+
+- `src/theory/chords.js` imports `{ chords }` (the chord-suffix-list data)
+  from `../chords.js` — a DOM-heavy file, not a theory module.
+  `identifySyntheticChords` genuinely calls `matchChord(chord, chords, ...)`
+  against that data; it looked like dead code at first (shadowed everywhere
+  else by `matchChord`'s own `chords` parameter) but isn't. This import means
+  merely importing the chord engine also runs `chords.js`'s module-scope
+  `document.getElementById('chordPlaceholderContent')` — pre-existing
+  behavior (`src/intervals.js` already imported `chords.js` the same way,
+  a circular `chords.js` &lt;-&gt; `intervals.js` dependency that predates this
+  phase), not something Phase 2 introduced. A future phase that gives
+  `chords.js` a real module boundary (splitting its suffix-list data from
+  its DOM builders) removes this.
+- `src/theory/roman.js`'s `resolveRomanChord`/`resolveFallbackRomanChord`
+  import `getPrimaryScale`/`getPrimaryRootNote` from `../scaleGenerator.js`
+  (live scale-selection state) — required, not incidental: "which chord
+  does 'I' mean" depends on the currently selected scale. `useSeventhChords`
+  (progressionBuilder.js's triads-vs-sevenths toggle) is *not* imported the
+  same way — it's threaded through as an explicit parameter
+  (`resolveRomanChord(romanChord, useSeventhChords)`, default `false`) so
+  this module doesn't reach back into the file it was extracted from.
+
+### 6.2 Corrections to `REFACTOR_PLAN.md`'s Phase 2 bullet list
+
+Investigating the "20 duplicate arrays / duplicate helpers" inventory in
+`REFACTOR_PLAN.md` §2.2 while doing the move surfaced several pairs that are
+**not** safe drop-in duplicates, despite having matching or near-matching
+names. Each was left in place rather than merged, to keep this a
+restructuring-only phase:
+
+- **`midi.js`'s `noteToMidi`/`noteToName` vs `notation.js`'s** — same
+  argument shape (`"C#/4"`-style strings) but a *different MIDI-number
+  convention*: `midi.js`'s `noteToMidi('C/4') === 48`, `notation.js`'s
+  `noteToMidi('C/4') === 60` (standard MIDI, middle C). They already lived
+  side by side under different aliased names before this phase (e.g.
+  `frets.js` imports both, calling the second one `notationNoteToMidi`).
+  This is why there are **two** modules, `src/theory/notes.js` (midi.js's
+  pair, including its documented `noteToMidi`/`noteToName` asymmetry - see
+  `midi.test.js`) and `src/theory/notation.js` (notation.js's pair), instead
+  of the single `notes.js` the plan's bullet list originally sketched.
+- **`MiniPiano.js`'s `normalizeNoteName` vs `MiniStave.js`'s** — different
+  behavior, not just different code: MiniPiano's collapses enharmonics
+  (`Db` -> `C#`, `B#` -> `C`, lossy); MiniStave's only maps accidental
+  *symbols* to ASCII and explicitly preserves spelling (`Db` stays `Db`).
+  Left as two separate, un-consolidated functions.
+- **`MiniPiano.js`'s `extractOctave` vs `MiniStave.js`'s
+  `parseNoteWithOctave`** — different note formats (`"C#/5"` slash-form vs
+  `"C#4"` concatenated). Not merged.
+- **`MiniPiano.js`'s `getSemitoneFromRoot` vs `frets.js`'s
+  `getSemitoneFromReference`** — different algorithms (a local sharps-only
+  semitone lookup table vs a round-trip through `notation.js`'s MIDI
+  conversion, which understands flats). Only the *data* both were computing
+  a color/label from (`INTERVAL_COLORS`/`INTERVAL_LABELS`) was safe to
+  consolidate into `src/theory/intervals.js`; the semitone-computation
+  functions themselves were left alone.
+- **`src/scales.js` was not moved into `src/theory/`.** The plan's bullet
+  called it "existing scales.js, data only" - it isn't: ~550 lines of pure
+  scale data/functions plus ~60 lines of DOM-touching
+  `highlightKeysForScales`/`keys_chords`/`getElementByNote`/`getElementByMIDI`
+  at the bottom, mirroring `chords.js`'s split. Separating that pure half is
+  real work (updating every one of `scales.js`'s many importers to pull from
+  two modules instead of one) that belongs to Phase 4, which already plans
+  `src/scales/state.js` and already lists the data half moving to
+  `src/theory/` - this correction just makes that division point explicit
+  rather than something Phase 2 could do as a side effect.
 
 ---
 
