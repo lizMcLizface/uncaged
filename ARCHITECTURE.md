@@ -293,7 +293,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` when Phase 3 splits `frets.js` — noted explicitly in `REFACTOR_PLAN.md` Phase 3 |
 | `src/fretboard/state.js` *(Phase 3, in progress, landed 2026-08-01)* | The ~28 module-level `let`s `frets.js` used to hold directly - Scale Position Grid row anchors/tuning + its persisted display settings, the fretboard instance registry, chord/display state, chord-fingering tab state, and the scale-change debounce timestamps - plus `refreshScalePositionTuning()` and `persistScalePositionGridSettings()`. Exported as one mutable object, `fretboardState`, not bare `let`s - see §6.3 for why. | `theory/notation`, `tuning` | everything that used to read/write these as bare identifiers now imports `fretboardState` instead |
 | `src/fretboard/geometry.js` *(Phase 3, in progress, landed 2026-08-01)* | Pure fret-position and note-at-position math: `calculateFretPositions`, `calculateFretPosition`, `calculateNote`, `extractNoteName`, `extractOctave`, `getNoteAt`, `findNotePositions`. No DOM, no class instance - takes plain data (tuning array, fret count, fret-position table) in, plain data out. The `Fretboard` class keeps same-named methods that delegate to these (e.g. `calculateNote(a, b) { return geometryCalculateNote(a, b); }`), so its public API is unchanged. | `theory/notation` | — |
-| `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, marker/shape drawing, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. State and geometry math moved to `src/fretboard/state.js`/`geometry.js` (see above); the rest is still one file, pending the remaining Phase 3 steps. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), `src/fretboard/state.js`, `src/fretboard/geometry.js` | — |
+| `src/fretboard/markers.js` *(Phase 3, in progress, landed 2026-08-01)* | `createNoteShapeMarker` - builds one detached SVG shape element (circle/square/diamond/triangle/pentagon/hexagon/star/plus/cross) for a Scale Position Grid dot. Touches the DOM (`document.createElementNS`) but no app state - not framework-free the way `geometry.js` is, just state-free. | nothing app-specific | — |
+| `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. State, geometry math and marker drawing moved to `src/fretboard/state.js`/`geometry.js`/`markers.js` (see above); the rest is still one file, pending the remaining Phase 3 steps. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), `src/fretboard/state.js`, `src/fretboard/geometry.js`, `src/fretboard/markers.js` | — |
 | `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
@@ -442,6 +443,17 @@ Verified via `npm test` (28/28, including the Phase 0 `calculateNote`/
 `calculateChordPatternPositions` characterization tests, which exercise this
 module through the class delegates), `npm run build`, and a `run-app`
 screenshot pixel-identical to the pre-checkpoint baseline.
+
+### 6.5 `src/fretboard/markers.js` (Phase 3, third step, 2026-08-01)
+
+A single function, `createNoteShapeMarker`, moved verbatim - it was already
+self-contained (a position/size/shape-name in, one detached SVG element
+out; the only global it touches is `document`, to call
+`createElementNS`). Used by the Scale Position Grid's mini-fretboard
+renderer and legend, both still in `frets.js` pending the UI-builder split
+later in Phase 3. No behavior to preserve beyond "same switch statement,
+different file" - verified via `npm test` (28/28), `npm run build`, and a
+`run-app` screenshot pixel-identical to the pre-checkpoint baseline.
 
 ---
 

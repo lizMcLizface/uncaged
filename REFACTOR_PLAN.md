@@ -13,7 +13,7 @@ session finds its place without re-reading the codebase.
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
-| 3 — Split `frets.js` | in progress | this commit | Steps 1-2/8 landed: `src/fretboard/state.js` (the ~28 module-level `let`s + persistence, as one mutable `fretboardState` object - `ARCHITECTURE.md` §6.3) and `src/fretboard/geometry.js` (pure fret-position/note-at-position math, `ARCHITECTURE.md` §6.4). Remaining: markers, patterns, the `Fretboard` class, the three UI builders, the barrel. |
+| 3 — Split `frets.js` | in progress | this commit | Steps 1-3/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5, `createNoteShapeMarker`). Remaining: patterns, the `Fretboard` class, the three UI builders, the barrel. |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
@@ -456,6 +456,15 @@ now one-line delegates, the same shape the file already used for
 (28/28) and `npm run build` pass; a `run-app` screenshot came back
 pixel-identical to the pre-checkpoint baseline. Remaining steps: markers,
 patterns, the `Fretboard` class, the three UI builders, then the barrel.
+
+**Progress (2026-08-01), step 3/8 - `markers.js`:** landed as planned,
+verbatim - `createNoteShapeMarker` was already self-contained (position/
+size/shape-name in, one detached SVG element out), so this was a pure
+move, no delegation shim needed since it was already a standalone function,
+not a class method. Full detail in `ARCHITECTURE.md` §6.5. `npm test`
+(28/28) and `npm run build` pass; a `run-app` screenshot came back
+pixel-identical to the pre-checkpoint baseline. Remaining steps: patterns,
+the `Fretboard` class, the three UI builders, then the barrel.
 
 ### Phase 4 — Split the other two
 
