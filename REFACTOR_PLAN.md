@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 4/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js` landed (`ARCHITECTURE.md` §6.12-§6.15). Remaining: `scaleSync.js`, `fretboardDisplay.js`, the chord-card cluster, `progressionList.js`, `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | Step 5/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js` landed (`ARCHITECTURE.md` §6.12-§6.16). Remaining: `fretboardDisplay.js`, the chord-card cluster, `progressionList.js`, `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -794,6 +794,26 @@ chord card and confirmed the console log shows
 `getChordDisplayName` resolving correctly - zero console errors. Remaining
 steps: `scaleSync.js`, `fretboardDisplay.js`, the chord-card cluster,
 `progressionList.js`, `input.js`, `controls.js`, then the barrel.
+
+**Progress (2026-08-01), step 5 - `src/progression/scaleSync.js`:** landed
+- another contiguous block, straight cut-and-paste. Only
+`setupScaleChangeListener`/`initializeScaleNotesDisplay` have callers
+outside the block (both from `createChordProgressionUI`), so those two are
+exported; the other four stay private. Needed four cross-imports back into
+`progressionBuilder.js` (`precomputeAllPatternData`,
+`updateProgressionDisplay`, `displaySingleChordPattern`,
+`displayAllChordPatterns` - none had moved yet, so none were exported
+before this step). Full detail in `ARCHITECTURE.md` §6.16. `npm test`
+(28/28) and plain `npm run build` pass - 219 warnings, unchanged.
+Verification hit a false alarm worth remembering: the scale-notes display
+text looked stuck after a root-note change, but `git stash`-ing back to the
+pre-step commit reproduced the identical stuck text on unmodified code - a
+pre-existing display bug, not a regression from this move. Confirmed the
+actual logic instead: changing the root-note dropdown correctly re-resolved
+every Roman-numeral chord in a live progression and their mini-fretboard
+voicings (`I (Em)` -> `I (Am)` etc. when the root moved E -> A) - zero
+console errors. Remaining steps: `fretboardDisplay.js`, the chord-card
+cluster, `progressionList.js`, `input.js`, `controls.js`, then the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 
