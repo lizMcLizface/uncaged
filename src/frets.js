@@ -25,7 +25,6 @@ import {
     getActiveConfig as getActiveInstrumentConfig,
     setActiveConfig as setActiveInstrumentConfig,
     subscribe as subscribeToInstrumentChanges,
-    isStandardGuitarTuning,
     toSlashFormat as tuningToSlashFormat
 } from './tuning';
 import { fretboardState, refreshScalePositionTuning, persistScalePositionGridSettings } from './fretboard/state';
@@ -39,6 +38,11 @@ import {
     findNotePositions as geometryFindNotePositions
 } from './fretboard/geometry';
 import { createNoteShapeMarker } from './fretboard/markers';
+import {
+    calculateChordPatternPositions as patternsCalculateChordPatternPositions,
+    findChordPatternMatches as patternsFindChordPatternMatches,
+    findOptimalChordShape as patternsFindOptimalChordShape
+} from './fretboard/patterns';
 
 // Fallback tuning used only if no active instrument config is available yet.
 const GUITAR_TUNING = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'];
@@ -1168,57 +1172,7 @@ class Fretboard {
      * @returns {Array} Optimal positions for chord shape
      */
     findOptimalChordShape(positions, chordNotes) {
-        // Group positions by note
-        const positionsByNote = {};
-        positions.forEach(pos => {
-            if (!positionsByNote[pos.note]) {
-                positionsByNote[pos.note] = [];
-            }
-            positionsByNote[pos.note].push(pos);
-        });
-        
-        // Try to find a compact chord shape
-        const chordShape = [];
-        const usedStrings = new Set();
-        
-        // Prioritize positions in a reasonable fret range (3-7 frets)
-        for (let centerFret = 3; centerFret <= 12; centerFret++) {
-            const candidateShape = [];
-            const tempUsedStrings = new Set();
-            
-            chordNotes.forEach(note => {
-                const noteName = this.extractNoteName(note);
-                const notePositions = positionsByNote[noteName] || [];
-                
-                // Find closest position to centerFret on an unused string
-                const bestPos = notePositions
-                    .filter(pos => !tempUsedStrings.has(pos.string))
-                    .filter(pos => Math.abs(pos.fret - centerFret) <= 4)
-                    .sort((a, b) => Math.abs(a.fret - centerFret) - Math.abs(b.fret - centerFret))[0];
-                
-                if (bestPos) {
-                    candidateShape.push(bestPos);
-                    tempUsedStrings.add(bestPos.string);
-                }
-            });
-            
-            // If we found a good shape (at least 3 notes), use it
-            if (candidateShape.length >= Math.min(3, chordNotes.length)) {
-                return candidateShape.sort((a, b) => a.string - b.string);
-            }
-        }
-        
-        // Fallback: just take the first position of each note
-        chordNotes.forEach(note => {
-            const noteName = this.extractNoteName(note);
-            const notePositions = positionsByNote[noteName] || [];
-            if (notePositions.length > 0 && !usedStrings.has(notePositions[0].string)) {
-                chordShape.push(notePositions[0]);
-                usedStrings.add(notePositions[0].string);
-            }
-        });
-        
-        return chordShape.sort((a, b) => a.string - b.string);
+        return patternsFindOptimalChordShape(positions, chordNotes);
     }
     
     /**
@@ -1784,38 +1738,7 @@ class Fretboard {
      * @returns {Array|null} Array of {string, fret, interval, label} objects or null if invalid
      */
     calculateChordPatternPositions(pattern, rootFret) {
-        const positions = [];
-        
-        // Check if this pattern is restricted to open voicing
-        if (pattern.openVoicingOnly && pattern.fixedPosition !== undefined) {
-            if (rootFret !== pattern.fixedPosition) {
-                return null; // Pattern only works at fixed position
-            }
-        }
-        
-        // Check fret range constraints
-        if (rootFret < pattern.minFret || rootFret > pattern.maxFret) {
-            return null;
-        }
-        
-        // Calculate positions for each note in the pattern
-        for (const note of pattern.notes) {
-            const actualFret = rootFret + note.fretOffset;
-            
-            // Check if fret is valid (0-15 range)
-            if (actualFret < 0 || actualFret > this.fretCount) {
-                continue; // Skip invalid fret positions
-            }
-            
-            positions.push({
-                string: note.string,
-                fret: actualFret,
-                interval: note.interval,
-                label: note.label
-            });
-        }
-        
-        return positions.length > 0 ? positions : null;
+        return patternsCalculateChordPatternPositions(pattern, rootFret, this.fretCount);
     }
 
     /**
@@ -1826,101 +1749,7 @@ class Fretboard {
      * @returns {Array} Array of matching pattern results
      */
     findChordPatternMatches(chordNotes, rootNote, patternNames = null) {
-        // The canned chordPatterns.js shape library only encodes standard
-        // 6-string guitar tuning - for any other tuning/string count, skip
-        // straight to the dynamic best-effort grip fallback in the callers
-        // below rather than matching (and mis-fretting) the wrong shapes.
-        if (!isStandardGuitarTuning(this.tuning)) {
-            return [];
-        }
-
-        const patterns = getChordPatterns();
-        const matches = [];
-        
-        // Convert chord notes to a set for easy lookup, normalizing the notation
-        const chordNoteSet = new Set(chordNotes.map(note => normalizeNote(this.extractNoteName(note))));
-        
-        // Extract just the note name from the root note (remove octave)
-        const rootNoteName = this.extractNoteName(rootNote);
-        
-        // Check each pattern (or only specified patterns)
-        const patternsToCheck = patternNames ? 
-            patternNames.filter(name => patterns[name]).map(name => ({name, pattern: patterns[name]})) :
-            Object.entries(patterns).map(([name, pattern]) => ({name, pattern}));
-        
-        for (const {name, pattern} of patternsToCheck) {
-            // console.log(`Checking pattern: ${name} for root note: ${rootNoteName} (all octaves)`);
-            // Find ALL positions of the root note (all octaves) for this pattern
-            const rootPositions = this.findNotePositions(rootNoteName);
-            
-            for (const rootPos of rootPositions) {
-                // Only check positions on the pattern's root string
-                if (rootPos.string !== pattern.rootString) {
-                    // console.log(`Skipping pattern ${name} for root ${rootNoteName} at ${rootPos.string}:${rootPos.fret} - root string mismatch (expected string ${pattern.rootString})`);
-                    continue;
-                }
-                
-                // console.log(`Testing pattern ${name} with root ${rootNoteName} at string ${rootPos.string}, fret ${rootPos.fret}`);
-                
-                const positions = this.calculateChordPatternPositions(pattern, rootPos.fret);
-                if (!positions) {
-                    // console.log(`Skipping pattern ${name} for root ${rootNoteName} at fret ${rootPos.fret} - invalid positions`);
-                    continue;
-                }
-                
-                // Check if all pattern notes match the chord
-                let isValidMatch = true;
-                const patternNotes = [];
-                
-                for (const pos of positions) {
-                    const noteAtPosition = this.getNoteAt(pos.string, pos.fret);
-                    if (noteAtPosition) {
-                        // console.log(`Found note ${noteAtPosition} at position ${pos.string}:${pos.fret}`);
-                        const noteName = normalizeNote(this.extractNoteName(noteAtPosition));
-                        patternNotes.push(noteName);
-                        
-                        // Check if this note is in the chord using enharmonic matching
-                        if (!noteArrayContains(Array.from(chordNoteSet), noteName)) {
-                            isValidMatch = false;
-                            // console.log(`Pattern ${name} for root ${rootNoteName} at fret ${rootPos.fret} - note ${noteName} not in chord [${Array.from(chordNoteSet).join(', ')}]`);
-                            break;
-                        }
-                    } else {
-                        // console.log(`Pattern ${name} - no note found at string ${pos.string}, fret ${pos.fret}`);
-                        isValidMatch = false;
-                        break;
-                    }
-                }
-                
-                if (isValidMatch && patternNotes.length > 0) {
-                    // Additional check: ensure all chord notes are represented in the pattern using enharmonic matching
-                    const chordNotesArray = Array.from(chordNoteSet);
-                    const allChordNotesPresent = chordNotesArray.every(chordNote => 
-                        noteArrayContains(patternNotes, chordNote)
-                    );
-
-
-                    if (allChordNotesPresent) {
-                    console.log(`Pattern ${name} for root ${rootNoteName} at fret ${rootPos.fret} - ${allChordNotesPresent ? 'VALID MATCH' : 'REJECTED'}`);
-                    console.log(`  Pattern details: ${JSON.stringify(pattern)}`);
-                    console.log(`  Pattern notes: ${patternNotes.join(', ')}`);
-                    console.log(`  Chord notes: ${Array.from(chordNoteSet).join(', ')}`);
-                    matches.push({
-                        patternName: name,
-                        pattern: pattern,
-                        rootPosition: rootPos,
-                        positions: positions,
-                            patternNotes: patternNotes
-                        });
-                        // console.log(`Pattern ${name} for root ${rootNoteName} at fret ${rootPos.fret} - VALID MATCH (all chord notes present)`);
-                    } else {
-                        // console.log(`Pattern ${name} for root ${rootNoteName} at fret ${rootPos.fret} - REJECTED (missing chord notes: ${Array.from(chordNoteSet).filter(note => !patternNoteSet.has(note)).join(', ')})`);
-                    }
-                }
-            }
-        }
-        
-        return matches;
+        return patternsFindChordPatternMatches(this.tuning, this.fretCount, chordNotes, rootNote, patternNames);
     }
 
     /**

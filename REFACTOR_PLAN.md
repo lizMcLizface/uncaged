@@ -13,7 +13,7 @@ session finds its place without re-reading the codebase.
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
-| 3 — Split `frets.js` | in progress | this commit | Steps 1-3/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5, `createNoteShapeMarker`). Remaining: patterns, the `Fretboard` class, the three UI builders, the barrel. |
+| 3 — Split `frets.js` | in progress | this commit | Steps 1-4/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6, CAGED matching + fingering-shape scoring). Remaining: the `Fretboard` class, the three UI builders, the barrel. |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
@@ -465,6 +465,21 @@ not a class method. Full detail in `ARCHITECTURE.md` §6.5. `npm test`
 (28/28) and `npm run build` pass; a `run-app` screenshot came back
 pixel-identical to the pre-checkpoint baseline. Remaining steps: patterns,
 the `Fretboard` class, the three UI builders, then the barrel.
+
+**Progress (2026-08-01), step 4/8 - `patterns.js`:** landed as planned.
+`calculateChordPatternPositions`, `findChordPatternMatches` and
+`findOptimalChordShape` became parameterized pure functions (tuning/
+fretCount passed in, geometry.js called directly); the class keeps
+one-line delegates for all three, same shape as the geometry.js/markers.js
+steps. `displayChordWithPatterns`/`showAllChordPatterns` stayed put - they
+call `this.clearMarkers()`/`this.drawChordShape()`, real DOM writes, so
+they're display logic, not pattern matching. One unused import
+(`isStandardGuitarTuning`) fell out of `frets.js` as a result and was
+removed rather than left to warn. Full detail in `ARCHITECTURE.md` §6.6.
+`npm test` (28/28, including the two most specific Phase 0 characterization
+tests) and `npm run build` pass; zero console errors on a `run-app` load
+check. Remaining steps: the `Fretboard` class, the three UI builders, then
+the barrel.
 
 ### Phase 4 — Split the other two
 

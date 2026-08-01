@@ -294,7 +294,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/fretboard/state.js` *(Phase 3, in progress, landed 2026-08-01)* | The ~28 module-level `let`s `frets.js` used to hold directly - Scale Position Grid row anchors/tuning + its persisted display settings, the fretboard instance registry, chord/display state, chord-fingering tab state, and the scale-change debounce timestamps - plus `refreshScalePositionTuning()` and `persistScalePositionGridSettings()`. Exported as one mutable object, `fretboardState`, not bare `let`s - see §6.3 for why. | `theory/notation`, `tuning` | everything that used to read/write these as bare identifiers now imports `fretboardState` instead |
 | `src/fretboard/geometry.js` *(Phase 3, in progress, landed 2026-08-01)* | Pure fret-position and note-at-position math: `calculateFretPositions`, `calculateFretPosition`, `calculateNote`, `extractNoteName`, `extractOctave`, `getNoteAt`, `findNotePositions`. No DOM, no class instance - takes plain data (tuning array, fret count, fret-position table) in, plain data out. The `Fretboard` class keeps same-named methods that delegate to these (e.g. `calculateNote(a, b) { return geometryCalculateNote(a, b); }`), so its public API is unchanged. | `theory/notation` | — |
 | `src/fretboard/markers.js` *(Phase 3, in progress, landed 2026-08-01)* | `createNoteShapeMarker` - builds one detached SVG shape element (circle/square/diamond/triangle/pentagon/hexagon/star/plus/cross) for a Scale Position Grid dot. Touches the DOM (`document.createElementNS`) but no app state - not framework-free the way `geometry.js` is, just state-free. | nothing app-specific | — |
-| `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class, CAGED pattern matching, the fretboard control panels, scale position grid, chord grid. State, geometry math and marker drawing moved to `src/fretboard/state.js`/`geometry.js`/`markers.js` (see above); the rest is still one file, pending the remaining Phase 3 steps. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), `src/fretboard/state.js`, `src/fretboard/geometry.js`, `src/fretboard/markers.js` | — |
+| `src/fretboard/patterns.js` *(Phase 3, in progress, landed 2026-08-01)* | CAGED chord-pattern matching and generic fingering-shape scoring: `calculateChordPatternPositions`, `findChordPatternMatches`, `findOptimalChordShape`. Takes tuning/fretCount as parameters instead of reading `this.*`; calls `geometry.js`'s functions directly. Not framework-free - depends on `chordPatterns.js`'s canned shape library and `tuning.js`'s `isStandardGuitarTuning`. The `Fretboard` class keeps same-named delegate methods, matching the Phase 0 characterization tests that call them as instance methods. | `chordPatterns.js`, `tuning.js`, `theory/notation`, `src/fretboard/geometry.js` | — |
+| `frets.js` (→ `src/fretboard/` in Phase 3) | The `Fretboard` class (now delegating its geometry/marker/pattern methods), the fretboard control panels, scale position grid, chord grid - the DOM-touching display logic (`displayChordWithPatterns`, `showAllChordPatterns` and friends) that calls into the pattern-matching above. State, geometry math, marker drawing and pattern matching moved to `src/fretboard/state.js`/`geometry.js`/`markers.js`/`patterns.js` (see above); the rest is still one file, pending the remaining Phase 3 steps. | theory, `chordFingering`/`chordPatterns`, `progressionBuilder.js` (for the Chord Progression tab content), `src/fretboard/state.js`, `src/fretboard/geometry.js`, `src/fretboard/markers.js`, `src/fretboard/patterns.js` | — |
 | `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
@@ -454,6 +455,40 @@ renderer and legend, both still in `frets.js` pending the UI-builder split
 later in Phase 3. No behavior to preserve beyond "same switch statement,
 different file" - verified via `npm test` (28/28), `npm run build`, and a
 `run-app` screenshot pixel-identical to the pre-checkpoint baseline.
+
+### 6.6 `src/fretboard/patterns.js` (Phase 3, fourth step, 2026-08-01)
+
+Three methods moved: `calculateChordPatternPositions` (only touched
+`this.fretCount`), `findOptimalChordShape` (only touched
+`this.extractNoteName`, itself already a geometry.js delegate by this
+point), and `findChordPatternMatches` (the largest - touched `this.tuning`,
+plus `this.extractNoteName`/`this.findNotePositions`/
+`this.calculateChordPatternPositions`/`this.getNoteAt`, all either plain
+data or other now-pure delegates). All three became parameterized pure
+functions calling `geometry.js` directly rather than routing back through
+`this`; the class keeps three one-line delegate methods, same shape as the
+geometry.js and markers.js steps.
+
+**Left in place, deliberately:** `displayChordWithPatterns` and
+`showAllChordPatterns` call `this.clearMarkers()`/`this.drawChordShape()` -
+real DOM writes - so they stay Fretboard class methods, not pattern-matching
+logic. `getPatternsByChordType` was already a one-line pass-through to
+`chordPatterns.js`'s function of the same name; there was nothing to
+extract, so it's untouched.
+
+One dead import fell out of this move: `isStandardGuitarTuning` (from
+`tuning.js`) was only ever called inside `findChordPatternMatches`, so
+`frets.js`'s import of it was removed rather than left to trip
+`no-unused-vars` - `patterns.js` imports it directly instead.
+
+Verified via `npm test` (28/28 - `findChordPatternMatches`/
+`calculateChordPatternPositions` are exactly the two Phase 0 characterization
+tests with the most specific assertions, checking exact match counts and
+position data, not just "doesn't crash"), `npm run build`, and a `run-app`
+check (zero console errors on load; interactive chord-button clicks weren't
+screenshotted this round - the characterization tests already assert exact
+structured output for this module, which is stronger coverage than a visual
+diff would add here).
 
 ---
 
