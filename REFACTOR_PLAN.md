@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | not started | — | |
+| 4 — Split progression + scales | in progress | this commit | Step 1/? - `src/progression/state.js` landed (`ARCHITECTURE.md` §6.12). Remaining: `parse.js`, `share.js`, the `ui/*.js` split, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -670,6 +670,26 @@ src/scales/index.js           barrel
 
 `progressionBuilder.js`'s first ~1,200 lines are already cleanly
 separable from its DOM half — start there.
+
+**Progress (2026-08-01), step 1 - `src/progression/state.js`:** landed as
+planned, with the addition of a `state.js` the plan's own sketch didn't
+list - not needed to spell out for `src/fretboard/`, but `progressionBuilder.js`
+turned out to have the same shape `frets.js` did: ~15 module-level `let`s
+most of the file's functions close over, several of them fully reassigned
+(not just mutated-in-place) elsewhere, so the same `fretboardState`-style
+mutable-object pattern applied - `progressionState`, one object, every bare
+read/write site rewritten to `progressionState.<name>`. Full detail,
+including two things this step's verification caught (a live external
+dependency on `window.currentProgression`/`progressionState.currentProgression`
+sharing one array identity for `PolySynth.jsx`'s in-place mutation, and a
+spread-syntax false-negative in the mechanical rename pass caught by
+`npm run build`, not silently), in `ARCHITECTURE.md` §6.12. `npm test`
+(28/28) and plain `npm run build` pass (219 warnings, unchanged - only line
+numbers shifted); verified via the `run-app` skill including actually
+typing a progression and toggling two of the migrated state fields
+(`showMiniPianos`, `useSeventhChords`) to confirm they drive re-render
+end-to-end, not just at parse time - zero console errors. Remaining steps:
+`parse.js`, `share.js`, the `ui/*.js` split, then the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 

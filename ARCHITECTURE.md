@@ -301,7 +301,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/fretboard/ui/chordGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Chord Pattern Grid (12-note x 12-chord-type button table, color coded for scale compatibility) and the chord-fingering-shape pipeline it shares with the Roman-numeral chord display: matching `chordPatterns.js` shapes to a chord, a "best-effort" fallback grip, the position-picker tab bar, and the scale/chord-interval math (`getSemitoneFromReference`, `getScaleIntervalEntries`, `deriveChordSuffix`, `getScaleDescriptor`) that both this grid and `src/fretboard/ui/scalePositionGrid.js` depend on. See §6.9. | theory, `scales.js`, `scaleGenerator.js`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), and (cross-import, see §6.9) glue functions from `frets.js` | must not import `src/fretboard/ui/scalePositionGrid.js` (the dependency runs one way - see §6.10) |
 | `src/fretboard/ui/scalePositionGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Scale Position Grid tab: one movable mini-fretboard pattern per (root string x scale degree) cell, the Focus Selector visibility matrix, and the per-cell rendering options (pattern/dot size, fret-label mode, note shapes, chord-name headers, etc.) on `fretboardState`. See §6.10. | theory, `scaleGenerator.js`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`FRET_COUNT`), `src/fretboard/markers`, `src/fretboard/ui/chordGrid` | — |
 | `src/fretboard/index.js` *(Phase 3, done 2026-08-01 - `frets.js` deleted)* | The public barrel for `src/fretboard/`: `initializeFretboard`, chord display/search/pattern glue functions, `playChordVoicing`/`getChordVoicingNotes`, the `CHORD_TYPE_TO_PATTERN_TYPE` map, and the re-exports that make this folder's surface a single import. Everything else that used to live in `src/frets.js` moved to `state.js`/`geometry.js`/`markers.js`/`patterns.js`/`Fretboard.js`/`ui/controls.js`/`ui/chordGrid.js`/`ui/scalePositionGrid.js` across this phase's earlier steps (see §6.3-6.10); this file is what remained plus the barrel role. See §6.11. | theory, `chordFingering`/`chordPatterns`, `../chords.js`, `../progressionBuilder.js` (for the Chord Progression tab content), all of `src/fretboard/*` above, `./ui/controls.js` (for `createFretboardControls`), `./ui/chordGrid.js` (for the fingering-shape pipeline the glue functions call) | — (two-way with `../chords.js` and with `./ui/controls.js`/`./ui/chordGrid.js` - see §6.11) |
-| `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
+| `src/progression/state.js` *(Phase 4, first step, landed 2026-08-01)* | The ~15 module-level `let`s `progressionBuilder.js` used to hold directly - current progression array, hovered/selected-pattern-index tracking, mini-fretboard/piano/stave display toggles, seventh-chords toggle, input-parse caches and debounce timer - plus `INPUT_DEBOUNCE_DELAY`/`CHORD_LINE_CONFIG`/`MINI_FRETBOARD_CONFIG`. Exported as one mutable object, `progressionState` (config constants as plain exports alongside it) - see §6.12 for why. | `tuning.js` | everything that used to read/write these as bare identifiers now imports `progressionState` instead |
+| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`), `src/progression/state.js` | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
@@ -931,6 +932,92 @@ no longer exists; its contents are `src/fretboard/state.js`, `geometry.js`,
 Every external consumer imports the folder as a unit via `from
 './fretboard'`. Phase 4 (splitting `progressionBuilder.js` and
 `scaleGenerator.js`/`scales.js`) is next per `REFACTOR_PLAN.md`.
+
+### 6.12 `src/progression/state.js` (Phase 4, first step, 2026-08-01)
+
+Same treatment as `src/fretboard/state.js` (§6.3), and for the same reason:
+`progressionBuilder.js` held ~15 module-level `let`s that most of its
+functions close over, some of them fully *reassigned* (not just
+mutated-in-place) elsewhere in the file - e.g. `currentProgression =
+resolvedProgression` in `updateProgression()`, `precomputedPatternData =
+newPatternData` in `updateProgressionIncremental()` - which a bare ES module
+export can't support for importers, so they're all fields on one exported
+mutable object, `progressionState`, not individual `let`s. Every read/write
+site in `progressionBuilder.js` was rewritten from a bare identifier to
+`progressionState.<name>`. Three configuration constants that are only ever
+property-mutated, never reassigned wholesale (`INPUT_DEBOUNCE_DELAY`,
+`CHORD_LINE_CONFIG`, `MINI_FRETBOARD_CONFIG`), moved alongside as plain
+named exports rather than fields on the object - the same distinction
+`src/fretboard/state.js` draws for its own persistence-key constant.
+
+Two things this step's verification caught, worth flagging for whoever does
+the remaining Phase 4 steps:
+
+- **A live external dependency on the wrapper array's identity.**
+  `window.currentProgression = currentProgression` (a manual snapshot, not a
+  live binding) is read by `PolySynth.jsx`, which in one place
+  (`PolySynth.jsx:2014-2016`) mutates it **in place**
+  (`window.currentProgression.length = 0; window.currentProgression.push(...)`).
+  That only stays correct if `window.currentProgression` and
+  `progressionState.currentProgression` are the *same array object* at every
+  point PolySynth might run. `progressionBuilder.js` already re-pointed
+  `window.currentProgression` by hand after every full reassignment (in
+  `updateProgression()` and `clearProgression()`); that manual re-sync is
+  unchanged, just now reading `progressionState.currentProgression` instead
+  of a bare identifier. Migrating this to a real live reference (so the
+  manual re-sync can be deleted) is Phase 5's job, not this one's.
+- **A naive "not preceded by `.`" rename rule has a false-negative on spread
+  syntax.** `[...currentProgression]` has a `.` immediately before the
+  identifier (the last of the three spread dots), which is
+  indistinguishable from property access to a simple regex lookbehind - one
+  site (`updateProgressionIncremental()`) was missed by the mechanical pass
+  for exactly this reason and caught by `npm run build`'s `no-undef` check,
+  not silently. Grep `\.\.\.<name>\b` in addition to `\.` + `<name>`
+  before trusting a bulk rename is complete, for future phases doing the
+  same kind of rewrite in `scaleGenerator.js`.
+
+One more disambiguation this step depended on: `buildShareableState()` /
+`decodeStateFromURLParams()` / `applySharedState()` build and read a
+*local* `state` object with field names that coincidentally match four
+`progressionState` fields (`showMiniFretboards`, `showFretboardIntervals`,
+`showMiniPianos`, `useSeventhChords`) - e.g.
+`showMiniFretboards: showMiniFretboards` is an object-literal key (left,
+unchanged) next to a `progressionState` read (right, renamed), and
+`state.showMiniFretboards` (property access on the *unrelated* local
+`state`) must never be confused with `progressionState.showMiniFretboards`.
+Both objects happen to share these four names because the URL-share format
+mirrors the toggle state it serializes, not because they're the same
+object - full detail in `progressionBuilder.js`'s `buildShareableState`/
+`applySharedState` functions themselves.
+
+`currentProgression` and `selectedPatternIndexes` were also removed from
+`progressionBuilder.js`'s tail `export { ... }` block - both are exported
+today but grepping the whole of `src` for `from '../progressionBuilder'` /
+`from './progressionBuilder'` (besides the one test-file comment) turned up
+zero importers of either name; `src/fretboard/ui/controls.js` is the file's
+only real external importer, and it only ever imports
+`createChordProgressionUI`/`loadSharedStateFromURL`. Dead exports, not
+live traffic - consistent with the other dead-code corrections this plan has
+already made in Phase 1/2 (§7 below).
+
+`npm test` (28/28) and plain `npm run build` pass - total warning count
+unchanged at 219, the three warnings that live inside `progressionBuilder.js`
+shifted line numbers only (the file is ~45 lines shorter after the
+declaration block moved out), confirmed via `scripts/check-build.sh`'s diff
+before updating the baseline. Verified via the `run-app` skill: default
+load and the Chord Progression tab render identically to the Phase 3
+baseline; typing `I IV V vi` into the progression input correctly parses
+and resolves the roman-numeral chords against the active scale (exercising
+`parseProgressionInput`/`precomputePatternData`/`resolveRomanChord` reading
+and writing `progressionState`); toggling "Show Mini Pianos" and "Use
+Seventh Chords" correctly re-rendered mini pianos and switched every chord
+from a triad to its seventh (Em -> Em7, Am -> Am7, ...), which exercises
+`progressionState.showMiniPianos`/`progressionState.useSeventhChords`
+end-to-end, not just at parse time. Zero console errors in all of the
+above. Remaining Phase 4 work for `progressionBuilder.js`: `parse.js`,
+`share.js`, the `ui/*.js` split, then the barrel - see
+`REFACTOR_PLAN.md`'s Phase 4 section for the current plan. `scaleGenerator.js`
+/ `scales.js` -> `src/scales/` is a separate checkpoint after that.
 
 ---
 
