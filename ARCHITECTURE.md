@@ -225,18 +225,30 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `progressionBuilder.js` (→ `src/progression/` in Phase 4) | Chord/roman token parsing, progression UI, URL share encode/decode. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`) | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4, data half to `src/theory/`) | Scale selection state + persistence, scale/root-note tables. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` once it exists | — |
-| `index.js` | Currently: keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount. 5,777 lines, 243 live (Phase 1 target: strip the rest). | — | — |
+| `index.js` | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `frets.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). | — | — |
 | `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`. | — | — |
 
 ---
 
 ## 7. Known-dead code (context for Phase 1)
 
-Beyond `REFACTOR_PLAN.md` §2.5's list (`App_new.js`, `App_backup.js`,
-`chord-examples.js`, `metronome-example.js`, `util/dutyCycleDemo.js`,
-`components/RouteHelper.js`, the empty `src/polysynthFull/` tree,
-`Untitled-1.ipynb`, the `util.js`/`util/util.js` duplication): **add
-`src/staves.js`** (173 lines) — imported by nothing; its only reference is a
-commented-out `// import './staves';` in `index.js:17`. Confirmed via
-`grep` for any live import path, 2026-08-01. See §5.3 above for why this
-matters beyond line count.
+**Removed in Phase 1 (2026-08-01):** everything `REFACTOR_PLAN.md` §2.5
+listed - `App_new.js`, `App_backup.js`, `chord-examples.js`,
+`metronome-example.js`, `util/dutyCycleDemo.js`, `components/RouteHelper.js`,
+`staves.js` (173 lines, imported by nothing - its only reference was a
+commented-out `// import './staves';` in `index.js:17`), the empty
+`src/polysynthFull/` tree, and `Untitled-1.ipynb`. Also removed:
+`src/util.js`, which turned out to have zero importers anywhere in `src` -
+`src/util/util.js` was already a superset (same `minTime`, `clamp`,
+`getNoteInfo`, `WAVEFORM`, `FILTER`, `REVERB`, plus `NOISE`,
+`ENVELOPE_SHAPE`, `generateEnvelopeCurve` that `src/util.js` never had) with
+four live importers (`nodes/gain.js`, `components/Knob/Knob.jsx`,
+`components/MonoSynth/MonoSynth.js`, `components/PolySynth/PolySynth.jsx`),
+so this was a straight deletion rather than a merge. `index.js` dropped from
+5,777 to 281 lines - see the module ownership map above and
+`REFACTOR_PLAN.md`'s Phase 1 result note for what stayed and why.
+
+Confirmed still true and not yet acted on: nothing else in this list has
+turned up since. If a later phase finds another orphan module, add it here
+before deleting it, the same way this section tracked the Phase 0 finds
+until Phase 1 cleared them.

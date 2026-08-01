@@ -9,8 +9,8 @@ session finds its place without re-reading the codebase.
 
 | Phase | State | Commit | Notes |
 |---|---|---|---|
-| 0 — Safety net | done | this commit | `npm test` fixed (App.test.js + 4 new characterization test files, 28 tests); ARCHITECTURE.md seeded; baseline screenshots in `docs/baseline-screenshots/`; playwright added as devDependency |
-| 1 — Delete | not started | — | |
+| 0 — Safety net | done | `07a8b12` | `npm test` fixed (App.test.js + 4 new characterization test files, 28 tests); ARCHITECTURE.md seeded; baseline screenshots in `docs/baseline-screenshots/`; playwright added as devDependency |
+| 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | not started | — | |
 | 2b — `src/audio/` | not started | — | |
 | 3 — Split `frets.js` | not started | — | |
@@ -238,6 +238,19 @@ Mechanical, near-zero risk. Git history preserves everything.
 
 Expected: ~10,000 lines gone, zero functional change. Verify against
 Phase 0 screenshots.
+
+**Result (2026-08-01):** `index.js` landed at 281 lines - every live
+(uncommented) statement was kept as-is, in its original relative order,
+including a few pieces of live-but-inert leftover cruft (a handful of
+now-pointless empty function stubs, an unused destructure, a literally
+duplicated `reportWebVitals()` boilerplate call) that a stricter dead-code
+pass could still remove later; none of it is behavior-visible today, so it
+was left alone rather than turning a comment-stripping phase into a
+judgment-call phase. Step 5 turned out to be pure deletion, not a merge:
+`src/util.js` had zero importers anywhere in `src`, while `src/util/util.js`
+already contained everything in it plus more (NOISE, ENVELOPE_SHAPE,
+generateEnvelopeCurve, extra WAVEFORM entries) and already had four live
+importers. No importer updates were needed.
 
 ### Phase 2 — Extract `src/theory/`
 
