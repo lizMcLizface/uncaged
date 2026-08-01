@@ -13,7 +13,7 @@ session finds its place without re-reading the codebase.
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
-| 3 — Split `frets.js` | in progress | this commit | Steps 1-7/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7, the class itself), `ui/controls.js` (§6.8, top bar/tab shell/hotkey footer/"Other Controls" panel), `ui/chordGrid.js` (§6.9, Chord Pattern Grid + fingering-shape pipeline). Remaining: scale position grid, the barrel. |
+| 3 — Split `frets.js` | in progress | this commit | Steps 1-8/8 landed: `src/fretboard/state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7, the class itself), `ui/controls.js` (§6.8, top bar/tab shell/hotkey footer/"Other Controls" panel), `ui/chordGrid.js` (§6.9, Chord Pattern Grid + fingering-shape pipeline), `ui/scalePositionGrid.js` (§6.10, Scale Position Grid). `frets.js` is now pure glue. Remaining: the barrel (`src/fretboard/index.js`). |
 | 4 — Split progression + scales | not started | — | |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
@@ -553,6 +553,37 @@ tab, the Scale Information tab where the Chord Pattern Grid actually lives,
 and a hover+click on a grid cell to exercise the cross-imported glue) show
 zero console errors and correct rendering. Remaining steps: scale position
 grid, then the barrel.
+
+**Progress (2026-08-01), step 8/8 - `src/fretboard/ui/scalePositionGrid.js`:**
+landed as twenty functions plus six config constants, already contiguous in
+`frets.js` unlike the chord-grid group, so this was mechanical. Not
+independent of `chordGrid.js` the way steps 1-6 were independent of each
+other: `createScalePositionMiniFretboard`/`renderScalePositionGrid` call
+six functions and one constant from `chordGrid.js`, a dependency `frets.js`
+was carrying on its behalf since step 7 - one-directional, not a new cycle.
+`controls.js` was repointed to import `createScalePositionGrid`/
+`renderScalePositionGrid` from `./scalePositionGrid` directly instead of
+cross-importing through `frets.js`, the same treatment step 7 gave
+`chordGrid.js`'s three names; `frets.js`'s temporary cross-import block is
+now down to exactly the glue `chordGrid.js`/`controls.js` still need back.
+Seventeen now-unused imports fell out of `frets.js` as a result and were
+removed rather than left to warn (`FRET_COUNT`, `getIntervalColor`,
+`noteArrayContains`, `areEnharmonicEquivalent`, two `notation.js` aliases,
+`normalizeNote`, `assignFingers`, `selectGripFromPositions`,
+`createNoteShapeMarker`, plus seven chord-grid-only names and
+`createScalePositionGrid` itself that a first build pass surfaced were no
+longer called anywhere in `frets.js`). Full detail in `ARCHITECTURE.md`
+§6.10. `npm test` (28/28) and plain `npm run build` pass - total warning
+count unchanged at 219; `scalePositionGrid.js` carries exactly the four
+warnings that moved with its code verbatim (one pre-existing unused const,
+three pre-existing `eqeqeq`), `frets.js` down to its two remaining
+pre-existing ones, zero new warnings anywhere. `run-app` screenshots
+(default load / Scale Position Grid tab - pixel-identical to every prior
+checkpoint, a Pattern Size slider drag to confirm the re-render path, and
+the Scale Information tab's Chord Pattern Grid to confirm `chordGrid.js` is
+unaffected) show zero console errors. This closes Phase 3's
+function-extraction work - `frets.js` is now pure glue. Remaining: the
+barrel (`src/fretboard/index.js`).
 
 ### Phase 4 — Split the other two
 
