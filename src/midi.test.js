@@ -1,8 +1,10 @@
-import { noteToMidi, noteToName } from './midi';
+import { noteToMidi, noteToName } from './theory/notes';
 
 // Characterization tests written ahead of REFACTOR_PLAN.md Phase 2, which
-// relocates these into src/theory/notes.js. They pin today's behavior so
-// the move can be verified byte-for-byte, not a spec of correct behavior.
+// relocated these into src/theory/notes.js (done - this import was updated
+// from './midi' as part of that move; midi.js re-exports the same bindings
+// unchanged for its own importers). They pin today's behavior so the move
+// can be verified byte-for-byte, not a spec of correct behavior.
 
 describe('noteToMidi', () => {
   test('natural notes', () => {

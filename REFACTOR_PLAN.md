@@ -11,7 +11,7 @@ session finds its place without re-reading the codebase.
 |---|---|---|---|
 | 0 — Safety net | done | `07a8b12` | `npm test` fixed (App.test.js + 4 new characterization test files, 28 tests); ARCHITECTURE.md seeded; baseline screenshots in `docs/baseline-screenshots/`; playwright added as devDependency |
 | 1 — Delete | done | this commit | `index.js` 5,777 → 281 lines (stripped commented-out blocks only, no live statements removed); 7 orphan modules + empty `polysynthFull/` tree + `Untitled-1.ipynb` deleted; `src/util.js` deleted (zero importers - `src/util/util.js` was already the live superset, no merge needed) |
-| 2 — `src/theory/` | not started | — | |
+| 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` | not started | — | |
 | 3 — Split `frets.js` | not started | — | |
 | 4 — Split progression + scales | not started | — | |
@@ -273,6 +273,49 @@ imports. Phase 0's tests cover this directly.
 This phase is what makes 3–5 tractable: every large file currently carries
 its own theory tail, and those tails are most of what makes the files look
 unrelated to each other.
+
+**Result (2026-08-01):** landed as five modules instead of four -
+`notes.js`, `notation.js`, `chords.js`, `intervals.js`, `roman.js` - and
+`scales.js` was deliberately **not** moved. Both deviations came from
+verifying rather than assuming the "duplicate" characterizations in §2.2:
+several pairs that share a name (`midi.js`/`notation.js`'s
+`noteToMidi`/`noteToName`; `MiniPiano.js`/`MiniStave.js`'s
+`normalizeNoteName`; `MiniPiano.js`'s `extractOctave` vs `MiniStave.js`'s
+`parseNoteWithOctave`; `MiniPiano.js`'s `getSemitoneFromRoot` vs `frets.js`'s
+`getSemitoneFromReference`) turned out to have different behavior, not just
+different code, so merging them would have been a behavior change disguised
+as a refactor. They were left in place, unmerged - full detail, including
+why `scales.js` stays split between data and DOM (mirroring `chords.js`) and
+why that split is Phase 4's job, is in `ARCHITECTURE.md` §6.1/§6.2.
+
+What *did* land: the verified-identical pieces - the 12-note chromatic array
+(all 20 copies), the natural-note semitone map (6 internal copies inside
+`notation.js` alone, plus `tuning.js`'s), `normalizeNote2`/`normalizeNote`'s
+shared body, and the interval-color/label tables duplicated between
+`MiniPiano.js` and `frets.js` - are now single sources of truth. Roman
+numeral parsing/resolution moved to `roman.js` with one signature change:
+`resolveRomanChord`/`resolveFallbackRomanChord` take `useSeventhChords` as
+an explicit parameter (default `false`) instead of closing over
+`progressionBuilder.js`'s module-level toggle, so the new module doesn't
+import back into the file it came from; all three call sites were updated
+to pass it explicitly, and the Phase 0 characterization test's one-argument
+call keeps passing unchanged against the parameter default. Two `Fixed a
+latent bug while moving code` items ended up being "confirmed pre-existing,
+not introduced here" instead: `src/intervals.js` (now `theory/chords.js`)
+already had a load-bearing import of `chords.js`'s DOM-heavy suffix-list
+data (it looked dead - shadowed everywhere else by `matchChord`'s own
+`chords` parameter - until deleting it broke `identifySyntheticChords`),
+and `scales.js` &lt;-&gt; `intervals.js` already had a circular import before this
+phase; both were kept exactly as they were, not "fixed," since fixing
+either is a real behavior-neutral refactor of `chords.js`/`scales.js`
+themselves, out of scope for a phase whose file wasn't `chords.js` or
+`scales.js`. `npm test` (28/28) and `npm run build` pass; verified visually
+against the Phase 0 baseline screenshots via the `run-app` skill, plus a
+same-harness A/B screenshot comparison against the pre-Phase-2 commit to
+rule out a rendering difference the first comparison surfaced (it turned
+out to be pre-existing Playwright-timing flakiness in this app, reproducing
+identically on unmodified code, not a regression - see the commit for
+detail if this needs re-verifying later).
 
 ### Phase 2b — Extract `src/audio/`: one context, one clock
 

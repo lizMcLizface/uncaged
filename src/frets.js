@@ -1,10 +1,10 @@
-import {processChord, generateSyntheticChords} from './intervals';
+import {processChord, generateSyntheticChords} from './theory/chords';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, translateNotes, stripOctave} from './scales';
 import {createHeptatonicScaleTable, createQuickScalePicker, selectedRootNote, selectedScales, getPrimaryScale, getPrimaryRootNote} from './scaleGenerator';
 import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from './midi';
 import {
-    midiToNote as notationMidiToNote, 
+    midiToNote as notationMidiToNote,
     noteToMidi as notationNoteToMidi,
     translateNotes as notationTranslateNotes,
     stripOctave as notationStripOctave,
@@ -13,7 +13,9 @@ import {
     noteArrayContains,
     filterEnharmonicMatches,
     normalizeNote
-} from './notation';
+} from './theory/notation';
+import { CHROMATIC } from './theory/notes';
+import { INTERVAL_LABELS, getIntervalColor } from './theory/intervals';
 import { createChordProgressionUI, loadSharedStateFromURL } from './progressionBuilder';
 import {getChordPatterns, getPatternsByChordType} from './chordPatterns';
 import {assignFingers, selectGripFromPositions, classifyFingeringSource} from './chordFingering';
@@ -2211,21 +2213,6 @@ let currentChordGridSelection = null; // Track permanent chord grid selections {
 let chordFingeringShapes = []; // Playable shapes found for the currently displayed chord
 let selectedFingeringTabIndex = 0; // Which shape/tab is currently rendered
 
-const SEMITONE_TO_INTERVAL_LABEL = {
-    0: 'R',
-    1: 'm2',
-    2: 'M2',
-    3: 'm3',
-    4: 'M3',
-    5: 'P4',
-    6: 'd5',
-    7: 'P5',
-    8: 'm6',
-    9: 'M6',
-    10: 'm7',
-    11: 'M7'
-};
-
 // Flag to prevent infinite update loops
 let isUpdatingFretboards = false;
 
@@ -2249,7 +2236,7 @@ function getIntervalLabelFromRoot(rootNote, targetNote) {
         const targetMidi = notationNoteToMidi(`${normalizedTarget}/4`);
         const semitoneDistance = (targetMidi - rootMidi + 12) % 12;
 
-        return SEMITONE_TO_INTERVAL_LABEL[semitoneDistance] || '';
+        return INTERVAL_LABELS[semitoneDistance] || '';
     } catch (error) {
         return '';
     }
@@ -3932,7 +3919,7 @@ function analyzeChordScaleCompatibility(rootNote, chordType) {
  * Create chord button grid directly (avoiding circular dependency)
  */
 function createChordButtonGrid() {
-    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const chromaticNotes = CHROMATIC;
     const commonChordTypes = ['Major', 'Minor', '7', '5', 'dim', 'dim7', 'aug', 'sus2', 'sus4', 'maj7', 'm7', 'm7b5'];
     
     let gridContainer = document.createElement('div');
@@ -4153,29 +4140,6 @@ function getCurrentScaleNoteNames() {
     const noteNames = translatedScaleNotes.map(note => notationStripOctave(note));
 
     return [...new Set(noteNames)];
-}
-
-/**
- * Convert an interval in semitones to a color.
- * @param {number} semitone - Interval distance from reference root (0-11)
- * @returns {string} Hex color
- */
-function getIntervalColor(semitone) {
-    const colors = [
-        '#ff4d4d', // 1
-        '#ff8a3d', // b2
-        '#ffb347', // 2
-        '#ffd34f', // b3
-        '#d2f25f', // 3
-        '#8fdc5b', // 4
-        '#4dd6b8', // b5
-        '#45b6ff', // 5
-        '#5a88ff', // b6
-        '#7a6cff', // 6
-        '#a46cff', // b7
-        '#d26bff'  // 7
-    ];
-    return colors[((semitone % 12) + 12) % 12];
 }
 
 /**
@@ -5801,9 +5765,9 @@ function updateChordGridColors() {
         return;
     }
     
-    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const chromaticNotes = CHROMATIC;
     const commonChordTypes = ['Major', 'Minor', '7', '5', 'dim', 'dim7', 'aug', 'sus2', 'sus4', 'maj7', 'm7', 'm7b5'];
-    
+
     // Find all chord cells and update their colors
     const table = gridContainer.querySelector('table');
     if (!table) return;
@@ -6786,20 +6750,20 @@ function quickChordPattern(chordName, options = {}) {
     
     // Helper functions to calculate chord tones (simplified)
     const getThird = (root, type) => {
-        const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const notes = CHROMATIC;
         const rootIndex = notes.indexOf(root);
         const offset = type === 'major' ? 4 : 3;
         return notes[(rootIndex + offset) % 12];
     };
-    
+
     const getFifth = (root) => {
-        const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const notes = CHROMATIC;
         const rootIndex = notes.indexOf(root);
         return notes[(rootIndex + 7) % 12];
     };
-    
+
     const getSeventh = (root, type) => {
-        const notes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const notes = CHROMATIC;
         const rootIndex = notes.indexOf(root);
         const offset = type === 'dominant' ? 10 : 11;
         return notes[(rootIndex + offset) % 12];

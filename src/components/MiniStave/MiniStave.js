@@ -5,7 +5,7 @@
  * on both treble and bass clefs with proper enharmonic handling.
  */
 
-import { stripOctave as notationStripOctave } from '../../notation';
+import { stripOctave as notationStripOctave } from '../../theory/notation';
 
 // VexFlow components are available globally from index.js
 // Access them from the global scope

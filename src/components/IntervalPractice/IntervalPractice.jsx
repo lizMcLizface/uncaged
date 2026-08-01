@@ -33,7 +33,8 @@ import {
 } from './IntervalPractice.styled';
 // Import MicrotonalModule from PolySynth
 import { MicrotonalModule } from '../PolySynth/PolySynth.styled';
-import { intervalToSemitones, midiToNote } from '../../intervals';
+import { intervalToSemitones, midiToNote } from '../../theory/chords';
+import { CHROMATIC } from '../../theory/notes';
 
 
 let practiceSettingsGlobal = {
@@ -54,7 +55,7 @@ const BASE_CLASS_NAME = 'IntervalPractice';
 
 const IntervalPractice = ({ className }) => {
     // Define chromatic scale notes and intervals for the 12x12 grid
-    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const chromaticNotes = CHROMATIC;
     const intervals = ['P1', 'm2', 'M2', 'm3', 'M3', 'P4', 'A4/d5', 'P5', 'm6', 'M6', 'm7', 'M7'];
 
     // State for practice configuration
@@ -655,7 +656,7 @@ const IntervalPractice = ({ className }) => {
 
     // Helper functions
     const calculateIntervalNotes = (rootNote, interval) => {
-        const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+        const chromaticNotes = CHROMATIC;
         const rootIndex = chromaticNotes.indexOf(rootNote);
         
         const intervalSemitones = {

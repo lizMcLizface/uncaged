@@ -1,5 +1,6 @@
-import { processChord } from "./intervals"
+import { processChord } from "./theory/chords"
 import {noteToMidi} from './midi';
+import { CHROMATIC } from './theory/notes';
 import { getPrimaryScale, getPrimaryRootNote } from './scaleGenerator';
 import { HeptatonicScales, getScaleNotes } from './scales';
 import { getFretboard, showChordOnFretboard, showScaleOnFretboard, currentDisplayedChord } from './frets';
@@ -146,7 +147,7 @@ let selectedChordRootNote = 'C'; // Default to C
 
 // Create a table for selecting root notes for chords
 function createChordRootNoteTable() {
-    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const chromaticNotes = CHROMATIC;
     
     let rootTableContainer = document.createElement('div');
     rootTableContainer.style.marginBottom = '20px';
@@ -340,7 +341,7 @@ const chordPatternMatchers = {
 
 // Create a chord button grid below the fretboard
 function createChordButtonGrid() {
-    const chromaticNotes = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const chromaticNotes = CHROMATIC;
     
     let gridContainer = document.createElement('div');
     gridContainer.style.marginTop = '20px';
