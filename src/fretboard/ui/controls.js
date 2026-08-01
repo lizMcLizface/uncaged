@@ -15,20 +15,21 @@
 // This creates a two-way import between this file and frets.js: frets.js
 // imports createFretboardControls from here, and the button handlers below
 // import glue functions (showChordOnFretboard, showChordPatternOnFretboard,
-// restoreFretboardState, updateChordButtonStyles, updateChordInfoDisplay,
-// clearFingeringTabs) and the not-yet-extracted chord grid / scale position
-// grid builders back from frets.js. This is safe the same way the
-// pre-existing chords.js <-> theory/chords.js cycle is (see
-// ARCHITECTURE.md §6.1): every cross-import here is only touched inside a
-// function body invoked later (a click handler or initializeFretboard()
-// itself), never at module top-level, so neither module needs the other to
-// have finished evaluating first. The frets.js-side imports of
-// createChordButtonGrid/createScalePositionGrid/updateChordGridColors/
-// renderScalePositionGrid/clearFingeringTabs are temporary - they will
-// repoint at ./chordGrid and ./scalePositionGrid once REFACTOR_PLAN.md
-// Phase 3's remaining steps extract those files.
+// restoreFretboardState, updateChordButtonStyles, updateChordInfoDisplay)
+// and the not-yet-extracted scale position grid builders back from
+// frets.js. This is safe the same way the pre-existing chords.js <->
+// theory/chords.js cycle is (see ARCHITECTURE.md §6.1): every cross-import
+// here is only touched inside a function body invoked later (a click
+// handler or initializeFretboard() itself), never at module top-level, so
+// neither module needs the other to have finished evaluating first. The
+// frets.js-side imports of createScalePositionGrid/renderScalePositionGrid
+// are temporary - they will repoint at ./scalePositionGrid once
+// REFACTOR_PLAN.md Phase 3's remaining step extracts that file.
+// clearFingeringTabs/createChordButtonGrid/updateChordGridColors already
+// made that move, imported from ./chordGrid instead.
 //
-// Lifted from src/frets.js as part of REFACTOR_PLAN.md Phase 3, step 6/8.
+// Lifted from src/frets.js as part of REFACTOR_PLAN.md Phase 3, step 6/8
+// (chordGrid.js import added in step 7/8).
 
 import { fretboardState } from '../state';
 import { addInteractiveEvent } from '../Fretboard';
@@ -47,12 +48,14 @@ import {
     restoreFretboardState,
     updateChordButtonStyles,
     updateChordInfoDisplay,
-    clearFingeringTabs,
-    createChordButtonGrid,
     createScalePositionGrid,
-    updateChordGridColors,
     renderScalePositionGrid
 } from '../../frets';
+import {
+    clearFingeringTabs,
+    createChordButtonGrid,
+    updateChordGridColors
+} from './chordGrid';
 
 /**
  * Build a simple tabbed panel: a horizontal tab bar plus a content area that
