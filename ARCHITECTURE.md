@@ -304,7 +304,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/progression/state.js` *(Phase 4, first step, landed 2026-08-01)* | The ~15 module-level `let`s `progressionBuilder.js` used to hold directly - current progression array, hovered/selected-pattern-index tracking, mini-fretboard/piano/stave display toggles, seventh-chords toggle, input-parse caches and debounce timer - plus `INPUT_DEBOUNCE_DELAY`/`CHORD_LINE_CONFIG`/`MINI_FRETBOARD_CONFIG`. Exported as one mutable object, `progressionState` (config constants as plain exports alongside it) - see §6.12 for why. | `tuning.js` | everything that used to read/write these as bare identifiers now imports `progressionState` instead |
 | `src/progression/parse.js` *(Phase 4, second step, landed 2026-08-01)* | The tokenize -> parse -> fretboard-pattern-match pipeline: `parseProgressionInput`, `updateProgressionIncremental`, `compareTokenArrays`, `precomputePatternData`, `processDefaultPatternSelections`, `getChordPatternMatches`, `collectArpeggiationNotes`, `clearCache`. Roman-numeral parsing/resolution itself stays in `theory/roman.js` (Phase 2). | `theory/roman`, `theory/notation`, `tuning.js`, `chordFingering.js`, `src/progression/state`, and (cross-import, see §6.13) `getChordDisplayName`/`getFretboardForProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js` - see §6.13, same shape as `src/fretboard/ui/{controls,chordGrid}.js` <-> `src/fretboard/index.js` in Phase 3 §6.8) |
 | `src/progression/share.js` *(Phase 4, third step, landed 2026-08-01)* | URL-based sharing: `buildShareableState`/`encodeStateToURLParams`/`decodeStateFromURLParams` (human-readable format), `encodeStateToURL`/`decodeStateFromURL` (legacy Base64 fallback), `generateShareableURL`, `copyShareableURL`, `applySharedState`, `loadSharedStateFromURL`. | `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`/`setPrimaryRootNote`/`setPrimaryScale`), `src/progression/state`, and (cross-import, see §6.14) `updateProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.8/§6.13) |
-| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`), `src/progression/state.js`, `src/progression/parse.js`, `src/progression/share.js` | — |
+| `src/progression/playback.js` *(Phase 4, fourth step, landed 2026-08-01)* | Turns a chord into concrete notes and plays them: `getProcessedChordNotes` (resolves the selected fretboard pattern, or falls back to chord theory), `getProcessedProgression`, `triggerChordProgression` (dispatches through the `'synth'` channel). | `theory/notation`, `tuning.js`, `audio/dispatch.js`, `src/progression/state`, `src/progression/parse` (`getChordPatternMatches`), and (cross-import, see §6.15) `getChordDisplayName` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13/§6.14) |
+| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`), `src/progression/state.js`, `src/progression/parse.js`, `src/progression/share.js`, `src/progression/playback.js` | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
@@ -1111,6 +1112,50 @@ back correctly - the full `buildShareableState` -> `encodeStateToURLParams`
 through an actual page load, not just a function call. Zero console errors.
 Remaining Phase 4 work: the `ui/*.js` split, then the barrel;
 `scaleGenerator.js`/`scales.js` -> `src/scales/` after that.
+
+### 6.15 `src/progression/playback.js` (Phase 4, fourth step, 2026-08-01)
+
+Unlike steps 2-3, this one **wasn't** a single contiguous block move without
+adjustment - a pre-move call-graph check (grepping every call site of each
+candidate function, not just trusting file position) found that
+`getFretboardForProgression`, textually sandwiched between this group and
+the rest of the file, is never actually called by any of the six playback
+functions. Its three real callers (`displaySingleChordPattern`,
+`displayScaleContext`, `displayAllChordPatterns`) are all still in
+`progressionBuilder.js`, in what will become the fretboard-display cluster
+- so it stayed put rather than moving on the strength of proximity alone.
+This is the same "verify before trusting a categorization" lesson Phase 3's
+resume notes flagged, applied here before it caused a wrong move rather
+than after.
+
+Of the six functions that did move, only three had callers outside this
+block (`getProcessedChordNotes`, `getProcessedProgression`,
+`triggerChordProgression` - called from `createProgressionControlsSection`,
+`createChordElement`, and `createPatternSelector`, none of which have moved
+out of `progressionBuilder.js` yet); those three are `playback.js`'s export
+list. `convertNoteForPolySynth`/`getOneBeatDuration`/`getDurationInMs` stay
+module-private, called only from within this file - same shape as
+`parse.js`'s private helpers (§6.13).
+
+One now-dead import fell out of `progressionBuilder.js`
+(`getChordPatternMatches` from `./progression/parse` - its only call site
+moved with `getProcessedChordNotes`), caught by `scripts/check-build.sh`'s
+diff as a new `no-unused-vars` hit, same as every prior step.
+`notationStripOctave`/`getNoteAtStringFret`/`getChannel`/`isChannelEnabled`
+were checked the same way and confirmed still used elsewhere in
+`progressionBuilder.js` (the not-yet-moved chord-card cluster), so those
+imports stayed.
+
+`npm test` (28/28) and plain `npm run build` pass - 219 warnings, unchanged,
+only a line-number shift. Verified via the `run-app` skill: built a
+progression and clicked a chord card, confirming the console log
+(`Triggering chord 0: I (Em) [E2, B2, E3, G3, B3, E4]`) shows the full
+`triggerChordProgression` -> `getProcessedChordNotes` -> cross-imported
+`getChordDisplayName` path resolved correctly through the new module - zero
+console errors. Remaining Phase 4 work: `scaleSync.js`,
+`fretboardDisplay.js`, the chord-card cluster, `progressionList.js`,
+`input.js`, `controls.js`, then the barrel; `scaleGenerator.js`/`scales.js`
+-> `src/scales/` after that.
 
 ---
 
