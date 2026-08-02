@@ -307,7 +307,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/progression/playback.js` *(Phase 4, fourth step, landed 2026-08-01)* | Turns a chord into concrete notes and plays them: `getProcessedChordNotes` (resolves the selected fretboard pattern, or falls back to chord theory), `getProcessedProgression`, `triggerChordProgression` (dispatches through the `'synth'` channel). | `theory/notation`, `tuning.js`, `audio/dispatch.js`, `src/progression/state`, `src/progression/parse` (`getChordPatternMatches`), and (cross-import, see §6.15) `getChordDisplayName` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13/§6.14) |
 | `src/progression/scaleSync.js` *(Phase 4, fifth step, landed 2026-08-01)* | Keeps the progression in sync with the active scale/root: `setupScaleChangeListener` (event + polling-fallback listener), `initializeScaleNotesDisplay`, `updateScaleNotesDisplay`, `generateFallbackScaleNotes`, `updateProgressionDisplayForScaleChange`, `updateRomanNumeralChords` (re-resolves Roman-numeral chords against the new scale). | `scaleGenerator.js`, `scales.js`, `theory/notes`, `theory/roman`, `src/progression/state`, `src/progression/fretboardDisplay` (`displaySingleChordPattern`/`displayAllChordPatterns`, repointed here in step 6 - see §6.17), and (cross-import, see §6.16) `precomputeAllPatternData`/`updateProgressionDisplay` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13-§6.15) |
 | `src/progression/fretboardDisplay.js` *(Phase 4, sixth step, landed 2026-08-02)* | Draws chord/scale content on the main chord-progression fretboard (not the per-card mini fretboards): `displaySingleChordPattern`, `displayScaleContext`, `displayAllChordPatterns`. | `src/progression/state`, `src/progression/parse` (`precomputePatternData`), and (cross-import, see §6.17) `getFretboardForProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13-§6.16; also imported by `src/progression/scaleSync.js`, repointed from `../progressionBuilder` in this step) |
-| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI. | theory, `scaleGenerator.js` (`getPrimaryScale`/`getPrimaryRootNote`), `src/progression/state.js`, `src/progression/parse.js`, `src/progression/share.js`, `src/progression/playback.js`, `src/progression/scaleSync.js`, `src/progression/fretboardDisplay.js` | — |
+| `src/progression/chordCard.js` *(Phase 4, seventh step, landed 2026-08-02)* | The per-chord card in the progression display: `createChordElement` (name, notes, optional mini piano/stave, status indicator, hover/click handlers), `createPatternSelector` (the fret-pattern dropdown + prev/next buttons), `createMiniFretboardVisualization` (the SVG voicing diagram), `copySvgAsPng`, `showNotification`, `lightenColor` - all private except `createChordElement`. Also `getChordDisplayName`, moved here in this step rather than staying in `progressionBuilder.js` as earlier steps' notes expected - see §6.18. | theory, `scaleGenerator.js`, `scales.js`, MiniPiano/MiniStave components, `audio/dispatch.js`, `src/progression/state`, `src/progression/parse` (`precomputePatternData`), `src/progression/playback`, `src/progression/fretboardDisplay`, and (cross-import, see §6.18) `updateProgressionDisplay` from `../progressionBuilder` | two-way with `progressionBuilder.js` (same shape as §6.13-§6.17); also two-way with `src/progression/parse.js` and `src/progression/playback.js` for `getChordDisplayName` (§6.18) |
+| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI. | theory, `scaleGenerator.js` (`initializeNavigationButtonsDirect`), `src/progression/state.js`, `src/progression/parse.js`, `src/progression/share.js`, `src/progression/playback.js`, `src/progression/scaleSync.js`, `src/progression/fretboardDisplay.js`, `src/progression/chordCard.js` | — |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
@@ -1247,6 +1248,89 @@ display with no chord-pattern lines, exercising `clearProgression`'s
 cross-imported call to `displayScaleContext` - zero console errors
 throughout. Remaining Phase 4 work: the chord-card cluster,
 `progressionList.js`, `input.js`, `controls.js`, then the barrel;
+`scaleGenerator.js`/`scales.js` -> `src/scales/` after that.
+
+### 6.18 `src/progression/chordCard.js` (Phase 4, seventh step, 2026-08-02)
+
+Another contiguous block - `copySvgAsPng` through `createPatternSelector`,
+immediately after the not-yet-moved progression-list functions
+(`createProgressionDisplaySection`/`updateProgression`/`precomputeAllPatternData`/
+`updateProgressionDisplay`/`highlightCurrentChord`) and immediately before
+`clearProgression` - straight cut-and-paste, six functions matching the
+plan's list plus one it didn't: `getChordDisplayName`.
+
+The plan's investigation note (and §6.13/§6.15) expected `getChordDisplayName`
+to stay in `progressionBuilder.js`, cross-imported by `parse.js`/`playback.js`,
+because at the time most of its callers lived there. That was true when
+those steps landed, but it stopped being true once this step's own cluster
+was identified: grepping every call site before moving anything (the same
+check that caught `getFretboardForProgression` in §6.15/§6.17) found
+`getChordDisplayName`'s only two remaining callers inside
+`progressionBuilder.js` were `createChordElement` and `createPatternSelector`
+- both moving in this step. Leaving it behind would have meant a four-way
+cross-import (`parse.js`, `playback.js`, and this new module all reaching
+into a `progressionBuilder.js` that no longer had any callers of its own)
+instead of moving it to where its callers actually are. So it moved, and
+`parse.js`/`playback.js` had their existing `getChordDisplayName` imports
+repointed from `../progressionBuilder` to `./chordCard`.
+
+That repointing creates two new two-way-import pairs that, unlike every
+prior Phase 4 cross-import, are both between already-extracted modules
+rather than between an extracted module and the `progressionBuilder.js`
+residual: `chordCard.js` imports `precomputePatternData` from `parse.js`
+while `parse.js` imports `getChordDisplayName` back from `chordCard.js`;
+`chordCard.js` imports `getProcessedChordNotes`/`getProcessedProgression`/
+`triggerChordProgression` from `playback.js` while `playback.js` imports
+`getChordDisplayName` back from `chordCard.js`. Both resolve safely for the
+same reason every other cross-import in `src/progression/` does - neither
+side reads the other's export at module top level, only inside function
+bodies - confirmed by the clean build and passing tests below, not just
+asserted.
+
+One more cross-import went the other way: `updateProgressionDisplay`
+(called from `createPatternSelector`'s change handler) hasn't moved out of
+`progressionBuilder.js` yet (progression-list cluster, still pending), so
+`chordCard.js` imports it back - the same shape `scaleSync.js` already
+established.
+
+Only `createChordElement` has a caller outside this block
+(`createProgressionDisplaySection`, still in `progressionBuilder.js`), so
+it's this module's sole non-`getChordDisplayName` export; `createPatternSelector`/
+`createMiniFretboardVisualization`/`copySvgAsPng`/`showNotification`/
+`lightenColor` stay private, called only from within this file - same
+call-chain shape (`createChordElement` -> `createPatternSelector` ->
+`createMiniFretboardVisualization` -> `copySvgAsPng` -> `showNotification`,
+plus `lightenColor`) the investigation note described.
+
+Sixteen imports fell out of `progressionBuilder.js` as dead
+(`intervalToSemitones`, `HeptatonicScales`/`getScaleNotes`, `getPrimaryScale`/
+`getPrimaryRootNote`, `notationStripOctave`, `CHROMATIC`, `createChordPiano`/
+`createMixedPiano`, `createChordStave`/`createMixedStave`,
+`getNoteAtStringFret`, `getChannel`/`isChannelEnabled`, `getProcessedChordNotes`,
+`triggerChordProgression`) - every one of them had zero remaining call sites
+once this block's only uses of them moved, caught by
+`scripts/check-build.sh`'s diff as new `no-unused-vars` hits, same as every
+prior step. `getPrimaryScale`/`getPrimaryRootNote` were double-checked
+individually since `scaleGenerator.js`'s import also carries
+`initializeNavigationButtonsDirect`, which does still have a call site
+(`createChordProgressionUI`) - that one import stayed, narrowed to just the
+name still used.
+
+`npm test` (28/28) and plain `npm run build` pass - 219 warnings, unchanged
+except one line-number-only shift (`parse.js`'s pre-existing `eqeqeq`
+warning moved two lines for this step's header-comment edit). Verified via
+the `run-app` skill: built a progression, enabled "Show Mini Pianos" and
+"Show Mini Staves" (exercising `createChordElement`'s optional branches),
+confirmed all four chord cards rendered with correct names (`I (Em)`
+through `vi (CM)`), notes, mini pianos, and mini staves (including a
+correctly-rendered sharp for `V (Bm)`); changed the first card's
+pattern-selector dropdown and confirmed the main fretboard's pattern line
+changed shape to match; clicked the next-pattern button; clicked the card
+to trigger playback; and right-clicked a mini-fretboard SVG to trigger
+`copySvgAsPng`, confirming the "downloaded as PNG" notification appeared
+(`showNotification`'s clipboard-unavailable fallback path, expected in
+headless Chromium) - zero console errors throughout. Remaining Phase 4
+work: `progressionList.js`, `input.js`, `controls.js`, then the barrel;
 `scaleGenerator.js`/`scales.js` -> `src/scales/` after that.
 
 ---
