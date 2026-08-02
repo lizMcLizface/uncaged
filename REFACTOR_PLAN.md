@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 6/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js` landed (`ARCHITECTURE.md` §6.12-§6.17). Remaining: the chord-card cluster, `progressionList.js`, `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | Step 7/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js`, `chordCard.js` landed (`ARCHITECTURE.md` §6.12-§6.18). Remaining: `progressionList.js`, `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -839,6 +839,34 @@ main fretboard, toggled "Show Scale Context" off/on, then clicked **Clear
 Progression** and confirmed the fretboard reset to a full scale display
 with no chord lines - zero console errors. Remaining steps: the chord-card
 cluster, `progressionList.js`, `input.js`, `controls.js`, then the barrel.
+
+**Progress (2026-08-02), step 7 - `src/progression/chordCard.js`:** landed
+- another contiguous block: the six functions the plan named
+(`createChordElement`, `createPatternSelector`, `createMiniFretboardVisualization`,
+`copySvgAsPng`, `showNotification`, `lightenColor`) plus `getChordDisplayName`,
+which the plan expected to stay behind but grepping its call sites (before
+moving anything, the same check §6.15/§6.17 already used once each) found
+had zero remaining callers in `progressionBuilder.js` once this cluster
+moved - both were inside it. So it moved too, and `parse.js`/`playback.js`
+had their existing cross-imports of it repointed from `../progressionBuilder`
+to `./chordCard`. That creates two cross-import pairs between
+already-extracted modules rather than with the residual
+(`chordCard.js` <-> `parse.js`, `chordCard.js` <-> `playback.js`) - safe for
+the same reason every other one is: nothing is read at module top level.
+`updateProgressionDisplay` still hasn't moved out of `progressionBuilder.js`
+(progression-list cluster, still pending), so `chordCard.js` cross-imports
+that one back. Sixteen now-dead imports fell out of `progressionBuilder.js`,
+caught by `scripts/check-build.sh`'s diff, same as every prior step. Full
+detail in `ARCHITECTURE.md` §6.18. `npm test` (28/28) and plain `npm run
+build` pass - 219 warnings, unchanged except one line-number-only shift.
+Verified via `run-app`: built a progression with mini pianos and mini
+staves enabled, confirmed all four cards rendered correctly (names, notes,
+mini piano/stave, sharps correct for `V (Bm)`); changed a pattern-selector
+dropdown and confirmed the main fretboard's pattern line updated to match;
+clicked a card to trigger playback; right-clicked a mini-fretboard SVG and
+confirmed the "downloaded as PNG" notification appeared - zero console
+errors. Remaining steps: `progressionList.js`, `input.js`, `controls.js`,
+then the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 

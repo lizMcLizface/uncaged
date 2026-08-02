@@ -3,10 +3,14 @@
 // back to chord theory) to concrete note+octave strings, then dispatching
 // them through the 'synth' channel (src/audio/dispatch.js).
 //
-// getChordDisplayName is imported back from progressionBuilder.js rather
-// than moved here - most of its callers stay there (chord-element/pattern-
-// selector rendering). Same two-way-import shape as parse.js/share.js
-// (ARCHITECTURE.md §6.13/§6.14).
+// getChordDisplayName is imported from src/progression/chordCard.js, where
+// it moved in Phase 4 step 7 (its remaining callers, verified by grep, all
+// ended up in that cluster). chordCard.js imports back from this module
+// (getProcessedChordNotes/getProcessedProgression/triggerChordProgression),
+// so this is a two-way import between two already-extracted modules rather
+// than with the progressionBuilder.js residual - safe for the same reason
+// as every other cross-import in src/progression/: neither side reads the
+// other's export at module top level, only inside function bodies.
 //
 // window.polySynthRef here is the progression-sequencer-control surface
 // (getProgressionSequencerState) ARCHITECTURE.md §5.1 documents as still
@@ -19,7 +23,7 @@ import { getNoteAtStringFret } from '../tuning';
 import { getChannel } from '../audio/dispatch';
 import { progressionState } from './state';
 import { getChordPatternMatches } from './parse';
-import { getChordDisplayName } from '../progressionBuilder';
+import { getChordDisplayName } from './chordCard';
 
 /**
  * Process a chord to get the actual notes based on selected pattern
