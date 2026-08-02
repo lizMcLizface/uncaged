@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 5/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js` landed (`ARCHITECTURE.md` §6.12-§6.16). Remaining: `fretboardDisplay.js`, the chord-card cluster, `progressionList.js`, `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | Step 6/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js` landed (`ARCHITECTURE.md` §6.12-§6.17). Remaining: the chord-card cluster, `progressionList.js`, `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -813,6 +813,31 @@ actual logic instead: changing the root-note dropdown correctly re-resolved
 every Roman-numeral chord in a live progression and their mini-fretboard
 voicings (`I (Em)` -> `I (Am)` etc. when the root moved E -> A) - zero
 console errors. Remaining steps: `fretboardDisplay.js`, the chord-card
+cluster, `progressionList.js`, `input.js`, `controls.js`, then the barrel.
+
+**Progress (2026-08-02), step 6 - `src/progression/fretboardDisplay.js`:**
+landed - another contiguous block, straight cut-and-paste. This confirmed
+step 4's finding: `getFretboardForProgression` (still textually sandwiched
+between this block and the rest of the file) belongs to this cluster, not
+`playback.js` - its three real callers, `displaySingleChordPattern`/
+`displayScaleContext`/`displayAllChordPatterns`, are exactly the three
+functions that moved here, so it stayed in `progressionBuilder.js` and all
+three cross-import it back. A fourth cross-import went the other way:
+`clearProgression` (staying in `progressionBuilder.js`) calls
+`displayScaleContext` directly, so that's exported here too, not just the
+two functions `scaleSync.js` already needed. `scaleSync.js`'s existing
+cross-import of `displaySingleChordPattern`/`displayAllChordPatterns` was
+repointed from `../progressionBuilder` to `./fretboardDisplay`, since
+re-exporting them through `progressionBuilder.js` once they no longer live
+there would just add an indirection. One now-dead import fell out of
+`progressionBuilder.js` (`CHORD_LINE_CONFIG`), caught by
+`scripts/check-build.sh`'s diff. Full detail in `ARCHITECTURE.md` §6.17.
+`npm test` (28/28) and plain `npm run build` pass - 219 warnings, unchanged,
+one line-number-only shift. Verified via `run-app`: built a progression,
+hovered a chord card and confirmed an orange pattern line rendered on the
+main fretboard, toggled "Show Scale Context" off/on, then clicked **Clear
+Progression** and confirmed the fretboard reset to a full scale display
+with no chord lines - zero console errors. Remaining steps: the chord-card
 cluster, `progressionList.js`, `input.js`, `controls.js`, then the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
