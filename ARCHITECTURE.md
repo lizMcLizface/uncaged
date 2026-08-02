@@ -309,7 +309,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/progression/fretboardDisplay.js` *(Phase 4, sixth step, landed 2026-08-02)* | Draws chord/scale content on the main chord-progression fretboard (not the per-card mini fretboards): `displaySingleChordPattern`, `displayScaleContext`, `displayAllChordPatterns`. | `src/progression/state`, `src/progression/parse` (`precomputePatternData`), and (cross-import, see §6.17) `getFretboardForProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13-§6.16; also imported by `src/progression/scaleSync.js`, repointed from `../progressionBuilder` in this step) |
 | `src/progression/chordCard.js` *(Phase 4, seventh step, landed 2026-08-02; updated eighth step)* | The per-chord card in the progression display: `createChordElement` (name, notes, optional mini piano/stave, status indicator, hover/click handlers), `createPatternSelector` (the fret-pattern dropdown + prev/next buttons), `createMiniFretboardVisualization` (the SVG voicing diagram), `copySvgAsPng`, `showNotification`, `lightenColor` - all private except `createChordElement`. Also `getChordDisplayName`, moved here in step 7 rather than staying in `progressionBuilder.js` as earlier steps' notes expected - see §6.18. | theory, `scaleGenerator.js`, `scales.js`, MiniPiano/MiniStave components, `audio/dispatch.js`, `src/progression/state`, `src/progression/parse` (`precomputePatternData`), `src/progression/playback`, `src/progression/fretboardDisplay`, and (cross-import, see §6.19) `updateProgressionDisplay` from `src/progression/progressionList` | two-way with `src/progression/parse.js`/`src/progression/playback.js` for `getChordDisplayName` (§6.18) and with `src/progression/progressionList.js` for `updateProgressionDisplay`/`createChordElement` (§6.19) - no longer any two-way relationship with `progressionBuilder.js` itself |
 | `src/progression/progressionList.js` *(Phase 4, eighth step, landed 2026-08-02)* | Renders the chord-progression display: `createProgressionDisplaySection`, `updateProgressionDisplay`, `highlightCurrentChord` (private - only reached via `window.highlightCurrentChord`, which moved here with it). See §6.19. | `src/progression/state`, and (cross-import, see §6.19) `createChordElement` from `src/progression/chordCard` | two-way with `src/progression/chordCard.js` (§6.19) - the first Phase 4 module with no cross-import back into the `progressionBuilder.js` residual |
-| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI. | theory, `scaleGenerator.js` (`initializeNavigationButtonsDirect`), `src/progression/state.js`, `src/progression/parse.js`, `src/progression/share.js`, `src/progression/playback.js`, `src/progression/scaleSync.js`, `src/progression/fretboardDisplay.js`, `src/progression/progressionList.js` | — (as of step 8, no longer imports `src/progression/chordCard.js` directly - `createChordElement` is reached only through `progressionList.js`) |
+| `src/progression/input.js` *(Phase 4, ninth step, landed 2026-08-02)* | The chord-progression text input: `createInputSection` - the field, its debounced input handler (`updateProgression` after `INPUT_DEBOUNCE_DELAY`), and playback-blocking on input/keydown/paste while the sequencer is running. Self-contained, as the plan expected. See §6.20. | `src/progression/state`, and (cross-import, see §6.20) `updateProgression` from `../progressionBuilder` | two-way with `progressionBuilder.js` (same shape as §6.13-§6.19) |
+| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI. | theory, `scaleGenerator.js` (`initializeNavigationButtonsDirect`), `src/progression/state.js`, `src/progression/parse.js`, `src/progression/share.js`, `src/progression/playback.js`, `src/progression/scaleSync.js`, `src/progression/fretboardDisplay.js`, `src/progression/progressionList.js`, `src/progression/input.js` | — (as of step 8, no longer imports `src/progression/chordCard.js` directly - `createChordElement` is reached only through `progressionList.js`) |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
@@ -1392,6 +1393,36 @@ confirming `window.highlightCurrentChord` (called from `PolySynth.jsx`)
 correctly reaches `highlightCurrentChord` in its new location end-to-end -
 zero console errors throughout. Remaining Phase 4 work: `input.js`,
 `controls.js`, then the barrel; `scaleGenerator.js`/`scales.js` ->
+`src/scales/` after that.
+
+### 6.20 `src/progression/input.js` (Phase 4, ninth step, 2026-08-02)
+
+Self-contained, exactly as the investigation note predicted - one function,
+`createInputSection`, cut and pasted as-is. Its only external dependencies
+are `progressionState`/`INPUT_DEBOUNCE_DELAY` (already in `state.js`) and
+`updateProgression`, which stays in `progressionBuilder.js` (core residual
+orchestration) and is cross-imported back - `updateProgression` was already
+exported for `share.js`'s cross-import (§6.14), so this step only added a
+second consumer to that export's comment, not a new export.
+
+`createInputSection`'s only caller is `createChordProgressionUI`, still in
+`progressionBuilder.js`, so it's this module's sole export.
+`INPUT_DEBOUNCE_DELAY` fell out of `progressionBuilder.js`'s own import of
+`state.js` as dead (its only remaining use had been inside the just-moved
+function), caught by `scripts/check-build.sh`'s diff.
+
+`npm test` (28/28) and plain `npm run build` pass - 219 warnings, unchanged,
+with **zero** line-number shifts this time (`check-build.sh` reported no
+diff at all against the baseline) - the first Phase 4 step where every
+touched file's warnings landed on already-baselined line numbers. Verified
+via the `run-app` skill: typed a progression character-by-character (not
+`fill()`, to exercise the actual debounce timer) and confirmed 4 chord
+cards appeared after `INPUT_DEBOUNCE_DELAY` elapsed; appended a chord and
+confirmed the card count went to 5; selected all and retyped a shorter
+progression and confirmed it dropped to 3 - each transition exercising the
+full `input` event -> debounce timer -> cross-imported `updateProgression`
+path from the new module - zero console errors throughout. Remaining Phase
+4 work: `controls.js`, then the barrel; `scaleGenerator.js`/`scales.js` ->
 `src/scales/` after that.
 
 ---
