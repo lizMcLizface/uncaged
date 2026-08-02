@@ -1777,6 +1777,56 @@ correctly from their new module. Remaining steps: `infoPanel.js`, then the
 mutually-dependent `rootNoteTable.js`/`scaleTable.js` pair, then the
 barrel.
 
+### 6.25 `src/scales/ui/infoPanel.js` (Phase 4 second half, step 3, 2026-08-02)
+
+The "Scale Information" tab's panel builder - `updateScaleInfoPanel`,
+`buildDegreeChords`, `buildChordSection`, `makeChordCardDivider`,
+`bumpOctave` - moved as one contiguous block (`scaleGenerator.js`'s
+original lines 947-1247, sitting right between the root-note-table and
+scale-table clusters). None of the five have any caller outside this block
+except `updateScaleInfoPanel` itself, called once from
+`updateCurrentScaleDisplay` - confirmed by grep before moving, same check
+every prior step used - so it's the module's sole export.
+
+`intToRoman` (chord-card heading numerals) stayed behind in
+`scaleGenerator.js` rather than moving with its caller here - it has three
+call sites total and only one is in this block; the other two are in
+`createQuickScalePicker`/`createHeptatonicScaleTable`, which haven't moved
+yet. Moving it now would mean moving it again once the scale-table cluster
+does, so `infoPanel.js` cross-imports it back instead - the same
+one-function-stays-behind-for-its-real-cluster call `playback.js` made for
+`getFretboardForProgression` in §6.15. This creates a two-way import
+between `scaleGenerator.js` and `infoPanel.js` (`infoPanel.js` imports
+`intToRoman`, `scaleGenerator.js` imports `updateScaleInfoPanel`) - safe for
+the same reason every other cross-import in this refactor is: neither side
+reads the other's binding at module top level, only inside function bodies
+invoked well after both modules have finished loading.
+
+Three now-unused imports fell out of `scaleGenerator.js`, caught by
+`scripts/check-build.sh`'s diff as new `no-unused-vars` hits before they
+were removed, same as every prior step: `matchChord` (its only call site
+was inside `buildDegreeChords`, which moved - `identifySyntheticChords`
+from the same `theory/chords.js` import stayed, still used by
+`createHeptatonicScaleTable`), the entire `import { chords } from
+'./chords'` (nothing else in `scaleGenerator.js` ever read it), and three
+of the five names from the `MiniPiano.js` import
+(`createIntervalPiano`/`getIntervalInfo`/`getSynthBaseOctave`/
+`DEFAULT_BASE_OCTAVE` all moved with the block; `createScalePiano` stayed,
+since `createRootNoteTable`/`createHeptatonicScaleTable` still call it
+directly at three other sites).
+
+`npm test` (28/28) and `bash scripts/check-build.sh` pass - baseline
+unchanged at 203 warnings, both diffed lines pure line-number shifts (the
+`MiniPiano.js` import's unused-name warnings moved up one line;
+`createHeptatonicScaleTable`'s pre-existing `eqeqeq` warning moved up 318
+lines, matching how much shorter `scaleGenerator.js` got). Verified via
+`run-app`: zero console errors across the touched tabs; the Scale
+Information panel rendered pixel-identical to the pre-step screenshot for
+E Aeolian, including every roman-numeral chord-card heading (`I` through
+`VII`), confirming the `intToRoman` cross-import resolves correctly at
+render time. Remaining steps: the mutually-dependent
+`rootNoteTable.js`/`scaleTable.js` pair, then the barrel.
+
 ---
 
 ## 7. Known-dead code (context for Phase 1)

@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Second half started: `scaleGenerator.js`/`scales.js` -> `src/scales/`, investigated (`ARCHITECTURE.md` §6.23's intro) and steps 1-2/5 landed - `state.js` (`ARCHITECTURE.md` §6.23), `scaleData.js` (`ARCHITECTURE.md` §6.24). Remaining: `infoPanel.js`, `rootNoteTable.js`/`scaleTable.js`, then the barrel. |
+| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Second half started: `scaleGenerator.js`/`scales.js` -> `src/scales/`, investigated (`ARCHITECTURE.md` §6.23's intro) and steps 1-3/5 landed - `state.js` (`ARCHITECTURE.md` §6.23), `scaleData.js` (`ARCHITECTURE.md` §6.24), `ui/infoPanel.js` (`ARCHITECTURE.md` §6.25). Remaining: `rootNoteTable.js`/`scaleTable.js`, then the barrel. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -1055,6 +1055,25 @@ with correct mini-fretboard voicings, exercising `getScaleNotes` and the
 chord cache from their new module end-to-end. Remaining steps:
 `infoPanel.js`, the `rootNoteTable.js`/`scaleTable.js` pair, then the
 barrel.
+
+**Progress (2026-08-02), step 3/5 - `src/scales/ui/infoPanel.js`:** landed -
+the "Scale Information" panel builder (`updateScaleInfoPanel`,
+`buildDegreeChords`, `buildChordSection`, `makeChordCardDivider`,
+`bumpOctave`) moved as one contiguous block, its sole export being
+`updateScaleInfoPanel` (only caller: `updateCurrentScaleDisplay`, still in
+`scaleGenerator.js`). `intToRoman` stayed behind and gets cross-imported
+back instead of moving - it has three call sites and only one is in this
+block, the other two belong to the not-yet-moved scale-table cluster.
+Three now-dead imports fell out of `scaleGenerator.js` (`matchChord`, the
+whole `chords` import, three of five `MiniPiano.js` names), caught by
+`scripts/check-build.sh`'s diff. Full detail in `ARCHITECTURE.md` §6.25.
+`npm test` (28/28) and `bash scripts/check-build.sh` pass - baseline
+unchanged at 203 warnings, pure line-number shifts only. Verified via
+`run-app`: zero console errors; the Scale Information panel rendered
+pixel-identical to the pre-step screenshot, including every roman-numeral
+chord-card heading, confirming the `intToRoman` cross-import resolves
+correctly. Remaining steps: the mutually-dependent
+`rootNoteTable.js`/`scaleTable.js` pair, then the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 
