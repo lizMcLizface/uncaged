@@ -83,8 +83,6 @@ src\fretboard\Fretboard.js
 src\fretboard\index.js
   Line 22:27:   'scales' is defined but never used                    no-unused-vars
   Line 22:50:   'highlightKeysForScales' is defined but never used    no-unused-vars
-  Line 23:61:   'selectedRootNote' is defined but never used          no-unused-vars
-  Line 23:79:   'selectedScales' is defined but never used            no-unused-vars
   Line 24:9:    'chords' is defined but never used                    no-unused-vars
   Line 24:41:   'createChordRootNoteTable' is defined but never used  no-unused-vars
   Line 24:67:   'createChordSuffixTable' is defined but never used    no-unused-vars
@@ -168,8 +166,6 @@ src\keyboard.js
   Line 21:35:   'getScaleNotes' is defined but never used                   no-unused-vars
   Line 21:50:   'highlightKeysForScales' is defined but never used          no-unused-vars
   Line 22:9:    'createHeptatonicScaleTable' is defined but never used      no-unused-vars
-  Line 22:37:   'selectedRootNote' is defined but never used                no-unused-vars
-  Line 22:55:   'selectedScales' is defined but never used                  no-unused-vars
   Line 23:9:    'chords' is defined but never used                          no-unused-vars
   Line 23:17:   'highlightKeysForChords' is defined but never used          no-unused-vars
   Line 23:41:   'createChordRootNoteTable' is defined but never used        no-unused-vars
@@ -234,37 +230,31 @@ src\progression\share.js
   Line 138:10:  'encodeStateToURL' is defined but never used  no-unused-vars
 
 src\scaleGenerator.js
-  Line 2:27:     'scales' is defined but never used                                                                                                                                                                                                                      no-unused-vars
-  Line 2:116:    'translateNotes' is defined but never used                                                                                                                                                                                                              no-unused-vars
-  Line 2:132:    'stripOctave' is defined but never used                                                                                                                                                                                                                 no-unused-vars
-  Line 5:21:     'noteToName' is defined but never used                                                                                                                                                                                                                  no-unused-vars
-  Line 5:39:     'getElementByNote' is defined but never used                                                                                                                                                                                                            no-unused-vars
-  Line 5:57:     'getElementByMIDI' is defined but never used                                                                                                                                                                                                            no-unused-vars
-  Line 5:75:     'initializeMouseInput' is defined but never used                                                                                                                                                                                                        no-unused-vars
-  Line 50:5:     'scalePositionDarkDuplicate' is assigned a value but never used                                                                                                                                                                                         no-unused-vars
-  Line 383:17:   'key' is already defined                                                                                                                                                                                                                                no-redeclare
-  Line 384:17:   'midi' is already defined                                                                                                                                                                                                                               no-redeclare
-  Line 393:13:   'midi' is already defined                                                                                                                                                                                                                               no-redeclare
-  Line 489:10:   'getSelectedScales' is defined but never used                                                                                                                                                                                                           no-unused-vars
-  Line 493:10:   'clearSelectedScales' is defined but never used                                                                                                                                                                                                         no-unused-vars
-  Line 501:10:   'addSelectedScale' is defined but never used                                                                                                                                                                                                            no-unused-vars
-  Line 521:10:   'removeSelectedScale' is defined but never used                                                                                                                                                                                                         no-unused-vars
-  Line 931:34:   Function declared in a loop contains unsafe references to variable(s) 'exclusiveMode', 'selectedScales', 'selectedScales'                                                                                                                               no-loop-func
-  Line 1016:35:  Function declared in a loop contains unsafe references to variable(s) 'selectedScales', 'selectedScales'                                                                                                                                                no-loop-func
-  Line 1042:37:  Function declared in a loop contains unsafe references to variable(s) 'exclusiveMode', 'selectedScales', 'selectedScales'                                                                                                                               no-loop-func
-  Line 1125:38:  Function declared in a loop contains unsafe references to variable(s) 'selectedScales', 'selectedScales'                                                                                                                                                no-loop-func
-  Line 1173:32:  Function declared in a loop contains unsafe references to variable(s) 'exclusiveMode', 'selectedScales', 'selectedScales'                                                                                                                               no-loop-func
-  Line 1257:33:  Function declared in a loop contains unsafe references to variable(s) 'selectedScales', 'selectedScales'                                                                                                                                                no-loop-func
-  Line 1855:18:  Expected '===' and instead saw '=='                                                                                                                                                                                                                     eqeqeq
-  Line 1865:36:  Function declared in a loop contains unsafe references to variable(s) 'selectedScales', 'exclusiveMode', 'selectedScales', 'selectedScales', 'selectedScales', 'exclusiveMode', 'selectedScales', 'selectedScales', 'selectedScales', 'selectedScales'  no-loop-func
-  Line 1927:40:  Function declared in a loop contains unsafe references to variable(s) 'selectedScales'                                                                                                                                                                  no-loop-func
-  Line 1992:36:  Function declared in a loop contains unsafe references to variable(s) 'selectedScales', 'exclusiveMode', 'selectedScales', 'primaryScaleIndex', 'selectedScales', 'selectedScales', 'selectedScales'                                                    no-loop-func
-  Line 2043:40:  Function declared in a loop contains unsafe references to variable(s) 'selectedScales', 'selectedScales'                                                                                                                                                no-loop-func
+  Line 2:27:     'scales' is defined but never used                no-unused-vars
+  Line 2:74:     'translateNotes' is defined but never used        no-unused-vars
+  Line 2:90:     'stripOctave' is defined but never used           no-unused-vars
+  Line 5:21:     'noteToName' is defined but never used            no-unused-vars
+  Line 5:39:     'getElementByNote' is defined but never used      no-unused-vars
+  Line 5:57:     'getElementByMIDI' is defined but never used      no-unused-vars
+  Line 5:75:     'initializeMouseInput' is defined but never used  no-unused-vars
+  Line 91:17:    'key' is already defined                          no-redeclare
+  Line 92:17:    'midi' is already defined                         no-redeclare
+  Line 101:13:   'midi' is already defined                         no-redeclare
+  Line 1493:18:  Expected '===' and instead saw '=='               eqeqeq
 
 src\scales.js
   Line 3:19:   'notationMidiToNote' is defined but never used         no-unused-vars
   Line 4:19:   'notationNoteToMidi' is defined but never used         no-unused-vars
   Line 390:7:  'getElementByNote' is assigned a value but never used  no-unused-vars
+
+src\scales\state.js
+  Line 74:5:    'scalePositionDarkDuplicate' is assigned a value but never used  no-unused-vars
+  Line 340:10:  'getSelectedScales' is defined but never used                    no-unused-vars
+  Line 344:10:  'clearSelectedScales' is defined but never used                  no-unused-vars
+  Line 352:10:  'addSelectedScale' is defined but never used                     no-unused-vars
+  Line 372:10:  'removeSelectedScale' is defined but never used                  no-unused-vars
+  Line 413:10:  'getPrimaryScaleChords' is defined but never used                no-unused-vars
+  Line 428:10:  'getAllSelectedScaleChords' is defined but never used            no-unused-vars
 
 src\styles\constants.js
   Line 2:7:   'size0' is assigned a value but never used   no-unused-vars

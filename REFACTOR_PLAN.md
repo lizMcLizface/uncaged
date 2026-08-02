@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Remaining: `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint, its own investigate-before-editing pass first. |
+| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Second half started: `scaleGenerator.js`/`scales.js` -> `src/scales/`, investigated (`ARCHITECTURE.md` §6.23's intro) and step 1/5 landed - `src/scales/state.js` (`ARCHITECTURE.md` §6.23). Remaining: `scaleData.js`, `infoPanel.js`, `rootNoteTable.js`/`scaleTable.js`, then the barrel. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -984,6 +984,53 @@ entirely: 11 steps, 4,119 lines -> 11 files, `progressionBuilder.js`
 deleted. Remaining Phase 4 work: `scaleGenerator.js`/`scales.js` ->
 `src/scales/`, its own investigate-before-editing pass first (it hasn't
 had one yet, unlike `progressionBuilder.js`).
+
+**Investigation (2026-08-02), before starting the `scaleGenerator.js`/
+`scales.js` split:** traced every function's real call sites (not the
+starting inventory's name/position guess) plus all 15+14 external
+importers. Two corrections to the plan's original five-file sketch: the
+"root note table" and "scale table" UI builders (`createRootNoteTable`/
+`createHeptatonicScaleTable`) call each other, not a one-way dependency;
+and the real hub function (`updateCurrentScaleDisplay`, called from nearly
+every cluster) belongs in the eventual barrel rather than scattered across
+the UI files. Also found: six fully-dead functions (zero callers anywhere,
+not just zero external importers) in the "selection state" cluster, most of
+`scales.js`'s chord-cache section is likewise dead, and two top-level
+side-effecting statements run at module load (a placeholder-clearing DOM
+query, and `initializeNavigationButtons()`'s own self-invocation) that need
+an explicit home once the file stops existing as a single load-ordered
+unit. `scales.js` stays under `src/scales/` rather than splitting its data
+half into `src/theory/` (which `ARCHITECTURE.md` §6.2 had flagged as a
+possible destination) - Rene's call: the current data is raw dictionaries,
+not a real state-based `Scale` model, and a `src/theory/` wrapper belongs
+after that model exists, not before. Revised target layout: `state.js`,
+`scaleData.js` (from `scales.js`), `ui/infoPanel.js`, `ui/rootNoteTable.js`
++ `ui/scaleTable.js` (landing together given their mutual dependency),
+`index.js` (barrel - holds `updateCurrentScaleDisplay` and the other hub
+glue, not just re-exports).
+
+**Progress (2026-08-02), step 1/5 - `src/scales/state.js`:** landed - same
+`scaleState` mutable-object treatment as `src/fretboard/state.js`/
+`src/progression/state.js`, since the six selection-state values are
+reassigned (not just mutated) from inside UI builders that haven't moved
+yet. Forced one thing the earlier two `state.js` extractions didn't:
+`selectedRootNote`/`selectedScales`/`exclusiveMode` were bare-`let`
+exports read by four external files, and a live-binding export can't be
+deferred to a future barrel step the way function re-exports can - `index.js`/
+`cross.js` were updated to read `scaleState.<name>` in this same step, and
+`keyboard.js`/`fretboard/index.js` had their unused imports of the same
+names dropped. Full detail, including the six dead functions and both
+top-level side effects, in `ARCHITECTURE.md` §6.23. `npm test` (28/28) and
+`bash scripts/check-build.sh` pass - baseline moved 219 -> 207 warnings,
+entirely explained (2 dropped unused imports, 10 `no-loop-func` warnings
+resolved by the state object, 7 newly-surfaced-not-newly-broken warnings on
+the dead functions, the rest line-number shifts); baseline updated.
+Verified via `run-app`: zero console errors across all six tabs; clicking a
+scale-family-grid cell and using the quick-picker's root/family dropdowns
+both correctly updated the display end-to-end through the new cross-imports
+back into `scaleGenerator.js`. Remaining steps: `scaleData.js`,
+`infoPanel.js`, the `rootNoteTable.js`/`scaleTable.js` pair, then the
+barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 

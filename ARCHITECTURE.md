@@ -1596,6 +1596,124 @@ steps, `progressionBuilder.js` deleted, 4,119 lines -> 11 files under
 investigate-before-editing pass (unlike `progressionBuilder.js`, it hasn't
 had a call-graph investigation yet).
 
+### 6.23 `src/scales/state.js` (Phase 4 second half, first step, 2026-08-02)
+
+An investigation pass preceded this step (not summarized here - see the
+session that reported it) and found the plan's original five-file sketch
+(`state.js` + three `ui/*.js` + a barrel) needed two corrections before any
+code moved: `scaleGenerator.js`'s "root note table" and "scale table" UI
+builders call each other (not a one-way dependency), and the real hub
+function (`updateCurrentScaleDisplay`, called from nearly every cluster)
+belongs in the eventual barrel, not scattered across the UI files. `scales.js`
+stays under `src/scales/` rather than splitting its data half into
+`src/theory/` - Rene decided the current dictionary-shaped scale data
+(`HeptatonicScales` etc.) isn't worth relocating as-is; a `src/theory/`
+wrapper is a later phase, once a real state-based `Scale` model replaces the
+dictionaries.
+
+Same treatment as `src/fretboard/state.js` (§6.3) and `src/progression/state.js`
+(§6.12): six module-level values (`selectedScales`, `exclusiveMode`,
+`primaryScaleIndex`, `selectedRootNote`, `primaryRootNoteIndex`,
+`enharmonicDisplayPreferences`) are reassigned - not just mutated - from
+inside `createRootNoteTable`, `createHeptatonicScaleTable`,
+`createQuickScalePicker`, and `initializeNavigationButtonsDirect`, none of
+which have moved yet, so they're all fields on one exported mutable object,
+`scaleState`, not individual `let`s. Every bare read/write site in the
+still-local half of `scaleGenerator.js` was mechanically rewritten to
+`scaleState.<name>` (a `perl` word-boundary substitution per name, verified
+clean afterward - no pre-existing dot-access or spread-operator false
+negatives on any of the six names, unlike §6.12's `[...currentProgression]`
+case). Two accidental renames landed *inside* string-literal `console.log`
+label text (`'Current selectedRootNote:'` -> `'Current
+scaleState.selectedRootNote:'`) since the regex doesn't distinguish a
+quoted string from code; both were caught by grepping for
+`'[^']*scaleState\.` after the bulk rename and reverted to their original
+text, keeping only the real code-reference renames.
+
+`var currentScaleHighlight` (used solely inside `highlightScaleNotes`, never
+read elsewhere) stayed a private module-level var wherever `highlightScaleNotes`
+ends up (not moved this step) rather than joining `scaleState` - nothing
+outside that one function touches it. `getSelectedScales`/`clearSelectedScales`/
+`addSelectedScale`/`removeSelectedScale`/`getPrimaryScaleChords`/
+`getAllSelectedScaleChords` moved here verbatim but are fully dead - zero
+callers anywhere in `src/`, internal or external, confirmed by grep before
+moving (not just "unused export" the way Phase 4's earlier dead-export
+corrections were - these have no callers at all, only their own
+declarations). They weren't re-exported (matching their already-unexported
+status), which is why `scripts/check-build.sh`'s diff now shows them as
+`no-unused-vars` in `state.js` - they were never flagged before because
+sitting inside `scaleGenerator.js`'s live `export { ... }` block masked
+their dead status from ESLint. `scalePositionDarkDuplicate` is a second,
+unrelated orphan `let` (zero readers) that moved the same way - a leftover
+with the same name as `fretboardState.scalePositionDarkDuplicate` (the real
+one, migrated to `src/fretboard/state.js` in Phase 3), not the same
+variable.
+
+`refreshChordsForRootNote` moved here too, not into the future
+`rootNoteTable.js` as the investigation's first-pass categorization
+suggested - reading its body showed it's pure state+cache glue (reads
+`scaleState`, calls `getPrimaryRootNote`/`precomputeScaleChords`, touches no
+DOM), so keeping it beside the state it reads avoids a needless cross-import
+once `rootNoteTable.js` exists.
+
+Two cross-imports back into the still-2,062-line `scaleGenerator.js` were
+needed (`createHeptatonicScaleTable`, `updateCurrentScaleDisplay` - neither
+has moved yet): `applyExclusiveSelection` calls both directly, and five of
+the moved functions call `updateCurrentScaleDisplay`. `HeptatonicScales`/
+`precomputeScaleChords`/`getChordsForScale` are imported from `../scales`
+(unmoved `scales.js`) - both cross-import paths get repointed once their
+targets move (`../scaleGenerator` -> `./scaleTable` or `..` for the barrel;
+`../scales` -> `./scaleData`), same as `src/progression/scaleSync.js`'s
+repoint in §6.16 -> §6.17.
+
+The one constraint that reached outside `scaleGenerator.js`: `selectedRootNote`/
+`selectedScales`/`exclusiveMode` were exported as bare `let` bindings before
+this step and read as such by four external files. ES module named exports
+are live bindings importers can't reassign - the same reason `fretboardState`
+(§6.3) and `progressionState` (§6.12) exist - so a plain re-export of
+`scaleState.exclusiveMode` under the old bare name isn't possible, and this
+couldn't be deferred to a future barrel step the way function re-exports can
+be. `index.js` (8 read sites - `selectedScales[0]`, `selectedRootNote[0]`,
+6x `exclusiveMode` in keyboard-shortcut branches) and `cross.js` (3 read
+sites) were updated to import `scaleState` and read `scaleState.<name>`.
+`keyboard.js` and `fretboard/index.js` imported `selectedRootNote`/
+`selectedScales` but never used them (confirmed by grep) - dropped from
+their import lists rather than repointed.
+
+`getPrimaryScaleChords`/`getAllSelectedScaleChords` were dropped from
+`scaleGenerator.js`'s own re-export list - grepping every `from
+'.../scaleGenerator'` path across `src/` found zero external importers of
+either name (same check §6.12/§6.22 used for `currentProgression`/
+`parseProgressionInput`), so re-exporting them forward would just have
+carried a dead export into the next file. `scaleGenerator.js` itself now
+imports `scaleState` and 23 functions back from `./scales/state` and
+re-exports the subset external files still need under the old
+`./scaleGenerator` path, unchanged, until the barrel step repoints them.
+
+`npm test` (28/28) and `bash scripts/check-build.sh` pass - baseline moved
+219 -> 207 warnings, entirely explained: 4 warnings removed (the two dropped
+unused imports in `keyboard.js`/`fretboard/index.js`), 10 `no-loop-func`
+warnings resolved (closures over `scaleState.<name>` - a stable imported
+reference - no longer trip ESLint's "unsafe reference to a loop-scoped
+variable" check the way closures over a bare mutable `let` did), 7 new
+`no-unused-vars` warnings in `state.js` for the confirmed-dead functions
+above (previously masked, not newly broken), the rest pure line-number
+shifts. Baseline updated and committed alongside this change. Verified via
+the `run-app` skill: zero console errors across all six tabs; the Scale
+Information panel rendered correctly for the default E Aeolian selection;
+on the Scale Selection tab, clicking a scale-family-grid cell (`Dorian`)
+correctly updated the header, both dropdowns, the fretboard note colors,
+and the grid's own highlight - the `applyExclusiveSelection` ->
+`updateCurrentScaleDisplay`/`createHeptatonicScaleTable` cross-import chain,
+exercised end-to-end; the quick-picker's `#quickRootSelect`/
+`#quickScaleFamilySelect` dropdowns (`createQuickScalePicker`'s
+`applySelection` closure) correctly changed `#currentRootNode`/
+`#currentScaleNode` (E Aeolian -> C Aeolian -> C "Lydian #9"), a second,
+independent write path into `scaleState` exercised separately from the grid
+click. Remaining steps: `scaleData.js` (from `scales.js`), `infoPanel.js`,
+then the mutually-dependent `rootNoteTable.js`/`scaleTable.js` pair, then
+the barrel.
+
 ---
 
 ## 7. Known-dead code (context for Phase 1)

@@ -1,7 +1,7 @@
 
 import {processChord} from './theory/chords';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
-import {createHeptatonicScaleTable, selectedRootNote, selectedScales} from './scaleGenerator';
+import {createHeptatonicScaleTable, scaleState} from './scaleGenerator';
 import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from './midi';
 
@@ -206,8 +206,8 @@ function updateCrossReferenceDisplay() {
     crossReferencePlaceholder.innerHTML = '';
     
     // Get current selections
-    const rootNotes = Array.isArray(selectedRootNote) ? selectedRootNote : [selectedRootNote];
-    const scales = selectedScales;
+    const rootNotes = Array.isArray(scaleState.selectedRootNote) ? scaleState.selectedRootNote : [scaleState.selectedRootNote];
+    const scales = scaleState.selectedScales;
     const chords = selectedChordSuffixes;
     
     if (scales.length === 0 || chords.length === 0) {
