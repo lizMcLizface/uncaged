@@ -1827,6 +1827,92 @@ E Aeolian, including every roman-numeral chord-card heading (`I` through
 render time. Remaining steps: the mutually-dependent
 `rootNoteTable.js`/`scaleTable.js` pair, then the barrel.
 
+### 6.26 `src/scales/ui/rootNoteTable.js` + `src/scales/ui/scaleTable.js` (Phase 4 second half, step 4, 2026-08-03)
+
+The last and largest pair of clusters, landed together in one commit since
+they're genuinely interdependent - confirmed by the investigation before
+touching any code, not assumed from the plan's sketch: `createRootNoteTable`
+calls `createHeptatonicScaleTable` three times (root-note changes rebuild
+the scale table so its highlighting stays current) and
+`createHeptatonicScaleTable` calls `createRootNoteTable` once (it embeds a
+fresh root-note table inside its own browsing UI). Splitting them into
+separate commits would have left one half unable to build in isolation, the
+same reasoning that kept `chordCard.js`'s internal cluster and
+`controls.js`'s mini-fretboard/mini-staves groups together as one function
+each in the progression split (§6.18/§6.21).
+
+`rootNoteTable.js` holds `positionTooltipSmart` (moved here rather than
+`scaleTable.js` - four of its six call sites are in `createRootNoteTable`,
+two in `createHeptatonicScaleTable`) and `createRootNoteTable` itself.
+`scaleTable.js` holds `intToRoman` (moved here rather than staying behind in
+`scaleGenerator.js` as §6.25 anticipated - once `createQuickScalePicker`/
+`createHeptatonicScaleTable` moved, `infoPanel.js`'s cross-import of it was
+repointed from `../../scaleGenerator` to the same-directory `./scaleTable`,
+avoiding a needless bounce through the barrel-to-be), `createQuickScalePicker`,
+and `createHeptatonicScaleTable`. Both files cross-import from the other
+(`rootNoteTable.js` imports `createHeptatonicScaleTable` from `./scaleTable`;
+`scaleTable.js` imports `createRootNoteTable`/`positionTooltipSmart` from
+`./rootNoteTable`) - safe for the same reason every cross-import in this
+refactor is: neither file has any top-level executable code (confirmed by
+grep before writing either file), only function/import/export declarations,
+so nothing reads the other's binding before both modules finish loading.
+
+Both files also cross-import `updateCurrentScaleDisplay` from
+`../../scaleGenerator` (not yet moved - it's slated for the eventual
+barrel) and `HeptatonicScales`/`getScaleNotes` from `../scaleData`, but
+**not** `highlightKeysForScales` from there - that one is still on
+`scales.js` itself (the DOM-touching residual §6.24 left behind), so both
+files import it from `../../scales` instead. A first build caught this
+exact mistake (`Attempted import error: 'highlightKeysForScales' is not
+exported from '../scaleData'`) before it reached `npm test`, fixed by
+splitting the two imports.
+
+`state.js`'s existing cross-import of `createHeptatonicScaleTable`
+(pointed at `../scaleGenerator` since §6.23, before this cluster had moved)
+was repointed to `./ui/scaleTable`, the same repoint pattern
+`scaleSync.js` → `fretboardDisplay.js` used in §6.16 → §6.17.
+`scaleGenerator.js` itself now imports `createHeptatonicScaleTable`/
+`createQuickScalePicker` back from `./scales/ui/scaleTable` purely to keep
+re-exporting them under its own `export { ... }` list - neither is called
+from anywhere still inside `scaleGenerator.js`, only from external files
+still importing the old path (`index.js`, `keyboard.js`, `cross.js`,
+`fretboard/index.js`).
+
+Two rounds of now-dead imports fell out of `scaleGenerator.js`, both caught
+by `scripts/check-build.sh`'s diff before being removed rather than left as
+new warnings: `identifySyntheticChords` (its only real call sites were
+commented-out code, not live) and `createScalePiano` (used only by the
+three functions that moved), then a second round -
+`getChromaticPosition`/`getPreferredDisplay`/`setEnharmonicPreference`/
+`sortRootNotesAndUpdateIndex`/`toggleSelectionMode` - a leftover of §6.23's
+original `state.js` import list that had no remaining callers once this
+step's functions (their only users) moved out.
+
+`npm test` (28/28) and `bash scripts/check-build.sh` pass - baseline moved
+203 -> 202 (one net warning removed, the dead `scales` import from
+`scaleGenerator.js`'s `./scales` import line, itself unrelated dead weight
+this step's editing surfaced - `HeptatonicScales`/`highlightKeysForScales`/
+`getScaleNotes` from the same import stayed, still used by
+`updateCurrentScaleDisplay`); every other diffed line is a pure line-number
+shift or a warning moving with its code (`scaleTable.js` picked up the
+`eqeqeq` warning that used to live in `createHeptatonicScaleTable`'s old
+position in `scaleGenerator.js`). Verified via `run-app`: zero console
+errors across all six tabs, pixel-identical Scale Selection tab rendering
+against the pre-step baseline; then exercised both cross-import directions
+directly - clicking the `Dorian` cell in the heptatonic table (E Aeolian ->
+E Dorian, `applyExclusiveSelection` -> `updateCurrentScaleDisplay` +
+`createHeptatonicScaleTable`'s self-rebuild) and selecting a new root via
+the quick-picker (`G`, `createQuickScalePicker`'s `applySelection` calling
+`createHeptatonicScaleTable` across the file boundary) - both updated the
+header, dropdowns, fretboard note colors, and the grid's own highlight
+correctly, zero console errors.
+
+This closes out the `scaleGenerator.js`/`scales.js` -> `src/scales/` split's
+function-extraction work. Remaining: rename the `scaleGenerator.js`
+residual to `src/scales/index.js` as the barrel, folding in `scales.js`'s
+remaining DOM tail and repointing every external importer of both old
+paths.
+
 ---
 
 ## 7. Known-dead code (context for Phase 1)

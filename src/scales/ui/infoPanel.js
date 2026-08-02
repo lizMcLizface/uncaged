@@ -5,10 +5,8 @@
 // HeptatonicScales/getScaleNotes - no state of its own.
 //
 // `intToRoman` (degree-number -> roman numeral for each chord card's
-// heading) stays in scaleGenerator.js for now and is cross-imported back -
-// it's used more by the not-yet-moved scale-table cluster
-// (createQuickScalePicker/createHeptatonicScaleTable) than by this file, so
-// it'll move once that cluster does rather than twice.
+// heading) lives in ./scaleTable.js, not here - it has three call sites and
+// only one is in this file, the other two are scaleTable.js's own.
 //
 // Split out of scaleGenerator.js as part of REFACTOR_PLAN.md Phase 4 (the
 // scaleGenerator.js/scales.js -> src/scales/ half).
@@ -18,7 +16,7 @@ import { chords } from '../../chords';
 import { createScalePiano, createIntervalPiano, getIntervalInfo, getSynthBaseOctave, DEFAULT_BASE_OCTAVE } from '../../components/MiniPiano/MiniPiano';
 import { getPrimaryScale, getPrimaryRootNote } from '../state';
 import { HeptatonicScales, getScaleNotes } from '../scaleData';
-import { intToRoman } from '../../scaleGenerator';
+import { intToRoman } from './scaleTable';
 
 function bumpOctave(noteWithOctave, bump) {
     if (!bump) return noteWithOctave;

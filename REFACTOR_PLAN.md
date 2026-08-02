@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Second half started: `scaleGenerator.js`/`scales.js` -> `src/scales/`, investigated (`ARCHITECTURE.md` §6.23's intro) and steps 1-3/5 landed - `state.js` (`ARCHITECTURE.md` §6.23), `scaleData.js` (`ARCHITECTURE.md` §6.24), `ui/infoPanel.js` (`ARCHITECTURE.md` §6.25). Remaining: `rootNoteTable.js`/`scaleTable.js`, then the barrel. |
+| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Second half started: `scaleGenerator.js`/`scales.js` -> `src/scales/`, investigated (`ARCHITECTURE.md` §6.23's intro) and steps 1-4/5 landed - `state.js` (`ARCHITECTURE.md` §6.23), `scaleData.js` (`ARCHITECTURE.md` §6.24), `ui/infoPanel.js` (`ARCHITECTURE.md` §6.25), `ui/rootNoteTable.js`+`ui/scaleTable.js` (`ARCHITECTURE.md` §6.26). Remaining: rename the residual to `src/scales/index.js` as the barrel. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -1074,6 +1074,34 @@ pixel-identical to the pre-step screenshot, including every roman-numeral
 chord-card heading, confirming the `intToRoman` cross-import resolves
 correctly. Remaining steps: the mutually-dependent
 `rootNoteTable.js`/`scaleTable.js` pair, then the barrel.
+
+**Progress (2026-08-03), step 4/5 - `src/scales/ui/rootNoteTable.js` +
+`src/scales/ui/scaleTable.js`:** landed together in one commit, confirmed
+mutually dependent before moving (`createRootNoteTable` calls
+`createHeptatonicScaleTable` three times; `createHeptatonicScaleTable`
+calls `createRootNoteTable` once) - splitting them would have left one half
+unbuildable on its own. `rootNoteTable.js` holds `positionTooltipSmart` +
+`createRootNoteTable`; `scaleTable.js` holds `intToRoman` (moved here
+instead of staying behind in `scaleGenerator.js` as planned, since its two
+remaining callers are both in this file) + `createQuickScalePicker` +
+`createHeptatonicScaleTable`. The two files cross-import each other, plus
+both cross-import `updateCurrentScaleDisplay` from `scaleGenerator.js`
+(not yet the barrel). `state.js`'s existing `createHeptatonicScaleTable`
+cross-import was repointed from `../scaleGenerator` to `./ui/scaleTable`.
+Two rounds of dead imports fell out of `scaleGenerator.js`
+(`identifySyntheticChords`/`createScalePiano`, then a leftover set from
+§6.23's original state.js import list with no remaining callers), caught by
+`scripts/check-build.sh`'s diff. Full detail, including a real build error
+this step's first pass hit and fixed (`highlightKeysForScales` wrongly
+assumed to live in `scaleData.js` - it's still on the `scales.js` residual),
+in `ARCHITECTURE.md` §6.26. `npm test` (28/28) and `bash
+scripts/check-build.sh` pass - baseline moved 203 -> 202, fully explained.
+Verified via `run-app`: zero console errors across all six tabs,
+pixel-identical Scale Selection rendering, then exercised both
+cross-import directions directly - a scale-family-grid click and a
+quick-picker root-note change both updated everything correctly end-to-end.
+This closes out the function-extraction work for this phase-half.
+Remaining: rename the residual to `src/scales/index.js` as the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 
