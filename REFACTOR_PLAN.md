@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 9/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js`, `chordCard.js`, `progressionList.js`, `input.js` landed (`ARCHITECTURE.md` §6.12-§6.20). Remaining: `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | Step 10/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js`, `chordCard.js`, `progressionList.js`, `input.js`, `controls.js` landed (`ARCHITECTURE.md` §6.12-§6.21). Remaining: rename the residual to `src/progression/index.js` as the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -915,6 +915,42 @@ shorter progression (3 cards) - each transition confirming the `input`
 event -> debounce -> cross-imported `updateProgression` path works from
 the new module - zero console errors. Remaining steps: `controls.js`, then
 the barrel.
+
+**Progress (2026-08-02), step 10 - `src/progression/controls.js`:** landed
+- the largest single move of Phase 4, 907 lines / 14 control groups, all
+called only from `createChordProgressionUI` (which stays and cross-imports
+the orchestrator). Two clusters turned out entangled by shared
+event-listener wiring and stayed one `buildXControls()` function each
+rather than splitting per the plan's group-by-group sketch:
+`buildMiniFretboardControls` (the mini-fretboard toggle reaches into the
+fretboard-intervals/arpeggiation containers to show/hide them) and
+`buildStaveControls` (the mini-staves checkbox has three separate `change`
+listeners registered on it, one of them from the theory-mode toggle
+redundantly re-toggling the stave-key container - preserved exactly, not
+simplified). `buildSynthControlsContainer` also stayed one function
+(rate/duration/chord-triggering) since its trailing sync code calls back
+into closures declared inside the rate/duration halves. All ~23
+`window.polySynthRef` references landed inside exactly three of the
+resulting groups, untouched. Two now-dead imports/exports fell out of
+`progressionBuilder.js` (`generateShareableURL`/`copyShareableURL`, both
+only used by the Share button which moved - also removed from the file's
+own export list after confirming zero external importers). Full detail in
+`ARCHITECTURE.md` §6.21. `npm test` (28/28) and plain `npm run build` pass -
+219 warnings, unchanged, zero line-number shifts. Verified via `run-app`
+with the most thorough pass of any Phase 4 step: exercised both entangled
+clusters directly (mini-fretboard toggle correctly showed/hid the
+intervals toggle; mini-staves toggle correctly showed/hid both the
+stave-key and theory-mode controls in both directions, with a key change
+and theory-mode toggle in between), the seventh-chords toggle (`I (Em)` ->
+`I (Em7)`), the presets dropdown, Share, and the chord-triggering
+checkbox. Two console messages appeared (a clipboard permission error from
+Share, and an unrelated `className.includes` TypeError) - both looked
+worth checking before trusting as pre-existing: `git stash`-ed
+`progressionBuilder.js` back to the pre-step commit and re-ran the
+identical script, getting byte-identical output including both messages,
+confirming neither is a regression from this move (same check §6.16
+already used once). Remaining step: rename the residual to
+`src/progression/index.js` as the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 
