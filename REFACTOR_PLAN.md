@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 7/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js`, `chordCard.js` landed (`ARCHITECTURE.md` §6.12-§6.18). Remaining: `progressionList.js`, `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | Step 8/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js`, `chordCard.js`, `progressionList.js` landed (`ARCHITECTURE.md` §6.12-§6.19). Remaining: `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -867,6 +867,36 @@ clicked a card to trigger playback; right-clicked a mini-fretboard SVG and
 confirmed the "downloaded as PNG" notification appeared - zero console
 errors. Remaining steps: `progressionList.js`, `input.js`, `controls.js`,
 then the barrel.
+
+**Progress (2026-08-02), step 8 - `src/progression/progressionList.js`:**
+landed - the plan's three named functions
+(`createProgressionDisplaySection`, `updateProgressionDisplay`,
+`highlightCurrentChord`), but not contiguous this time: `updateProgression`/
+`precomputeAllPatternData` sit between the first and the other two and stay
+behind (core residual orchestration and an already cross-imported function,
+respectively), so the three moved individually rather than as one cut
+block. First Phase 4 module with no cross-import back into
+`progressionBuilder.js` at all - verified by grepping every call site
+before moving, same as always, and none of the three touch anything that
+hadn't already moved. `window.highlightCurrentChord = highlightCurrentChord`
+moved with the function since nothing else in `progressionBuilder.js`
+called it directly - PolySynth.jsx only ever reaches it through the global.
+Repointed three existing cross-imports of `updateProgressionDisplay`
+(`chordCard.js`, `scaleSync.js`) from `../progressionBuilder` to
+`./progressionList`; `chordCard.js`'s repoint creates a second two-way pair
+between already-extracted modules (`progressionList.js` <-> `chordCard.js`,
+alongside step 7's `chordCard.js` <-> `parse.js`/`playback.js`). One
+now-dead import (`createChordElement`) fell out of `progressionBuilder.js`,
+caught by `scripts/check-build.sh`'s diff. Full detail in `ARCHITECTURE.md`
+§6.19. `npm test` (28/28) and plain `npm run build` pass - 219 warnings,
+unchanged except one line-number-only shift. Verified via `run-app`: built
+a progression (4 cards rendered), toggled "Show Intervals" and confirmed
+all 4 cards re-rendered correctly, then started the built-in sequencer and
+read each card's `boxShadow` mid-playback - exactly one card showed the
+green highlight at a time, confirming `window.highlightCurrentChord` ->
+`highlightCurrentChord` works end-to-end from its new location - zero
+console errors. Remaining steps: `input.js`, `controls.js`, then the
+barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 
