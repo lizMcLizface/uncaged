@@ -1,9 +1,35 @@
 import $ from 'jquery';
-import {HeptatonicScales, scales, highlightKeysForScales, getScaleNotes, precomputeScaleChords, getChordsForScale, translateNotes, stripOctave} from './scales';
+import {HeptatonicScales, scales, highlightKeysForScales, getScaleNotes, translateNotes, stripOctave} from './scales';
 import {identifySyntheticChords, matchChord} from './theory/chords';
 import {chords} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
 import { createScalePiano, createIntervalPiano, getIntervalInfo, getSynthBaseOctave, DEFAULT_BASE_OCTAVE } from './components/MiniPiano/MiniPiano';
+import {
+    scaleState,
+    persistScaleSelection,
+    getChromaticPosition,
+    getPreferredDisplay,
+    setEnharmonicPreference,
+    sortRootNotesAndUpdateIndex,
+    getPrimaryScale,
+    navigateToNextScale,
+    navigateToPreviousScale,
+    getPrimaryRootNote,
+    navigateToNextRootNote,
+    navigateToPreviousRootNote,
+    navigateRootUpExclusive,
+    navigateRootDownExclusive,
+    navigateModeUpExclusive,
+    navigateModeDownExclusive,
+    navigateScaleFamilyUpExclusive,
+    navigateScaleFamilyDownExclusive,
+    navigateSequentialUpExclusive,
+    navigateSequentialDownExclusive,
+    toggleSelectionMode,
+    setPrimaryRootNote,
+    setPrimaryScale,
+    refreshChordsForRootNote
+} from './scales/state';
 
 // Import progression refresh function (use dynamic import to avoid circular dependency)
 let refreshProgressionDisplay = null;
@@ -14,40 +40,6 @@ try {
 } catch (e) {
     console.warn('Could not import progression refresh function:', e);
 }
-
-// Persisted root note / scale selection so users return to where they left off
-const SCALE_SELECTION_STORAGE_KEY = 'PolySynth-ScaleSelection';
-
-function loadSavedScaleSelection() {
-    try {
-        const raw = localStorage.getItem(SCALE_SELECTION_STORAGE_KEY);
-        return raw ? JSON.parse(raw) : null;
-    } catch (error) {
-        console.warn('Could not load saved scale/root selection, using defaults', error);
-        return null;
-    }
-}
-
-const savedScaleSelection = loadSavedScaleSelection();
-
-function persistScaleSelection() {
-    try {
-        localStorage.setItem(SCALE_SELECTION_STORAGE_KEY, JSON.stringify({
-            selectedScales,
-            selectedRootNote,
-            primaryScaleIndex,
-            primaryRootNoteIndex,
-            exclusiveMode
-        }));
-    } catch (error) {
-        console.warn('Could not persist scale/root selection', error);
-    }
-}
-
-// Global array to store selected scales
-let selectedScales = savedScaleSelection?.selectedScales ?? ['Major-6']; // Default to Aeolian (mode 6 of Major)
-let exclusiveMode = savedScaleSelection?.exclusiveMode ?? true; // Toggle between exclusive and multiple selection modes
-let scalePositionDarkDuplicate = true; // Toggle for dark duplicate functionality
 
 /**
  * Smart tooltip positioning function that keeps tooltips within viewport bounds
@@ -87,290 +79,6 @@ function positionTooltipSmart(tooltip, e) {
     tooltip.style.left = left + 'px';
     tooltip.style.top = top + 'px';
 }
-
-// Primary scale index for navigation through multiple selected scales
-let primaryScaleIndex = savedScaleSelection?.primaryScaleIndex ?? 0;
-
-// Global variable to store selected root notes (can be array or single string)
-let selectedRootNote = savedScaleSelection?.selectedRootNote ?? ['E']; // Default to E (all other roots deselected)
-
-// Primary root note index for navigation through multiple selected root notes
-let primaryRootNoteIndex = savedScaleSelection?.primaryRootNoteIndex ?? 0;
-
-// Global object to store user's enharmonic display preferences
-// Maps chromatic positions to preferred display (sharp or flat)
-let enharmonicDisplayPreferences = {
-    1: 'C♯',  // Default to sharp for C♯/D♭
-    3: 'D♯',  // Default to sharp for D♯/E♭
-    6: 'F♯',  // Default to sharp for F♯/G♭
-    8: 'G♯',  // Default to sharp for G♯/A♭
-    10: 'A♯'  // Default to sharp for A♯/B♭
-};
-
-// Helper function to get chromatic position of a note
-function getChromaticPosition(note) {
-    const chromaticNotes = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-    const flatToSharp = { 'D♭': 'C♯', 'E♭': 'D♯', 'G♭': 'F♯', 'A♭': 'G♯', 'B♭': 'A♯' };
-    
-    // Convert flat to sharp for lookup
-    const normalizedNote = flatToSharp[note] || note;
-    return chromaticNotes.indexOf(normalizedNote);
-}
-
-// Helper function to get the preferred display for a note
-function getPreferredDisplay(note) {
-    const position = getChromaticPosition(note);
-    if (position !== -1 && enharmonicDisplayPreferences[position]) {
-        return enharmonicDisplayPreferences[position];
-    }
-    return note; // Return original if no preference or not an enharmonic note
-}
-
-// Helper function to set enharmonic display preference
-function setEnharmonicPreference(note) {
-    const position = getChromaticPosition(note);
-    if (position !== -1) {
-        enharmonicDisplayPreferences[position] = note;
-    }
-}
-
-// Helper function to sort root notes in chromatic order
-function sortRootNotesChronomatically(noteArray) {
-    if (!Array.isArray(noteArray)) return noteArray;
-    
-    // Define chromatic order including both sharp and flat versions
-    const chromaticOrder = [
-        'C', 'C♯', 'D♭', 'D', 'D♯', 'E♭', 'E', 'F', 'F♯', 'G♭', 'G', 'G♯', 'A♭', 'A', 'A♯', 'B♭', 'B'
-    ];
-    
-    // Create a map for quick lookup of chromatic positions
-    const chromaticPositions = {};
-    chromaticOrder.forEach((note, index) => {
-        chromaticPositions[note] = index;
-    });
-    
-    // Sort the array based on chromatic positions
-    return noteArray.slice().sort((a, b) => {
-        const posA = chromaticPositions[a] !== undefined ? chromaticPositions[a] : 999;
-        const posB = chromaticPositions[b] !== undefined ? chromaticPositions[b] : 999;
-        return posA - posB;
-    });
-}
-
-// Helper function to sort root notes and update the primary index accordingly
-function sortRootNotesAndUpdateIndex(noteArray, currentPrimaryNote) {
-    if (!Array.isArray(noteArray)) return noteArray;
-    
-    // Define enharmonic equivalents for finding the correct index
-    const enharmonicPairs = {
-        'C♯': 'D♭', 'D♭': 'C♯',
-        'D♯': 'E♭', 'E♭': 'D♯', 
-        'F♯': 'G♭', 'G♭': 'F♯',
-        'G♯': 'A♭', 'A♭': 'G♯',
-        'A♯': 'B♭', 'B♭': 'A♯'
-    };
-    
-    const sortedArray = sortRootNotesChronomatically(noteArray);
-    
-    // Update primary index to match the new position of the current primary note or its enharmonic equivalent
-    if (currentPrimaryNote) {
-        let newIndex = sortedArray.indexOf(currentPrimaryNote);
-        
-        // If exact match not found, try to find enharmonic equivalent
-        if (newIndex === -1 && enharmonicPairs[currentPrimaryNote]) {
-            const enharmonicEquivalent = enharmonicPairs[currentPrimaryNote];
-            newIndex = sortedArray.indexOf(enharmonicEquivalent);
-        }
-        
-        // Only update the index if we found a match (either exact or enharmonic)
-        if (newIndex !== -1) {
-            primaryRootNoteIndex = newIndex;
-        }
-    }
-    
-    return sortedArray;
-}
-
-// Function to get the current primary scale
-function getPrimaryScale() {
-    if (selectedScales.length === 0) return null;
-    if (primaryScaleIndex >= selectedScales.length) {
-        primaryScaleIndex = 0; // Reset if index is out of bounds
-    }
-    return selectedScales[primaryScaleIndex];
-}
-
-// Function to navigate to next scale
-function navigateToNextScale() {
-    if (selectedScales.length <= 1) return false; // No navigation needed
-    primaryScaleIndex = (primaryScaleIndex + 1) % selectedScales.length;
-    updateCurrentScaleDisplay();
-    return true;
-}
-
-// Function to navigate to previous scale
-function navigateToPreviousScale() {
-    if (selectedScales.length <= 1) return false; // No navigation needed
-    primaryScaleIndex = (primaryScaleIndex - 1 + selectedScales.length) % selectedScales.length;
-    updateCurrentScaleDisplay();
-    return true;
-}
-
-// Function to get the current primary root note
-function getPrimaryRootNote() {
-    let rootNote;
-    if (Array.isArray(selectedRootNote)) {
-        if (selectedRootNote.length === 0) return 'C';
-        if (primaryRootNoteIndex >= selectedRootNote.length) {
-            primaryRootNoteIndex = 0; // Reset if index is out of bounds
-        }
-        rootNote = selectedRootNote[primaryRootNoteIndex];
-    } else {
-        rootNote = selectedRootNote;
-    }
-    
-    // Return the preferred display version of this root note
-    return getPreferredDisplay(rootNote);
-}
-
-// Function to navigate to next root note
-function navigateToNextRootNote() {
-    if (!Array.isArray(selectedRootNote) || selectedRootNote.length <= 1) return false; // No navigation needed
-    primaryRootNoteIndex = (primaryRootNoteIndex + 1) % selectedRootNote.length;
-    updateCurrentScaleDisplay();
-    return true;
-}
-
-// Function to navigate to previous root note
-function navigateToPreviousRootNote() {
-    if (!Array.isArray(selectedRootNote) || selectedRootNote.length <= 1) return false; // No navigation needed
-    primaryRootNoteIndex = (primaryRootNoteIndex - 1 + selectedRootNote.length) % selectedRootNote.length;
-    updateCurrentScaleDisplay();
-    return true;
-}
-
-// --- Exclusive-mode navigation ---
-// In exclusive mode there's always exactly one selected root/scale, so the
-// functions above (which cycle through whatever happens to be in the
-// selection array) are no-ops. These instead step through the FULL domain
-// (all 12 roots / all modes of the current family / all families / the full
-// family x mode sequence) and always replace the selection wholesale.
-
-const EXCLUSIVE_NAV_CHROMATIC_NOTES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-
-/**
- * Apply a new primary root and/or scale, refresh the display, and keep the
- * detailed browser tables' highlighting in sync.
- * @param {{rootNote?: string, family?: string, modeNum?: number}} selection
- */
-function applyExclusiveSelection(selection) {
-    if (selection.rootNote !== undefined) {
-        selectedRootNote = [selection.rootNote];
-        primaryRootNoteIndex = 0;
-    }
-    if (selection.family !== undefined && selection.modeNum !== undefined) {
-        selectedScales = [`${selection.family}-${selection.modeNum}`];
-        primaryScaleIndex = 0;
-    }
-    updateCurrentScaleDisplay();
-    createHeptatonicScaleTable();
-}
-
-function navigateRootUpExclusive() {
-    const currentIndex = getChromaticPosition(getPrimaryRootNote());
-    const startIndex = currentIndex === -1 ? 0 : currentIndex;
-    const nextNote = EXCLUSIVE_NAV_CHROMATIC_NOTES[(startIndex + 1) % EXCLUSIVE_NAV_CHROMATIC_NOTES.length];
-    applyExclusiveSelection({ rootNote: nextNote });
-    return true;
-}
-
-function navigateRootDownExclusive() {
-    const currentIndex = getChromaticPosition(getPrimaryRootNote());
-    const startIndex = currentIndex === -1 ? 0 : currentIndex;
-    const prevNote = EXCLUSIVE_NAV_CHROMATIC_NOTES[(startIndex - 1 + EXCLUSIVE_NAV_CHROMATIC_NOTES.length) % EXCLUSIVE_NAV_CHROMATIC_NOTES.length];
-    applyExclusiveSelection({ rootNote: prevNote });
-    return true;
-}
-
-function navigateModeUpExclusive() {
-    const primaryScale = getPrimaryScale();
-    if (!primaryScale) return false;
-    const [family, modeStr] = primaryScale.split('-');
-    const modeCount = HeptatonicScales[family].length;
-    const nextMode = (parseInt(modeStr, 10) % modeCount) + 1;
-    applyExclusiveSelection({ family, modeNum: nextMode });
-    return true;
-}
-
-function navigateModeDownExclusive() {
-    const primaryScale = getPrimaryScale();
-    if (!primaryScale) return false;
-    const [family, modeStr] = primaryScale.split('-');
-    const modeCount = HeptatonicScales[family].length;
-    const prevMode = ((parseInt(modeStr, 10) - 2 + modeCount) % modeCount) + 1;
-    applyExclusiveSelection({ family, modeNum: prevMode });
-    return true;
-}
-
-function navigateScaleFamilyUpExclusive() {
-    const primaryScale = getPrimaryScale();
-    if (!primaryScale) return false;
-    const [family, modeStr] = primaryScale.split('-');
-    const families = Object.keys(HeptatonicScales);
-    const familyIndex = families.indexOf(family);
-    const nextFamily = families[(familyIndex + 1) % families.length];
-    const modeNum = Math.min(parseInt(modeStr, 10), HeptatonicScales[nextFamily].length);
-    applyExclusiveSelection({ family: nextFamily, modeNum });
-    return true;
-}
-
-function navigateScaleFamilyDownExclusive() {
-    const primaryScale = getPrimaryScale();
-    if (!primaryScale) return false;
-    const [family, modeStr] = primaryScale.split('-');
-    const families = Object.keys(HeptatonicScales);
-    const familyIndex = families.indexOf(family);
-    const prevFamily = families[(familyIndex - 1 + families.length) % families.length];
-    const modeNum = Math.min(parseInt(modeStr, 10), HeptatonicScales[prevFamily].length);
-    applyExclusiveSelection({ family: prevFamily, modeNum });
-    return true;
-}
-
-// Steps sequentially through every family x mode combination as one flat
-// list (all 7 modes of the first family, then all 7 of the next, etc.)
-function navigateSequentialUpExclusive() {
-    const primaryScale = getPrimaryScale();
-    if (!primaryScale) return false;
-    const [family, modeStr] = primaryScale.split('-');
-    const families = Object.keys(HeptatonicScales);
-    const familyIndex = families.indexOf(family);
-    const modeCount = HeptatonicScales[family].length;
-    let nextFamilyIndex = familyIndex;
-    let nextMode = parseInt(modeStr, 10) + 1;
-    if (nextMode > modeCount) {
-        nextMode = 1;
-        nextFamilyIndex = (familyIndex + 1) % families.length;
-    }
-    applyExclusiveSelection({ family: families[nextFamilyIndex], modeNum: nextMode });
-    return true;
-}
-
-function navigateSequentialDownExclusive() {
-    const primaryScale = getPrimaryScale();
-    if (!primaryScale) return false;
-    const [family, modeStr] = primaryScale.split('-');
-    const families = Object.keys(HeptatonicScales);
-    const familyIndex = families.indexOf(family);
-    let prevMode = parseInt(modeStr, 10) - 1;
-    let prevFamilyIndex = familyIndex;
-    if (prevMode < 1) {
-        prevFamilyIndex = (familyIndex - 1 + families.length) % families.length;
-        prevMode = HeptatonicScales[families[prevFamilyIndex]].length;
-    }
-    applyExclusiveSelection({ family: families[prevFamilyIndex], modeNum: prevMode });
-    return true;
-}
-
 
 var currentScaleHighlight = []
 function highlightScaleNotes(noteArray){
@@ -438,11 +146,11 @@ function updateCurrentScaleDisplay() {
 
     // Show navigation indicators
     // let indicators = [];
-    // if (selectedScales.length > 1) {
-    //     indicators.push(`Scale: ${primaryScaleIndex + 1}/${selectedScales.length}`);
+    // if (scaleState.selectedScales.length > 1) {
+    //     indicators.push(`Scale: ${scaleState.primaryScaleIndex + 1}/${scaleState.selectedScales.length}`);
     // }
-    // if (Array.isArray(selectedRootNote) && selectedRootNote.length > 1) {
-    //     indicators.push(`Root: ${primaryRootNoteIndex + 1}/${selectedRootNote.length}`);
+    // if (Array.isArray(scaleState.selectedRootNote) && scaleState.selectedRootNote.length > 1) {
+    //     indicators.push(`Root: ${scaleState.primaryRootNoteIndex + 1}/${scaleState.selectedRootNote.length}`);
     // }
     // if (indicators.length > 0) {
     //     currentScaleNode.textContent += ` (${indicators.join(', ')})`;
@@ -483,76 +191,6 @@ function updateCurrentScaleDisplay() {
     // console.log("Identified 4-note chords:", identifiedChords_4);
     // console.log("Identified 5-note chords:", identifiedChords_5);
 
-}
-
-// Utility functions to manage selected scales
-function getSelectedScales() {
-    return selectedScales.slice(); // Return a copy of the array
-}
-
-function clearSelectedScales() {
-    selectedScales = [];
-    primaryScaleIndex = 0;
-    // Refresh the table to update visual state
-    createHeptatonicScaleTable();
-    updateCurrentScaleDisplay();
-}
-
-function addSelectedScale(scaleId) {
-    if (!selectedScales.includes(scaleId)) {
-        selectedScales.push(scaleId);
-        
-        // Precompute chords for this scale with current root note(s)
-        const rootNotes = Array.isArray(selectedRootNote) ? selectedRootNote : [selectedRootNote];
-        for (const rootNote of rootNotes) {
-            precomputeScaleChords(scaleId, rootNote);
-        }
-        
-        // If this is the first scale being added, make it primary
-        if (selectedScales.length === 1) {
-            primaryScaleIndex = 0;
-        }
-        // Refresh the table to update visual state
-        createHeptatonicScaleTable();
-        updateCurrentScaleDisplay();
-    }
-}
-
-function removeSelectedScale(scaleId) {
-    const index = selectedScales.indexOf(scaleId);
-    if (index > -1) {
-        selectedScales.splice(index, 1);
-        // Adjust primary scale index if needed
-        if (primaryScaleIndex >= selectedScales.length) {
-            primaryScaleIndex = Math.max(0, selectedScales.length - 1);
-        } else if (primaryScaleIndex > index) {
-            primaryScaleIndex--;
-        }
-        // Refresh the table to update visual state
-        createHeptatonicScaleTable();
-        updateCurrentScaleDisplay();
-    }
-}
-
-function toggleSelectionMode() {
-    exclusiveMode = !exclusiveMode;
-    
-    // If switching to exclusive mode and multiple items are selected, keep only the first one
-    if (exclusiveMode && selectedScales.length > 1) {
-        selectedScales = [selectedScales[0]];
-        primaryScaleIndex = 0;
-    }
-    
-    // Handle root note selection mode change
-    if (exclusiveMode && Array.isArray(selectedRootNote)) {
-        // Switch to exclusive mode - keep only the first selected root note
-        selectedRootNote = selectedRootNote[0];
-        primaryRootNoteIndex = 0;
-    }
-    
-    // console.log(`Selection mode: ${exclusiveMode ? 'Exclusive' : 'Multiple'}`);
-    // Don't call createHeptatonicScaleTable here - let the event listener handle it
-    persistScaleSelection();
 }
 
 // Try to get the new scale controls container first, fallback to old one
@@ -613,10 +251,10 @@ function createRootNoteTable() {
     
     // Check if all notes are selected (considering only one version of each enharmonic pair)
     let allNotesSelected = false;
-    if (Array.isArray(selectedRootNote)) {
+    if (Array.isArray(scaleState.selectedRootNote)) {
         // Count unique chromatic positions, considering enharmonic equivalents
         const selectedChromaticPositions = new Set();
-        selectedRootNote.forEach(note => {
+        scaleState.selectedRootNote.forEach(note => {
             // Map each note to its chromatic position
             const chromaticIndex = chromaticNotes.indexOf(note);
             if (chromaticIndex !== -1) {
@@ -651,16 +289,16 @@ function createRootNoteTable() {
             }
         });
         
-        if (exclusiveMode) {
+        if (scaleState.exclusiveMode) {
             // In exclusive mode, "All" doesn't make sense, so do nothing
             // Could alternatively select 'C' or show a message
             return;
         } else {
             // In multiple mode, toggle between all selected and just 'C'
-            if (Array.isArray(selectedRootNote)) {
+            if (Array.isArray(scaleState.selectedRootNote)) {
                 // Count unique chromatic positions to check if all are selected
                 const selectedChromaticPositions = new Set();
-                selectedRootNote.forEach(note => {
+                scaleState.selectedRootNote.forEach(note => {
                     const chromaticIndex = chromaticNotes.indexOf(note);
                     if (chromaticIndex !== -1) {
                         selectedChromaticPositions.add(chromaticIndex);
@@ -679,22 +317,22 @@ function createRootNoteTable() {
                 
                 if (selectedChromaticPositions.size === chromaticNotes.length) {
                     // All are selected, reset to just 'C'
-                    selectedRootNote = 'C';
-                    primaryRootNoteIndex = 0;
+                    scaleState.selectedRootNote = 'C';
+                    scaleState.primaryRootNoteIndex = 0;
                 } else {
                     // Not all selected, select all (using sharp versions by default)
-                    selectedRootNote = [...chromaticNotes];
-                    primaryRootNoteIndex = 0;
+                    scaleState.selectedRootNote = [...chromaticNotes];
+                    scaleState.primaryRootNoteIndex = 0;
                 }
             } else {
                 // Not all selected, select all
-                selectedRootNote = [...chromaticNotes];
-                primaryRootNoteIndex = 0;
+                scaleState.selectedRootNote = [...chromaticNotes];
+                scaleState.primaryRootNoteIndex = 0;
             }
             refreshChordsForRootNote(); // Refresh chords for updated root notes
         }
         
-        // console.log('Selected root note(s):', selectedRootNote);
+        // console.log('Selected root note(s):', scaleState.selectedRootNote);
         // Refresh both tables to update visual state
         createHeptatonicScaleTable();
         updateCurrentScaleDisplay();
@@ -718,7 +356,7 @@ function createRootNoteTable() {
         tooltip.style.fontSize = '11px';
         
         let tooltipText = `<strong>All Root Notes</strong><br>`;
-        if (exclusiveMode) {
+        if (scaleState.exclusiveMode) {
             tooltipText += `<em>Not available in exclusive mode</em>`;
         } else {
             tooltipText += `<em>Click to ${allNotesSelected ? 'reset to C only' : 'select all notes'}</em>`;
@@ -751,21 +389,21 @@ function createRootNoteTable() {
     
     // Helper function to check if a note is selected
     function isNoteSelected(note) {
-        if (exclusiveMode) {
+        if (scaleState.exclusiveMode) {
             // Check if the note or its enharmonic equivalent is selected
             const position = getChromaticPosition(note);
-            if (Array.isArray(selectedRootNote)) {
-                return selectedRootNote.some(selectedNote => getChromaticPosition(selectedNote) === position);
+            if (Array.isArray(scaleState.selectedRootNote)) {
+                return scaleState.selectedRootNote.some(selectedNote => getChromaticPosition(selectedNote) === position);
             } else {
-                return getChromaticPosition(selectedRootNote) === position;
+                return getChromaticPosition(scaleState.selectedRootNote) === position;
             }
         } else {
-            if (Array.isArray(selectedRootNote)) {
+            if (Array.isArray(scaleState.selectedRootNote)) {
                 // Check if the note or its enharmonic equivalent is selected
                 const position = getChromaticPosition(note);
-                return selectedRootNote.some(selectedNote => getChromaticPosition(selectedNote) === position);
+                return scaleState.selectedRootNote.some(selectedNote => getChromaticPosition(selectedNote) === position);
             } else {
-                return getChromaticPosition(selectedRootNote) === getChromaticPosition(note);
+                return getChromaticPosition(scaleState.selectedRootNote) === getChromaticPosition(note);
             }
         }
     }
@@ -773,7 +411,7 @@ function createRootNoteTable() {
     // Helper function to create a click handler for a note
     function createNoteClickHandler(note, alternativeNote = null) {
         return function() {
-            console.log('Root note clicked:', note, 'Current selectedRootNote:', selectedRootNote);
+            console.log('Root note clicked:', note, 'Current selectedRootNote:', scaleState.selectedRootNote);
             
             // Remove any existing tooltips
             const existingTooltips = document.querySelectorAll('.scale-tooltip');
@@ -787,14 +425,14 @@ function createRootNoteTable() {
             // This handles enharmonic switching (e.g., D♯ ↔ E♭) without changing the actual selection
             if (alternativeNote && isNoteSelected(alternativeNote)) {
                 console.log(`Switching display preference from ${getPreferredDisplay(alternativeNote)} to ${note}`);
-                console.log(`Selected root notes before: ${Array.isArray(selectedRootNote) ? selectedRootNote.join(', ') : selectedRootNote}`);
-                console.log(`Primary index before: ${primaryRootNoteIndex}`);
+                console.log(`Selected root notes before: ${Array.isArray(scaleState.selectedRootNote) ? scaleState.selectedRootNote.join(', ') : scaleState.selectedRootNote}`);
+                console.log(`Primary index before: ${scaleState.primaryRootNoteIndex}`);
                 
                 // Update the enharmonic display preference to the newly clicked note
                 setEnharmonicPreference(note);
                 
-                console.log(`Selected root notes after: ${Array.isArray(selectedRootNote) ? selectedRootNote.join(', ') : selectedRootNote}`);
-                console.log(`Primary index after: ${primaryRootNoteIndex}`);
+                console.log(`Selected root notes after: ${Array.isArray(scaleState.selectedRootNote) ? scaleState.selectedRootNote.join(', ') : scaleState.selectedRootNote}`);
+                console.log(`Primary index after: ${scaleState.primaryRootNoteIndex}`);
                 console.log(`getPrimaryRootNote() now returns: ${getPrimaryRootNote()}`);
                 
                 // Refresh the display to show the new enharmonic preference
@@ -804,59 +442,59 @@ function createRootNoteTable() {
                 return;
             }
             
-            if (exclusiveMode) {
+            if (scaleState.exclusiveMode) {
                 // In exclusive mode, always select the clicked note
-                selectedRootNote = note;
-                primaryRootNoteIndex = 0;
-                console.log('Set root note to:', selectedRootNote);
+                scaleState.selectedRootNote = note;
+                scaleState.primaryRootNoteIndex = 0;
+                console.log('Set root note to:', scaleState.selectedRootNote);
                 refreshChordsForRootNote(); // Refresh chords for new root note
             } else {
                 // In multiple mode, toggle selection
-                if (Array.isArray(selectedRootNote)) {
+                if (Array.isArray(scaleState.selectedRootNote)) {
                     // Already in array mode
-                    const index = selectedRootNote.indexOf(note);
+                    const index = scaleState.selectedRootNote.indexOf(note);
                     if (index > -1) {
                         // Note is selected, remove it
-                        selectedRootNote.splice(index, 1);
+                        scaleState.selectedRootNote.splice(index, 1);
                         // Adjust primary root note index if needed
-                        if (primaryRootNoteIndex >= selectedRootNote.length) {
-                            primaryRootNoteIndex = Math.max(0, selectedRootNote.length - 1);
-                        } else if (primaryRootNoteIndex > index) {
-                            primaryRootNoteIndex--;
+                        if (scaleState.primaryRootNoteIndex >= scaleState.selectedRootNote.length) {
+                            scaleState.primaryRootNoteIndex = Math.max(0, scaleState.selectedRootNote.length - 1);
+                        } else if (scaleState.primaryRootNoteIndex > index) {
+                            scaleState.primaryRootNoteIndex--;
                         }
                         // If array becomes empty, default to 'C'
-                        if (selectedRootNote.length === 0) {
-                            selectedRootNote = 'C';
-                            primaryRootNoteIndex = 0;
+                        if (scaleState.selectedRootNote.length === 0) {
+                            scaleState.selectedRootNote = 'C';
+                            scaleState.primaryRootNoteIndex = 0;
                         }
                         refreshChordsForRootNote(); // Refresh chords for updated root notes
                     } else {
                         // Note is not selected, add it
-                        selectedRootNote.push(note);
+                        scaleState.selectedRootNote.push(note);
                         // Sort the array chronomatically and update primary index
                         const currentPrimary = getPrimaryRootNote();
-                        selectedRootNote = sortRootNotesAndUpdateIndex(selectedRootNote, currentPrimary);
+                        scaleState.selectedRootNote = sortRootNotesAndUpdateIndex(scaleState.selectedRootNote, currentPrimary);
                         refreshChordsForRootNote(); // Refresh chords for new root note
                     }
                 } else {
                     // Convert to array mode
-                    if (selectedRootNote === note) {
+                    if (scaleState.selectedRootNote === note) {
                         // Clicking the same note - convert to array with just 'C'
-                        selectedRootNote = 'C';
-                        primaryRootNoteIndex = 0;
+                        scaleState.selectedRootNote = 'C';
+                        scaleState.primaryRootNoteIndex = 0;
                         refreshChordsForRootNote(); // Refresh chords for reset root note
                     } else {
                         // Clicking a different note - convert to array with both
-                        selectedRootNote = [selectedRootNote, note];
+                        scaleState.selectedRootNote = [scaleState.selectedRootNote, note];
                         // Sort the array chronomatically and update primary index
                         const currentPrimary = getPrimaryRootNote();
-                        selectedRootNote = sortRootNotesAndUpdateIndex(selectedRootNote, currentPrimary);
+                        scaleState.selectedRootNote = sortRootNotesAndUpdateIndex(scaleState.selectedRootNote, currentPrimary);
                         refreshChordsForRootNote(); // Refresh chords for new root notes
                     }
                 }
             }
             
-            console.log('Final selectedRootNote:', selectedRootNote, 'Primary index:', primaryRootNoteIndex);
+            console.log('Final selectedRootNote:', scaleState.selectedRootNote, 'Primary index:', scaleState.primaryRootNoteIndex);
             console.log('getPrimaryRootNote() returns:', getPrimaryRootNote());
             
             // Refresh both tables to update visual state
@@ -903,11 +541,11 @@ function createRootNoteTable() {
             
             // Check selection status - only show the preferred enharmonic version as selected
             const chromaticPos = getChromaticPosition(note);
-            const isThisChromaticPositionSelected = (exclusiveMode ? 
-                getChromaticPosition(selectedRootNote) === chromaticPos :
-                (Array.isArray(selectedRootNote) ? 
-                    selectedRootNote.some(sel => getChromaticPosition(sel) === chromaticPos) :
-                    getChromaticPosition(selectedRootNote) === chromaticPos));
+            const isThisChromaticPositionSelected = (scaleState.exclusiveMode ? 
+                getChromaticPosition(scaleState.selectedRootNote) === chromaticPos :
+                (Array.isArray(scaleState.selectedRootNote) ? 
+                    scaleState.selectedRootNote.some(sel => getChromaticPosition(sel) === chromaticPos) :
+                    getChromaticPosition(scaleState.selectedRootNote) === chromaticPos));
             
             const preferredNote = getPreferredDisplay(note);
             const sharpSelected = isThisChromaticPositionSelected && preferredNote === note;
@@ -947,7 +585,7 @@ function createRootNoteTable() {
                 tooltip.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                 
                 let tooltipText = `<strong>Root Note:</strong> ${note}<br>`;
-                if (exclusiveMode) {
+                if (scaleState.exclusiveMode) {
                     tooltipText += `<em>Click to ${sharpSelected ? 'keep selected' : (isThisChromaticPositionSelected ? 'switch to sharp' : 'select')}</em>`;
                 } else {
                     tooltipText += `<em>Click to ${sharpSelected ? 'deselect' : (isThisChromaticPositionSelected ? 'switch to sharp' : 'select')}</em>`;
@@ -959,8 +597,8 @@ function createRootNoteTable() {
                 tooltip.appendChild(tooltipContent);
 
                 // Add mini piano visualization if scale is available
-                if (selectedScales.length > 0) {
-                    let firstScaleId = selectedScales[0];
+                if (scaleState.selectedScales.length > 0) {
+                    let firstScaleId = scaleState.selectedScales[0];
                     let [family, mode] = firstScaleId.split('-');
                     let scales = HeptatonicScales;
                     
@@ -1027,9 +665,9 @@ function createRootNoteTable() {
                 });
                 
                 // Restore original scale highlighting
-                if (selectedScales.length > 0) {
+                if (scaleState.selectedScales.length > 0) {
                     let scales = HeptatonicScales;
-                    let firstScaleId = selectedScales[0];
+                    let firstScaleId = scaleState.selectedScales[0];
                     let [family, mode] = firstScaleId.split('-');
                     let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
                     let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
@@ -1057,7 +695,7 @@ function createRootNoteTable() {
                 tooltip.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                 
                 let tooltipText = `<strong>Root Note:</strong> ${flatNote}<br>`;
-                if (exclusiveMode) {
+                if (scaleState.exclusiveMode) {
                     tooltipText += `<em>Click to ${flatSelected ? 'keep selected' : (isThisChromaticPositionSelected ? 'switch to flat' : 'select')}</em>`;
                 } else {
                     tooltipText += `<em>Click to ${flatSelected ? 'deselect' : (isThisChromaticPositionSelected ? 'switch to flat' : 'select')}</em>`;
@@ -1069,8 +707,8 @@ function createRootNoteTable() {
                 tooltip.appendChild(tooltipContent);
 
                 // Add mini piano visualization if scale is available
-                if (selectedScales.length > 0) {
-                    let firstScaleId = selectedScales[0];
+                if (scaleState.selectedScales.length > 0) {
+                    let firstScaleId = scaleState.selectedScales[0];
                     let [family, mode] = firstScaleId.split('-');
                     let scales = HeptatonicScales;
                     
@@ -1135,9 +773,9 @@ function createRootNoteTable() {
                 });
                 
                 // Restore original scale highlighting
-                if (selectedScales.length > 0) {
+                if (scaleState.selectedScales.length > 0) {
                     let scales = HeptatonicScales;
-                    let firstScaleId = selectedScales[0];
+                    let firstScaleId = scaleState.selectedScales[0];
                     let [family, mode] = firstScaleId.split('-');
                     let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
                     let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
@@ -1189,7 +827,7 @@ function createRootNoteTable() {
                 tooltip.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
                 
                 let tooltipText = `<strong>Root Note:</strong> ${note}<br>`;
-                if (exclusiveMode) {
+                if (scaleState.exclusiveMode) {
                     tooltipText += `<em>Click to ${isSelected ? 'keep selected' : 'select'}</em>`;
                 } else {
                     tooltipText += `<em>Click to ${isSelected ? 'deselect' : 'select'}</em>`;
@@ -1201,8 +839,8 @@ function createRootNoteTable() {
                 tooltip.appendChild(tooltipContent);
 
                 // Add mini piano visualization if scale is available
-                if (selectedScales.length > 0) {
-                    let firstScaleId = selectedScales[0];
+                if (scaleState.selectedScales.length > 0) {
+                    let firstScaleId = scaleState.selectedScales[0];
                     let [family, mode] = firstScaleId.split('-');
                     let scales = HeptatonicScales;
                     
@@ -1267,9 +905,9 @@ function createRootNoteTable() {
                     }
                 });
                 
-                if (selectedScales.length > 0) {
+                if (scaleState.selectedScales.length > 0) {
                     let scales = HeptatonicScales;
-                    let firstScaleId = selectedScales[0];
+                    let firstScaleId = scaleState.selectedScales[0];
                     let [family, mode] = firstScaleId.split('-');
                     let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
                     let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
@@ -1703,10 +1341,10 @@ function createQuickScalePicker() {
     container.appendChild(modeSelect);
 
     function applySelection() {
-        selectedRootNote = [rootSelect.value];
-        primaryRootNoteIndex = 0;
-        selectedScales = [`${familySelect.value}-${modeSelect.value}`];
-        primaryScaleIndex = 0;
+        scaleState.selectedRootNote = [rootSelect.value];
+        scaleState.primaryRootNoteIndex = 0;
+        scaleState.selectedScales = [`${familySelect.value}-${modeSelect.value}`];
+        scaleState.primaryScaleIndex = 0;
         updateCurrentScaleDisplay();
         // Keep the detailed browser tables' highlighting in sync
         createHeptatonicScaleTable();
@@ -1753,7 +1391,7 @@ function createHeptatonicScaleTable() {
     
     let toggleInput = document.createElement('input');
     toggleInput.type = 'checkbox';
-    toggleInput.checked = exclusiveMode;
+    toggleInput.checked = scaleState.exclusiveMode;
     toggleInput.style.opacity = '0';
     toggleInput.style.width = '0';
     toggleInput.style.height = '0';
@@ -1765,7 +1403,7 @@ function createHeptatonicScaleTable() {
     slider.style.left = '0';
     slider.style.right = '0';
     slider.style.bottom = '0';
-    slider.style.backgroundColor = exclusiveMode ? '#4CAF50' : '#ccc';
+    slider.style.backgroundColor = scaleState.exclusiveMode ? '#4CAF50' : '#ccc';
     slider.style.transition = '0.4s';
     slider.style.borderRadius = '28px';
     
@@ -1774,7 +1412,7 @@ function createHeptatonicScaleTable() {
     sliderButton.style.content = '';
     sliderButton.style.height = '22px';
     sliderButton.style.width = '22px';
-    sliderButton.style.left = exclusiveMode ? '25px' : '3px';
+    sliderButton.style.left = scaleState.exclusiveMode ? '25px' : '3px';
     sliderButton.style.bottom = '3px';
     sliderButton.style.backgroundColor = 'white';
     sliderButton.style.transition = '0.4s';
@@ -1786,7 +1424,7 @@ function createHeptatonicScaleTable() {
     
     // Add label text
     let toggleLabel = document.createElement('span');
-    toggleLabel.textContent = exclusiveMode ? 'Exclusive Selection' : 'Multiple Selection';
+    toggleLabel.textContent = scaleState.exclusiveMode ? 'Exclusive Selection' : 'Multiple Selection';
     toggleLabel.style.fontWeight = 'bold';
     toggleLabel.style.fontSize = '14px';
 
@@ -1803,10 +1441,10 @@ function createHeptatonicScaleTable() {
     clearButton.style.marginLeft = '8px';
     
     clearButton.onclick = function() {
-        selectedScales = ['Major-1']; // Reset to default first scale
-        primaryScaleIndex = 0;
-        selectedRootNote = 'C'; // Reset root note to C
-        primaryRootNoteIndex = 0;
+        scaleState.selectedScales = ['Major-1']; // Reset to default first scale
+        scaleState.primaryScaleIndex = 0;
+        scaleState.selectedRootNote = 'C'; // Reset root note to C
+        scaleState.primaryRootNoteIndex = 0;
         createHeptatonicScaleTable();
         updateCurrentScaleDisplay();
     };
@@ -1858,7 +1496,7 @@ function createHeptatonicScaleTable() {
                 cell.textContent = i === 0 ? 'Scale' : `${scaleNames[i-1]}`;
                 
                 // Add click functionality to select/deselect entire row
-                if (i > 0 && !exclusiveMode) { // Skip the header row and disable in exclusive mode
+                if (i > 0 && !scaleState.exclusiveMode) { // Skip the header row and disable in exclusive mode
                     cell.style.cursor = 'pointer';
                     cell.style.userSelect = 'none';
                     
@@ -1881,42 +1519,42 @@ function createHeptatonicScaleTable() {
                         }
                         
                         // Check if all scales in this row are selected
-                        const allSelected = rowScaleIds.every(id => selectedScales.includes(id));
+                        const allSelected = rowScaleIds.every(id => scaleState.selectedScales.includes(id));
                         
                         if (allSelected) {
-                            if (exclusiveMode) {
+                            if (scaleState.exclusiveMode) {
                                 // In exclusive mode, prevent deselection - do nothing
                                 // Keep current selection
                             } else {
                                 // In multiple mode, only deselect if we have other selections
-                                const otherSelections = selectedScales.filter(id => !rowScaleIds.includes(id));
+                                const otherSelections = scaleState.selectedScales.filter(id => !rowScaleIds.includes(id));
                                 if (otherSelections.length > 0) {
                                     // We have other selections, safe to deselect this row
                                     rowScaleIds.forEach(id => {
-                                        const index = selectedScales.indexOf(id);
+                                        const index = scaleState.selectedScales.indexOf(id);
                                         if (index > -1) {
-                                            selectedScales.splice(index, 1);
+                                            scaleState.selectedScales.splice(index, 1);
                                         }
                                     });
                                 }
                                 // If no other selections, do nothing (keep this row selected)
                             }
                         } else {
-                            if (exclusiveMode) {
+                            if (scaleState.exclusiveMode) {
                                 // In exclusive mode, clear all selections first, then select this row
-                                selectedScales = [];
-                                selectedScales.push(...rowScaleIds);
+                                scaleState.selectedScales = [];
+                                scaleState.selectedScales.push(...rowScaleIds);
                             } else {
                                 // In multiple mode, add all unselected scales in this row
                                 rowScaleIds.forEach(id => {
-                                    if (!selectedScales.includes(id)) {
-                                        selectedScales.push(id);
+                                    if (!scaleState.selectedScales.includes(id)) {
+                                        scaleState.selectedScales.push(id);
                                     }
                                 });
                             }
                         }
                         
-                        // console.log('Selected scales:', selectedScales);
+                        // console.log('Selected scales:', scaleState.selectedScales);
                         
                         // Refresh the table to update visual state
                         createHeptatonicScaleTable();
@@ -1934,7 +1572,7 @@ function createHeptatonicScaleTable() {
                             rowScaleIds.push(`${scaleName}-${col}`);
                         }
                         
-                        const allSelected = rowScaleIds.every(id => selectedScales.includes(id));
+                        const allSelected = rowScaleIds.every(id => scaleState.selectedScales.includes(id));
                         
                         let tooltip = document.createElement('div');
                         tooltip.className = 'scale-tooltip';
@@ -1980,7 +1618,7 @@ function createHeptatonicScaleTable() {
                     cell.style.userSelect = 'none';
                     
                     // Check if this scale is already selected
-                    if (selectedScales.includes(scaleId)) {
+                    if (scaleState.selectedScales.includes(scaleId)) {
                         cell.style.backgroundColor = '#4CAF50';
                         cell.style.color = 'white';
                     } else {
@@ -1998,16 +1636,16 @@ function createHeptatonicScaleTable() {
                             }
                         });
                         
-                        const index = selectedScales.indexOf(scaleId);
+                        const index = scaleState.selectedScales.indexOf(scaleId);
                         
-                        if (exclusiveMode) {
+                        if (scaleState.exclusiveMode) {
                             if (index > -1) {
                                 // In exclusive mode, prevent deselection of current element - do nothing
                                 // Already selected element stays selected
                             } else {
                                 // Scale is not selected, clear all and select only this one
-                                selectedScales = [scaleId];
-                                primaryScaleIndex = 0;
+                                scaleState.selectedScales = [scaleId];
+                                scaleState.primaryScaleIndex = 0;
                                 // In exclusive mode, always refresh the entire table
                                 createHeptatonicScaleTable();
                                 updateCurrentScaleDisplay();
@@ -2016,16 +1654,16 @@ function createHeptatonicScaleTable() {
                             // Multiple selection mode (original behavior)
                             if (index > -1) {
                                 // Prevent deselection of last element in multiple mode
-                                if (selectedScales.length > 1) {
+                                if (scaleState.selectedScales.length > 1) {
                                     // Scale is selected, remove it (only if not the last one)
-                                    selectedScales.splice(index, 1);
+                                    scaleState.selectedScales.splice(index, 1);
                                     cell.style.backgroundColor = '';
                                     cell.style.color = '';
                                 }
                                 // If it's the last element, do nothing (keep it selected)
                             } else {
                                 // Scale is not selected, add it
-                                selectedScales.push(scaleId);
+                                scaleState.selectedScales.push(scaleId);
                                 cell.style.backgroundColor = '#4CAF50';
                                 cell.style.color = 'white';
                             }
@@ -2037,7 +1675,7 @@ function createHeptatonicScaleTable() {
                             updateCurrentScaleDisplay();
                         }
                         
-                        // console.log('Selected scales:', selectedScales);
+                        // console.log('Selected scales:', scaleState.selectedScales);
                     };
                     
                     cell.onmouseover = function() {
@@ -2068,7 +1706,7 @@ function createHeptatonicScaleTable() {
                         tooltipContent.innerHTML = `
                             <strong>Scale:</strong> ${scaleName}<br>
                             <strong>Interval:</strong> ${interval}<br>
-                            <em>Click to ${selectedScales.includes(scaleId) ? 'deselect' : 'select'}</em>${altNamesHtml}
+                            <em>Click to ${scaleState.selectedScales.includes(scaleId) ? 'deselect' : 'select'}</em>${altNamesHtml}
                         `;
                         tooltip.appendChild(tooltipContent);
                         
@@ -2107,7 +1745,7 @@ function createHeptatonicScaleTable() {
 
 
                             // identifiedChords.forEach(chord => {
-                            //     tooltip.innerHTML += `${chord.chord} - ${selectedRootNote[0]}${chord.matches}<br>`;
+                            //     tooltip.innerHTML += `${chord.chord} - ${scaleState.selectedRootNote[0]}${chord.matches}<br>`;
                             // });
                         }
                         
@@ -2120,7 +1758,7 @@ function createHeptatonicScaleTable() {
                             document.body.removeChild(tooltip);
                             cell.onmousemove = null;
                             cell.onmouseleave = null;
-                            let firstScaleId = selectedScales[0];
+                            let firstScaleId = scaleState.selectedScales[0];
                             let [family, mode] = firstScaleId.split('-');
                             let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
                             let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
@@ -2152,50 +1790,6 @@ function createHeptatonicScaleTable() {
 
     return;
 
-}
-
-/**
- * Get precomputed chords for the current primary scale and root note
- * @returns {object|null} Precomputed chord data or null if not available
- */
-function getPrimaryScaleChords() {
-    const primaryScale = getPrimaryScale();
-    const primaryRootNote = getPrimaryRootNote();
-    
-    if (!primaryScale || !primaryRootNote) {
-        return null;
-    }
-    
-    return getChordsForScale(primaryScale, primaryRootNote);
-}
-
-/**
- * Get precomputed chords for all selected scales with current root note
- * @returns {Array<object>} Array of chord data for all selected scales
- */
-function getAllSelectedScaleChords() {
-    const primaryRootNote = getPrimaryRootNote();
-    if (!primaryRootNote) {
-        return [];
-    }
-    
-    return selectedScales.map(scaleId => {
-        return getChordsForScale(scaleId, primaryRootNote);
-    }).filter(chordData => chordData !== null);
-}
-
-/**
- * Refresh chord cache for all selected scales when root note changes
- */
-function refreshChordsForRootNote() {
-    const primaryRootNote = getPrimaryRootNote();
-    if (!primaryRootNote) {
-        return;
-    }
-    
-    selectedScales.forEach(scaleId => {
-        precomputeScaleChords(scaleId, primaryRootNote);
-    });
 }
 
 /**
@@ -2442,54 +2036,10 @@ function initializeNavigationButtonsDirect() {
 // Initialize navigation buttons when the module loads
 initializeNavigationButtons();
 
-/**
- * Set the primary root note by note name
- * @param {string} rootNote - Root note name (e.g., 'C', 'D♯', 'F#')
- */
-function setPrimaryRootNote(rootNote) {
-    // Normalize the note name to handle both sharp and flat representations
-    const normalizedNote = rootNote.replace('#', '♯').replace('b', '♭');
-    
-    if (Array.isArray(selectedRootNote)) {
-        const index = selectedRootNote.findIndex(note => note === normalizedNote || note === rootNote);
-        if (index !== -1) {
-            primaryRootNoteIndex = index;
-            updateCurrentScaleDisplay();
-            return true;
-        }
-    } else {
-        selectedRootNote = normalizedNote;
-        updateCurrentScaleDisplay();
-        return true;
-    }
-    return false;
-}
-
-/**
- * Set the primary scale by scale name
- * @param {string} scaleName - Scale name (e.g., 'Major-1', 'Minor-1')
- */
-function setPrimaryScale(scaleName) {
-    const index = selectedScales.findIndex(scale => scale === scaleName);
-    if (index !== -1) {
-        primaryScaleIndex = index;
-        updateCurrentScaleDisplay();
-        return true;
-    } else {
-        // If scale isn't in selected scales, add it and make it primary
-        selectedScales.push(scaleName);
-        primaryScaleIndex = selectedScales.length - 1;
-        updateCurrentScaleDisplay();
-        return true;
-    }
-}
-
-
 export {
     createHeptatonicScaleTable,
     createQuickScalePicker,
-    selectedRootNote,
-    selectedScales,
+    scaleState,
     getPrimaryScale,
     navigateToNextScale,
     navigateToPreviousScale,
@@ -2497,14 +2047,11 @@ export {
     navigateToNextRootNote,
     navigateToPreviousRootNote,
     updateCurrentScaleDisplay,
-    getPrimaryScaleChords,
-    getAllSelectedScaleChords,
     refreshChordsForRootNote,
     initializeNavigationButtons,
     initializeNavigationButtonsDirect,
     setPrimaryRootNote,
     setPrimaryScale,
-    exclusiveMode,
     navigateRootUpExclusive,
     navigateRootDownExclusive,
     navigateModeUpExclusive,

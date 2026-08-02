@@ -19,7 +19,7 @@ import { context,
     isPlaying} from './synth';
 import {processChord} from './theory/chords';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
-import {createHeptatonicScaleTable, selectedRootNote, selectedScales} from './scaleGenerator';
+import {createHeptatonicScaleTable} from './scaleGenerator';
 import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from './midi';
 import {createScaleChordCrossReference, updateCrossReferenceDisplay} from './cross';

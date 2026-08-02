@@ -5,7 +5,7 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import $ from 'jquery';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
-import {createHeptatonicScaleTable, selectedRootNote, selectedScales, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, exclusiveMode, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scaleGenerator';
+import {createHeptatonicScaleTable, scaleState, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scaleGenerator';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
 import {modifiers, keyToNote} from './keyboard';
 import {initializeFretboard, getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState} from './fretboard';
@@ -25,10 +25,10 @@ document.addEventListener('DOMContentLoaded', () => {
     refreshChordsForRootNote();
 });
 
-let firstScaleId = selectedScales[0];
+let firstScaleId = scaleState.selectedScales[0];
 let [family, mode] = firstScaleId.split('-');
 let intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
-let scaleNotes = getScaleNotes(selectedRootNote[0], intervals);
+let scaleNotes = getScaleNotes(scaleState.selectedRootNote[0], intervals);
 
 // Export scale and fretboard functions for chord button grid
 window.getPrimaryScale = getPrimaryScale;
@@ -118,24 +118,24 @@ function onKeyPress(event, up) {
     // mode, the keys fall back to cycling through whatever's in the
     // multi-select arrays (the original behavior).
     if (event.type == 'keydown' && event.code == 'KeyN'){
-        if (exclusiveMode ? navigateModeDownExclusive() : navigateToPreviousScale()) {
+        if (scaleState.exclusiveMode ? navigateModeDownExclusive() : navigateToPreviousScale()) {
             console.log('Navigated mode down');
         }
         return; // Don't process as a musical note
     }
     if (event.type == 'keydown' && event.code == 'KeyM'){
-        if (exclusiveMode ? navigateModeUpExclusive() : navigateToNextScale()) {
+        if (scaleState.exclusiveMode ? navigateModeUpExclusive() : navigateToNextScale()) {
             console.log('Navigated mode up');
         }
         return; // Don't process as a musical note
     }
-    if (event.type == 'keydown' && event.code == 'KeyV' && exclusiveMode){
+    if (event.type == 'keydown' && event.code == 'KeyV' && scaleState.exclusiveMode){
         if (navigateScaleFamilyDownExclusive()) {
             console.log('Navigated scale family down');
         }
         return; // Don't process as a musical note
     }
-    if (event.type == 'keydown' && event.code == 'KeyB' && exclusiveMode){
+    if (event.type == 'keydown' && event.code == 'KeyB' && scaleState.exclusiveMode){
         if (navigateScaleFamilyUpExclusive()) {
             console.log('Navigated scale family up');
         }
@@ -143,21 +143,21 @@ function onKeyPress(event, up) {
     }
 
     if (event.type == 'keydown' && event.code == 'Comma'){
-        if (event.shiftKey && exclusiveMode) {
+        if (event.shiftKey && scaleState.exclusiveMode) {
             if (navigateSequentialDownExclusive()) {
                 console.log('Navigated sequentially down');
             }
-        } else if (exclusiveMode ? navigateRootDownExclusive() : navigateToPreviousRootNote()) {
+        } else if (scaleState.exclusiveMode ? navigateRootDownExclusive() : navigateToPreviousRootNote()) {
             console.log('Navigated root down');
         }
         return; // Don't process as a musical note
     }
     if (event.type == 'keydown' && event.code == 'Period'){
-        if (event.shiftKey && exclusiveMode) {
+        if (event.shiftKey && scaleState.exclusiveMode) {
             if (navigateSequentialUpExclusive()) {
                 console.log('Navigated sequentially up');
             }
-        } else if (exclusiveMode ? navigateRootUpExclusive() : navigateToNextRootNote()) {
+        } else if (scaleState.exclusiveMode ? navigateRootUpExclusive() : navigateToNextRootNote()) {
             console.log('Navigated root up');
         }
         return; // Don't process as a musical note
