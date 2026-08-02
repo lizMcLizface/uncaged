@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Second half started: `scaleGenerator.js`/`scales.js` -> `src/scales/`, investigated (`ARCHITECTURE.md` §6.23's intro) and step 1/5 landed - `src/scales/state.js` (`ARCHITECTURE.md` §6.23). Remaining: `scaleData.js`, `infoPanel.js`, `rootNoteTable.js`/`scaleTable.js`, then the barrel. |
+| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Second half started: `scaleGenerator.js`/`scales.js` -> `src/scales/`, investigated (`ARCHITECTURE.md` §6.23's intro) and steps 1-2/5 landed - `state.js` (`ARCHITECTURE.md` §6.23), `scaleData.js` (`ARCHITECTURE.md` §6.24). Remaining: `infoPanel.js`, `rootNoteTable.js`/`scaleTable.js`, then the barrel. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -1029,6 +1029,30 @@ Verified via `run-app`: zero console errors across all six tabs; clicking a
 scale-family-grid cell and using the quick-picker's root/family dropdowns
 both correctly updated the display end-to-end through the new cross-imports
 back into `scaleGenerator.js`. Remaining steps: `scaleData.js`,
+`infoPanel.js`, the `rootNoteTable.js`/`scaleTable.js` pair, then the
+barrel.
+
+**Progress (2026-08-02), step 2/5 - `src/scales/scaleData.js`:** landed -
+the pure data/cache/`getScaleNotes` half of `scales.js` moved as one block;
+`scales.js` itself keeps its shrinking-residual role (now 93 lines, just
+`highlightKeysForScales` and the DOM lookup table it needs) rather than
+being deleted this step, mirroring how `scaleGenerator.js` is being
+handled. `getScaleFromId` was narrowed to module-private (zero external
+importers, confirmed by grep); `generateProperScale` and the
+`setScaleContext`/`getScaleContext` re-export were dropped as dead surface
+for the same reason. `translateNotes`/`stripOctave` had one real external
+consumer (`fretboard/index.js`) that turned out to already import the same
+`theory/notation.js` functions a second time under aliased names - merged
+into one import statement there instead of picking an arbitrary new home
+for a pass-through; `scaleGenerator.js`'s import of the same two names was
+simply dead and got dropped. Full detail in `ARCHITECTURE.md` §6.24.
+`npm test` (28/28) and `bash scripts/check-build.sh` pass - baseline moved
+207 -> 203 warnings, entirely explained (4 dead imports removed, 2
+line-number shifts, zero new warnings). Verified via `run-app`: zero
+console errors across all six tabs; typed a chord progression (`I IV V
+vi`) and confirmed all four chords resolved correctly against E Aeolian
+with correct mini-fretboard voicings, exercising `getScaleNotes` and the
+chord cache from their new module end-to-end. Remaining steps:
 `infoPanel.js`, the `rootNoteTable.js`/`scaleTable.js` pair, then the
 barrel.
 
