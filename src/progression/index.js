@@ -1,34 +1,34 @@
-import { resolveRomanChord } from './theory/roman';
-import { subscribe as subscribeToInstrumentChanges } from './tuning';
-import { initializeNavigationButtonsDirect } from './scaleGenerator';
+import { resolveRomanChord } from '../theory/roman';
+import { subscribe as subscribeToInstrumentChanges } from '../tuning';
+import { initializeNavigationButtonsDirect } from '../scaleGenerator';
 import {
     progressionState,
     MINI_FRETBOARD_CONFIG
-} from './progression/state';
+} from './state';
 import {
     clearCache,
     precomputePatternData,
     parseProgressionInput
-} from './progression/parse';
+} from './parse';
 import {
     loadSharedStateFromURL,
     applySharedState
-} from './progression/share';
-import { getProcessedProgression } from './progression/playback';
+} from './share';
+import { getProcessedProgression } from './playback';
 import {
     setupScaleChangeListener,
     initializeScaleNotesDisplay
-} from './progression/scaleSync';
+} from './scaleSync';
 import {
     displayScaleContext,
     displayAllChordPatterns
-} from './progression/fretboardDisplay';
+} from './fretboardDisplay';
 import {
     createProgressionDisplaySection,
     updateProgressionDisplay
-} from './progression/progressionList';
-import { createInputSection } from './progression/input';
-import { createProgressionControlsSection } from './progression/controls';
+} from './progressionList';
+import { createInputSection } from './input';
+import { createProgressionControlsSection } from './controls';
 
 /**
  * Get the fretboard instance for chord progression operations
@@ -40,28 +40,28 @@ function getFretboardForProgression() {
 
 /**
  * Chord Progression Builder
- * 
+ *
  * This module handles the parsing, validation, and display of chord progressions
  * using both explicit chord names and Roman numeral notation.
- * 
+ *
  * Pattern Notation:
  * Chords can specify a default pattern position using the syntax: chord-position
  * Examples:
  *   C-1      → C major chord, first pattern (pattern index 0)
  *   iv-3     → Fourth degree minor chord, third pattern (pattern index 2)
  *   Dm7-2    → D minor 7 chord, second pattern (pattern index 1)
- * 
+ *
  * Sharing System:
  * The sharing functionality encodes the current state (chord progression with patterns,
  * UI settings, scale/root note) into a Base64-encoded URL parameter. When the page loads
  * with a share parameter, it automatically restores all settings and progressions.
- * 
+ *
  * Example shared URL: https://site.com/?share=eyJwcm9ncmVzc2lvbiI6I...
- * 
+ *
  * State includes:
  * - Chord progression with selected patterns (e.g., "C-1 Am-2 F-1 G-3")
  * - Show scale context toggle
- * - Mini fretboards toggle  
+ * - Mini fretboards toggle
  * - Mini pianos toggle
  * - Mini staves toggle
  * - Use seventh chords toggle
@@ -91,11 +91,11 @@ function createChordProgressionUI(fretboard) {
     // Store fretboard reference for later use
     if (fretboard) {
         window.chordProgressionFretboard = fretboard;
-        
+
         // Set up scale change listener
         setupScaleChangeListener();
     }
-    
+
     // Create main container
     const progressionContainer = document.createElement('div');
     progressionContainer.className = 'chord-progression-container';
@@ -106,19 +106,19 @@ function createChordProgressionUI(fretboard) {
         border-radius: 8px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
     `;
-    
+
     // Create input section
     const inputSection = createInputSection();
     progressionContainer.appendChild(inputSection);
-    
+
     // Create controls section
     const controlsSection = createProgressionControlsSection();
     progressionContainer.appendChild(controlsSection);
-    
+
     // Create progression display section
     const displaySection = createProgressionDisplaySection();
     progressionContainer.appendChild(displaySection);
-    
+
     // Reinitialize navigation buttons since we've created new root and scale buttons
     // Use setTimeout to ensure DOM is ready
     setTimeout(() => {
@@ -126,7 +126,7 @@ function createChordProgressionUI(fretboard) {
         // Initialize the scale notes display with current scale (with retries)
         initializeScaleNotesDisplay();
     }, 100);
-    
+
     return progressionContainer;
 }
 
@@ -136,7 +136,7 @@ function createChordProgressionUI(fretboard) {
  */
 function updateProgression(progressionText) {
     const parsedProgression = parseProgressionInput(progressionText);
-    
+
     // Resolve Roman numerals to actual chords
     const resolvedProgression = parsedProgression.map(chord => {
         if (chord.type === 'roman') {
@@ -144,16 +144,16 @@ function updateProgression(progressionText) {
         }
         return chord;
     });
-    
+
     // Reset hover state when progression changes
     progressionState.hoveredChordIndex = null;
-    
+
     progressionState.currentProgression = resolvedProgression;
     window.currentProgression = progressionState.currentProgression; // Update global reference
-    
+
     // Also provide processed progression for sequencer
     window.processedProgression = getProcessedProgression();
-    
+
     // If progression sequencer is currently playing, update it with new progression
     if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
         const state = window.polySynthRef.getProgressionSequencerState();
@@ -163,13 +163,13 @@ function updateProgression(progressionText) {
             console.log('🔄 Updated playing progression with', processedProgression.length, 'chords (with processed notes)');
         }
     }
-    
+
     // Precompute pattern data for all chords to optimize hover performance
     precomputeAllPatternData();
-    
+
     // Update display
     updateProgressionDisplay();
-    
+
     // Update fretboard display
     displayAllChordPatterns();
 }
@@ -189,7 +189,7 @@ function precomputeAllPatternData() {
         progressionState.precomputedPatternData.delete(index);
         progressionState.selectedPatternIndexes.delete(index);
     });
-    
+
     // Compute pattern data for all current chords
     progressionState.currentProgression.forEach((chord, index) => {
         // Always recompute to ensure fresh data
@@ -206,37 +206,37 @@ function clearProgression() {
     window.currentProgression = progressionState.currentProgression; // Update global reference
     progressionState.hoveredChordIndex = null;
     progressionState.selectedPatternIndexes.clear();
-    
+
     // Clear caches
     clearCache();
-    
+
     const input = document.getElementById('chord-progression-input');
     if (input) {
         input.value = '';
     }
-    
+
     updateProgressionDisplay();
-    
+
     const fretboard = getFretboardForProgression();
     if (fretboard) {
         fretboard.clearMarkers();
         fretboard.clearChordLines();
-        
+
         // Default back to scale display and activate scale button
         displayScaleContext();
-        
+
         // Activate the scale button (first button in Roman numeral controls)
         const scaleButton = document.querySelector('[data-chord-index="0"]');
         if (scaleButton) {
             // Set visual state to active
             scaleButton.style.background = 'linear-gradient(to bottom, #d4edda, #c3e6cb)';
             scaleButton.style.color = '#155724';
-            
+
             // Update the current displayed chord state in the parent context
             if (typeof window.currentDisplayedChord !== 'undefined') {
                 window.currentDisplayedChord = 0; // Scale button
             }
-            
+
             // Update button styles if the function exists
             if (typeof window.updateChordButtonStyles === 'function') {
                 window.updateChordButtonStyles();
@@ -245,21 +245,18 @@ function clearProgression() {
     }
 }
 
-// Export functions for use in other modules
+// Public barrel surface for src/progression/ - same pattern as
+// src/fretboard/index.js (Phase 3). createChordProgressionUI/
+// loadSharedStateFromURL are this file's real external exports (used by
+// src/fretboard/ui/controls.js); the rest are cross-imported back by
+// sibling modules in this folder, same two-way-import shape documented in
+// each of their own headers (ARCHITECTURE.md §6.13-§6.21).
 export {
     createChordProgressionUI,
-    parseProgressionInput,
-    // Cross-imported back by src/progression/share.js and
-    // src/progression/input.js - see those files' headers for why.
     updateProgression,
     clearProgression,
     loadSharedStateFromURL,
     applySharedState,
-    // Cross-imported back by src/progression/fretboardDisplay.js - see
-    // that file's header for why (its three real callers, verified by
-    // grep rather than file position).
     getFretboardForProgression,
-    // Cross-imported back by src/progression/scaleSync.js - see that
-    // file's header for why (hasn't moved out of this file yet).
     precomputeAllPatternData
 };

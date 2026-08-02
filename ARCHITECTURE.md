@@ -310,8 +310,8 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/progression/chordCard.js` *(Phase 4, seventh step, landed 2026-08-02; updated eighth step)* | The per-chord card in the progression display: `createChordElement` (name, notes, optional mini piano/stave, status indicator, hover/click handlers), `createPatternSelector` (the fret-pattern dropdown + prev/next buttons), `createMiniFretboardVisualization` (the SVG voicing diagram), `copySvgAsPng`, `showNotification`, `lightenColor` - all private except `createChordElement`. Also `getChordDisplayName`, moved here in step 7 rather than staying in `progressionBuilder.js` as earlier steps' notes expected - see §6.18. | theory, `scaleGenerator.js`, `scales.js`, MiniPiano/MiniStave components, `audio/dispatch.js`, `src/progression/state`, `src/progression/parse` (`precomputePatternData`), `src/progression/playback`, `src/progression/fretboardDisplay`, and (cross-import, see §6.19) `updateProgressionDisplay` from `src/progression/progressionList` | two-way with `src/progression/parse.js`/`src/progression/playback.js` for `getChordDisplayName` (§6.18) and with `src/progression/progressionList.js` for `updateProgressionDisplay`/`createChordElement` (§6.19) - no longer any two-way relationship with `progressionBuilder.js` itself |
 | `src/progression/progressionList.js` *(Phase 4, eighth step, landed 2026-08-02)* | Renders the chord-progression display: `createProgressionDisplaySection`, `updateProgressionDisplay`, `highlightCurrentChord` (private - only reached via `window.highlightCurrentChord`, which moved here with it). See §6.19. | `src/progression/state`, and (cross-import, see §6.19) `createChordElement` from `src/progression/chordCard` | two-way with `src/progression/chordCard.js` (§6.19) - the first Phase 4 module with no cross-import back into the `progressionBuilder.js` residual |
 | `src/progression/input.js` *(Phase 4, ninth step, landed 2026-08-02)* | The chord-progression text input: `createInputSection` - the field, its debounced input handler (`updateProgression` after `INPUT_DEBOUNCE_DELAY`), and playback-blocking on input/keydown/paste while the sequencer is running. Self-contained, as the plan expected. See §6.20. | `src/progression/state`, and (cross-import, see §6.20) `updateProgression` from `../progressionBuilder` | two-way with `progressionBuilder.js` (same shape as §6.13-§6.19) |
-| `src/progression/controls.js` *(Phase 4, tenth step, landed 2026-08-02)* | The "Other Controls" row above the chord-card display: scale-context/mini-fretboard/mini-piano/mini-stave/seventh-chords toggles, the stave-key and theory-mode selectors, the presets dropdown, Share/Clear buttons, the sequencer Loop toggle, and the rate/duration/chord-triggering synth row - one `buildXControls()` per group (or per entangled group-cluster, see §6.21), only the orchestrator `createProgressionControlsSection` exported. | theory-adjacent: `src/progression/state`, `src/progression/progressionList`, `src/progression/share`, `src/progression/playback`, `src/progression/fretboardDisplay`, and (cross-import, see §6.21) `updateProgression`/`clearProgression` from `../progressionBuilder` | two-way with `progressionBuilder.js` (same shape as §6.13-§6.20) |
-| `progressionBuilder.js` (→ `src/progression/` in Phase 4, in progress) | Chord/roman token parsing (now `src/theory/roman.js` — see below), progression UI. | theory, `scaleGenerator.js` (`initializeNavigationButtonsDirect`), `src/progression/state.js`, `src/progression/parse.js`, `src/progression/share.js` (`loadSharedStateFromURL`/`applySharedState` only - `generateShareableURL`/`copyShareableURL` no longer imported, see §6.21), `src/progression/playback.js`, `src/progression/scaleSync.js`, `src/progression/fretboardDisplay.js` (`displayScaleContext`/`displayAllChordPatterns` only), `src/progression/progressionList.js`, `src/progression/input.js`, `src/progression/controls.js` | — (no longer imports `src/progression/chordCard.js` directly - `createChordElement` is reached only through `progressionList.js`) |
+| `src/progression/controls.js` *(Phase 4, tenth step, landed 2026-08-02)* | The "Other Controls" row above the chord-card display: scale-context/mini-fretboard/mini-piano/mini-stave/seventh-chords toggles, the stave-key and theory-mode selectors, the presets dropdown, Share/Clear buttons, the sequencer Loop toggle, and the rate/duration/chord-triggering synth row - one `buildXControls()` per group (or per entangled group-cluster, see §6.21), only the orchestrator `createProgressionControlsSection` exported. | theory-adjacent: `src/progression/state`, `src/progression/progressionList`, `src/progression/share`, `src/progression/playback`, `src/progression/fretboardDisplay`, and (cross-import, see §6.21/§6.22) `updateProgression`/`clearProgression` from `src/progression/index.js` (the barrel) | two-way with `src/progression/index.js` (same shape as §6.13-§6.20) |
+| `src/progression/index.js` *(Phase 4, eleventh and final step, landed 2026-08-02 - `progressionBuilder.js` deleted)* | The public barrel for `src/progression/`: `createChordProgressionUI`, `updateProgression`, `clearProgression`, `getFretboardForProgression`, `precomputeAllPatternData`, plus the re-exports (`loadSharedStateFromURL`/`applySharedState`) that make this folder's surface a single import. Everything else that used to live in `progressionBuilder.js` moved to `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js` across this phase's earlier steps (§6.12-§6.21); this file is what remained plus the barrel role. See §6.22. | theory, `scaleGenerator.js` (`initializeNavigationButtonsDirect`), `tuning.js`, all of `src/progression/*` above, and (cross-imported back by seven sibling modules, see §6.22) itself | two-way with `src/progression/{parse,share,scaleSync,fretboardDisplay,input,controls}.js` (§6.13-§6.21); external importer is `src/fretboard/ui/controls.js` (`createChordProgressionUI`/`loadSharedStateFromURL`, repointed from `../../progressionBuilder` to `../../progression` in this step) |
 | `scaleGenerator.js` / `scales.js` (→ `src/scales/` in Phase 4) | Scale selection state + persistence, scale/root-note tables. **Not moved into `src/theory/` in Phase 2** — see §6.1 correction below. | theory | — |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`scaleGenerator.js` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
@@ -1529,6 +1529,72 @@ verify-before-trusting-an-alarm pattern §6.16 already used once. Zero
 *new* console errors from the move itself. Remaining Phase 4 work: rename
 the residual to `src/progression/index.js` as the barrel;
 `scaleGenerator.js`/`scales.js` -> `src/scales/` after that.
+
+### 6.22 `src/progression/index.js` (Phase 4, eleventh step, 2026-08-02 - `progressionBuilder.js` deleted)
+
+The last Phase 4 step for the progression split: rename what's left of
+`progressionBuilder.js` (`getFretboardForProgression`, `createChordProgressionUI`,
+`updateProgression`, `precomputeAllPatternData`, `clearProgression` - 265
+lines) to `src/progression/index.js`, the barrel, same pattern
+`src/fretboard/index.js` used at the end of Phase 3 (§6.11). Straight
+`git mv`-equivalent (Write + delete, since the file also needed every
+relative import path adjusted for its new location one directory deeper):
+`./theory/roman` -> `../theory/roman`, `./tuning` -> `../tuning`,
+`./scaleGenerator` -> `../scaleGenerator`, and all nine `./progression/*`
+imports -> `./*` (same directory now).
+
+Seven sibling modules had a cross-import of some residual function
+pointed at `'../progressionBuilder'`; all seven were repointed to the bare
+current-directory specifier `'.'`, which Node/webpack resolve to
+`./index.js` - the same bare-specifier convention `src/fretboard/ui/{controls,chordGrid}.js`
+already used for their own barrel cross-import (`from '..'`, §6.8), just
+one directory level shallower here since the barrel and its siblings share
+a directory instead of parent/child:
+
+- `parse.js`, `fretboardDisplay.js` - `getFretboardForProgression`
+- `scaleSync.js` - `precomputeAllPatternData`
+- `share.js`, `input.js`, `controls.js` - `updateProgression`
+- `controls.js` - `clearProgression` (same import statement as `updateProgression`)
+
+The one external importer, `src/fretboard/ui/controls.js`, had its
+`from '../../progressionBuilder'` repointed to `from '../../progression'`
+(`createChordProgressionUI`/`loadSharedStateFromURL`) - same bare-barrel
+pattern one level up.
+
+One more dead export fell out during this step, caught the same way
+step 1's `currentProgression`/`selectedPatternIndexes` were (§6.12):
+`parseProgressionInput` was in `progressionBuilder.js`'s own export list
+but grepping every `from '<path>/progressionBuilder'` (and, after the
+rename, every `from '.'`/`from './progression'`-style import of it) across
+`src/` found zero external importers - only the file's own internal call
+site inside `updateProgression` remained. Dropped from the barrel's export
+list rather than carried forward as another dead re-export.
+
+`npm test` (28/28) and plain `npm run build` pass - 219 warnings,
+unchanged, three line-number-only shifts (`parse.js`/`scaleSync.js`/`share.js`'s
+pre-existing warnings moved 1-2 lines for this step's header-comment
+edits). Verified via the `run-app` skill with the most end-to-end check of
+any Phase 4 step, since this one touches every module's import
+resolution at once: confirmed the Chord Progression tab and default load
+both render with zero console errors (`node scripts/screenshot.js`, exit
+0); then a full round trip through the barrel's real exports - typed a
+progression (`createChordProgressionUI` -> `createInputSection`/
+`createProgressionControlsSection`/`createProgressionDisplaySection` all
+render; typing -> `updateProgression` -> 4 cards), clicked **Clear
+Progression** (`clearProgression` -> 0 cards, empty input), rebuilt the
+progression with "Show Mini Pianos" enabled, clicked **Share**, read the
+resulting URL from the clipboard (`?p=I-1+IV-1+V-1+vi-1&r=E&s=Major-6&ui=fkn`),
+then navigated to that exact URL fresh in the same browser session and
+confirmed the input, all 4 cards, and the mini-piano toggle state all
+restored correctly - exercising `loadSharedStateFromURL`/`applySharedState`
+through `src/fretboard/ui/controls.js`'s newly-repointed external import,
+not just an internal call. Zero console errors throughout. This closes out
+the `progressionBuilder.js` -> `src/progression/` split entirely (11
+steps, `progressionBuilder.js` deleted, 4,119 lines -> 11 files under
+`src/progression/`); remaining Phase 4 work is `scaleGenerator.js`/`scales.js`
+-> `src/scales/`, a separate checkpoint requiring its own
+investigate-before-editing pass (unlike `progressionBuilder.js`, it hasn't
+had a call-graph investigation yet).
 
 ---
 

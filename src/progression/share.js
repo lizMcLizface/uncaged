@@ -3,20 +3,21 @@
 // human-readable format, plus a legacy Base64 fallback), and decode +
 // apply it back on load.
 //
-// updateProgression is imported back from progressionBuilder.js rather
-// than moved here - applySharedState() is this module's only caller of it,
-// and it's the file's main progression-input entry point, called from many
-// places that stay in progressionBuilder.js. Same two-way-import shape
-// REFACTOR_PLAN.md Phase 3 used between src/fretboard/ui/*.js and
-// src/fretboard/index.js, and Phase 4's own parse.js <-> progressionBuilder.js
-// (ARCHITECTURE.md §6.8/§6.13) - safe because nothing here is read at
-// module top level.
+// updateProgression is imported back from the barrel
+// (src/progression/index.js, formerly progressionBuilder.js, renamed in
+// Phase 4's final step) rather than moved here - applySharedState() is
+// this module's only caller of it, and it's the app's main
+// progression-input entry point, called from many places that stay in the
+// residual. Same two-way-import shape REFACTOR_PLAN.md Phase 3 used
+// between src/fretboard/ui/*.js and src/fretboard/index.js, and Phase 4's
+// own parse.js <-> the barrel (ARCHITECTURE.md §6.8/§6.13) - safe because
+// nothing here is read at module top level.
 //
 // Lifted from progressionBuilder.js as part of REFACTOR_PLAN.md Phase 4.
 
 import { getPrimaryScale, getPrimaryRootNote, setPrimaryRootNote, setPrimaryScale } from '../scaleGenerator';
 import { progressionState } from './state';
-import { updateProgression } from '../progressionBuilder';
+import { updateProgression } from '.';
 
 /**
  * Build a shareable state object containing all relevant progression and UI state

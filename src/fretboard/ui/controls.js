@@ -38,7 +38,7 @@ import {
     getActiveConfig as getActiveInstrumentConfig,
     setActiveConfig as setActiveInstrumentConfig
 } from '../../tuning';
-import { createChordProgressionUI, loadSharedStateFromURL } from '../../progressionBuilder';
+import { createChordProgressionUI, loadSharedStateFromURL } from '../../progression';
 import {
     showChordOnFretboard,
     showScaleOnFretboard,
@@ -235,7 +235,7 @@ function attachHotkeyFooter(container) {
  * plus a "Custom Tuning" mode that reveals a per-string note editor. Applying
  * either just calls setActiveInstrumentConfig() - actually rebuilding the
  * fretboard/grid/progression builder happens via the subscription each of
- * those wires up separately (see initializeFretboard / progressionBuilder.js).
+ * those wires up separately (see initializeFretboard / src/progression/index.js).
  */
 function createInstrumentTuningPicker() {
     const presets = getInstrumentPresets();

@@ -27,10 +27,11 @@
 //     back into the rate/duration controls' own update functions, so they
 //     stay nested here rather than becoming three more top-level exports.
 //
-// updateProgression/clearProgression are imported back from
-// progressionBuilder.js - both are core residual orchestration, not part
+// updateProgression/clearProgression are imported back from the barrel
+// (src/progression/index.js, formerly progressionBuilder.js, renamed in
+// Phase 4's final step) - both are core residual orchestration, not part
 // of any control-group cluster. Same two-way-import shape as the rest of
-// src/progression/ (ARCHITECTURE.md §6.13-§6.20).
+// src/progression/ (ARCHITECTURE.md §6.13-§6.21).
 //
 // window.polySynthRef/window.processedProgression/window.showScaleContext/
 // window.App here are the progression-sequencer-control surface
@@ -44,7 +45,7 @@ import { updateProgressionDisplay } from './progressionList';
 import { copyShareableURL } from './share';
 import { getProcessedProgression } from './playback';
 import { displaySingleChordPattern, displayAllChordPatterns } from './fretboardDisplay';
-import { updateProgression, clearProgression } from '../progressionBuilder';
+import { updateProgression, clearProgression } from '.';
 
 /**
  * Build the "Show Scale Context" toggle

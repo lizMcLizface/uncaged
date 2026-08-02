@@ -5,9 +5,11 @@
 // turns a raw input string into parsed chord objects and, for each one,
 // the fretboard patterns/arpeggiation notes the UI displays.
 //
-// getFretboardForProgression is imported back from progressionBuilder.js
-// rather than moved here: most of its call sites (the fretboard-display
-// cluster) stay there, so this is the same two-way-import shape
+// getFretboardForProgression is imported back from the barrel
+// (src/progression/index.js, formerly progressionBuilder.js, renamed in
+// Phase 4's final step) rather than moved here: its real callers (the
+// fretboard-display cluster) live in src/progression/fretboardDisplay.js,
+// which cross-imports it from the same place - same two-way-import shape
 // REFACTOR_PLAN.md Phase 3 used between src/fretboard/ui/{controls,chordGrid}.js
 // and src/fretboard/index.js - safe because nothing here is read at module
 // top level. getChordDisplayName is imported from src/progression/chordCard.js
@@ -23,7 +25,7 @@ import {
 } from '../tuning';
 import { selectGripFromPositions } from '../chordFingering';
 import { progressionState } from './state';
-import { getFretboardForProgression } from '../progressionBuilder';
+import { getFretboardForProgression } from '.';
 import { getChordDisplayName } from './chordCard';
 
 /**

@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 10/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js`, `chordCard.js`, `progressionList.js`, `input.js`, `controls.js` landed (`ARCHITECTURE.md` §6.12-§6.21). Remaining: rename the residual to `src/progression/index.js` as the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Remaining: `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint, its own investigate-before-editing pass first. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -951,6 +951,39 @@ identical script, getting byte-identical output including both messages,
 confirming neither is a regression from this move (same check §6.16
 already used once). Remaining step: rename the residual to
 `src/progression/index.js` as the barrel.
+
+**Progress (2026-08-02), step 11 - `src/progression/index.js` (final step,
+`progressionBuilder.js` deleted):** landed - renamed the 265-line residual
+(`getFretboardForProgression`, `createChordProgressionUI`, `updateProgression`,
+`precomputeAllPatternData`, `clearProgression`) to the barrel, same pattern
+`src/fretboard/index.js` used at the end of Phase 3. Every relative import
+inside the file needed adjusting for the new location (one directory
+deeper: `./theory/roman` -> `../theory/roman`, nine `./progression/*` ->
+`./*`). Seven cross-imports in sibling files (`parse.js`, `fretboardDisplay.js`,
+`scaleSync.js`, `share.js`, `input.js`, `controls.js`) that pointed at
+`'../progressionBuilder'` were repointed to the bare `'.'` specifier,
+which resolves to `./index.js` - same bare-barrel convention
+`src/fretboard/ui/{controls,chordGrid}.js` already used (`from '..'`,
+one level up there since the barrel is their parent, not their sibling).
+The one external importer, `src/fretboard/ui/controls.js`, moved from
+`'../../progressionBuilder'` to `'../../progression'`. One more dead
+export fell out (`parseProgressionInput` - zero external importers,
+grepped the same way step 1's dead exports were found) and was dropped
+rather than carried forward. Full detail in `ARCHITECTURE.md` §6.22.
+`npm test` (28/28) and plain `npm run build` pass - 219 warnings,
+unchanged, three line-number-only shifts. Verified via `run-app` with the
+most end-to-end check of any Phase 4 step: zero-error default load and tab
+render, then a full round trip through every barrel export - typed a
+progression (4 cards), cleared it (0 cards, empty input), rebuilt it with
+"Show Mini Pianos" enabled, clicked Share, read the resulting URL from the
+clipboard, navigated to it fresh, and confirmed the input/cards/toggle
+state all restored correctly through `src/fretboard/ui/controls.js`'s
+newly-repointed external import - zero console errors throughout. This
+closes out the `progressionBuilder.js` -> `src/progression/` split
+entirely: 11 steps, 4,119 lines -> 11 files, `progressionBuilder.js`
+deleted. Remaining Phase 4 work: `scaleGenerator.js`/`scales.js` ->
+`src/scales/`, its own investigate-before-editing pass first (it hasn't
+had one yet, unlike `progressionBuilder.js`).
 
 ### Phase 5 — Replace `window` with an event bus
 

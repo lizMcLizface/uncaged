@@ -6,12 +6,14 @@
 // list and the main fretboard so mini pianos/staves and Roman numerals
 // reflect the new context.
 //
-// precomputeAllPatternData is imported back from progressionBuilder.js - it
-// hasn't moved out of it yet. displaySingleChordPattern/
-// displayAllChordPatterns are imported from fretboardDisplay.js and
-// updateProgressionDisplay from progressionList.js, where they moved in
-// earlier/later Phase 4 steps. Same two-way-import shape as the rest of
-// src/progression/ (ARCHITECTURE.md §6.13-§6.19).
+// precomputeAllPatternData is imported back from the barrel
+// (src/progression/index.js, formerly progressionBuilder.js, renamed in
+// Phase 4's final step) - it hasn't moved out of the residual.
+// displaySingleChordPattern/displayAllChordPatterns are imported from
+// fretboardDisplay.js and updateProgressionDisplay from
+// progressionList.js, where they moved in earlier Phase 4 steps. Same
+// two-way-import shape as the rest of src/progression/
+// (ARCHITECTURE.md §6.13-§6.21).
 //
 // Lifted from progressionBuilder.js as part of REFACTOR_PLAN.md Phase 4.
 
@@ -20,7 +22,7 @@ import { getScaleNotes } from '../scales';
 import { CHROMATIC } from '../theory/notes';
 import { resolveRomanChord } from '../theory/roman';
 import { progressionState } from './state';
-import { precomputeAllPatternData } from '../progressionBuilder';
+import { precomputeAllPatternData } from '.';
 import {
     displaySingleChordPattern,
     displayAllChordPatterns
