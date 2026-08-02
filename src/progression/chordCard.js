@@ -17,10 +17,11 @@
 // §6.15/§6.17 already applied once each. parse.js/playback.js's existing
 // cross-imports of it are repointed here from progressionBuilder.js.
 //
-// updateProgressionDisplay is imported back from progressionBuilder.js -
-// it hasn't moved out yet (belongs to the not-yet-extracted
-// progression-list cluster). Same two-way-import shape as the rest of
-// src/progression/ (ARCHITECTURE.md §6.13-§6.17).
+// updateProgressionDisplay is imported from src/progression/progressionList.js,
+// where it moved in Phase 4 step 8. progressionList.js imports
+// createChordElement back from this module, so - like getChordDisplayName
+// above - it's a two-way import between two already-extracted modules, not
+// with the progressionBuilder.js residual.
 //
 // window.processedProgression/window.polySynthRef here are the
 // progression-sequencer-control surface ARCHITECTURE.md §5.1 documents as
@@ -45,7 +46,7 @@ import {
     triggerChordProgression
 } from './playback';
 import { displaySingleChordPattern, displayAllChordPatterns } from './fretboardDisplay';
-import { updateProgressionDisplay } from '../progressionBuilder';
+import { updateProgressionDisplay } from './progressionList';
 
 /**
  * Copy an SVG element to the clipboard as a PNG image
