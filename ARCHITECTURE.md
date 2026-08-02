@@ -1714,6 +1714,69 @@ click. Remaining steps: `scaleData.js` (from `scales.js`), `infoPanel.js`,
 then the mutually-dependent `rootNoteTable.js`/`scaleTable.js` pair, then
 the barrel.
 
+### 6.24 `src/scales/scaleData.js` (Phase 4 second half, step 2, 2026-08-02)
+
+The pure half of `scales.js` - `HeptatonicScales`/`HexatonicScales`/
+`PentatonicScales`/`scales` (the family-list array), the chord cache
+(`precomputeScaleChords` and five helpers around it), and `getScaleNotes` -
+moved as one contiguous block (lines 13-386 and 443-619 of the pre-move
+file, split only by the DOM tail sitting between them) into
+`src/scales/scaleData.js`. `scales.js` itself is not deleted, same
+shrinking-residual treatment `scaleGenerator.js` is getting: it keeps
+`highlightKeysForScales` and the `keys_chords` DOM lookup table it needs
+(the one piece of the original file that touches the DOM), now 93 lines,
+and imports the moved names back from `./scales/scaleData` to re-export
+them under its own unchanged `export { ... }` list - none of `scales.js`'s
+14 external importers needed a single import-path change this step.
+
+`getScaleFromId` stayed unexported from `scaleData.js` - it was exported
+from `scales.js` before, but grepping every `from '.../scales'` path across
+`src/` found zero external importers (only `precomputeScaleChords`'s own
+internal call), so this narrows the surface the same way `state.js`'s
+`getPrimaryScaleChords`/`getAllSelectedScaleChords` did in §6.23. Two
+dead re-exports were dropped outright rather than carried into either new
+file: `generateProperScale` (imported into `scales.js`, re-exported, never
+called anywhere - not even inside `scales.js` itself) and `setScaleContext`/
+`getScaleContext` (used internally by `getScaleNotes`, so `scaleData.js`
+still imports them from `theory/notation.js` directly, but had zero
+external consumers via the `./scales` path so aren't re-exported forward).
+Two more dead imports fell out of `scales.js`'s own top - `notationMidiToNote`/
+`notationNoteToMidi` (aliased imports from `theory/notation.js`, never
+referenced anywhere in the file, confirmed by grep before dropping).
+
+`translateNotes`/`stripOctave` were a different case: real re-exports with
+real external consumers via the `./scales` path (unlike the three above),
+but the consumers turned out to already import the *same* `theory/notation.js`
+functions a second time under aliased names for unrelated reasons.
+`fretboard/index.js` imported `translateNotes, stripOctave` bare from
+`../scales` *and* `translateNotes as notationTranslateNotes, stripOctave as
+notationStripOctave` from `../theory/notation` in the same file - both
+pairs resolve to the identical underlying functions, since `scales.js` was
+just forwarding them unchanged. Rather than choosing between `scaleData.js`
+and the `scales.js` residual as an arbitrary new home for a pass-through
+that isn't really "scale data," both bare names were merged into the
+existing `../theory/notation` import (now importing `translateNotes`/
+`stripOctave` under both their bare and aliased names from one statement),
+eliminating the redirect entirely. `scaleGenerator.js` imported the same
+two names from `./scales` too, but never actually called them anywhere in
+its body (a pre-existing dead import, unrelated to this phase) - dropped
+outright rather than repointed.
+
+`npm test` (28/28) and `bash scripts/check-build.sh` pass - baseline moved
+207 -> 203 warnings, all explained: 4 warnings removed (the dead
+`translateNotes`/`stripOctave` import in `scaleGenerator.js`, the dead
+`notationMidiToNote`/`notationNoteToMidi` imports in `scales.js`), 2
+line-number-only shifts in `fretboard/index.js` (its notation import block
+grew by two names), zero new warnings in `scaleData.js` itself. Baseline
+updated. Verified via `run-app`: zero console errors across all six tabs;
+Scale Information's chord panel and Chord Progression's resolved chords
+(`I (Em)` -> `vi (CM)` against E Aeolian, correct notes and mini-fretboard
+patterns) both came back pixel/data-identical to the pre-step baseline,
+confirming `getScaleNotes` and the chord cache still drive both features
+correctly from their new module. Remaining steps: `infoPanel.js`, then the
+mutually-dependent `rootNoteTable.js`/`scaleTable.js` pair, then the
+barrel.
+
 ---
 
 ## 7. Known-dead code (context for Phase 1)

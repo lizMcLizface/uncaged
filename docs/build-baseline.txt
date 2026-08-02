@@ -91,8 +91,8 @@ src\fretboard\index.js
   Line 25:33:   'keys' is defined but never used                      no-unused-vars
   Line 25:39:   'getElementByNote' is defined but never used          no-unused-vars
   Line 25:57:   'getElementByMIDI' is defined but never used          no-unused-vars
-  Line 29:5:    'filterEnharmonicMatches' is defined but never used   no-unused-vars
-  Line 37:22:   'tuningToSlashFormat' is defined but never used       no-unused-vars
+  Line 31:5:    'filterEnharmonicMatches' is defined but never used   no-unused-vars
+  Line 39:22:   'tuningToSlashFormat' is defined but never used       no-unused-vars
 
 src\fretboard\ui\scalePositionGrid.js
   Line 40:7:    'GENERIC_VISIBLE_FRET_START' is assigned a value but never used  no-unused-vars
@@ -231,8 +231,6 @@ src\progression\share.js
 
 src\scaleGenerator.js
   Line 2:27:     'scales' is defined but never used                no-unused-vars
-  Line 2:74:     'translateNotes' is defined but never used        no-unused-vars
-  Line 2:90:     'stripOctave' is defined but never used           no-unused-vars
   Line 5:21:     'noteToName' is defined but never used            no-unused-vars
   Line 5:39:     'getElementByNote' is defined but never used      no-unused-vars
   Line 5:57:     'getElementByMIDI' is defined but never used      no-unused-vars
@@ -243,9 +241,7 @@ src\scaleGenerator.js
   Line 1493:18:  Expected '===' and instead saw '=='               eqeqeq
 
 src\scales.js
-  Line 3:19:   'notationMidiToNote' is defined but never used         no-unused-vars
-  Line 4:19:   'notationNoteToMidi' is defined but never used         no-unused-vars
-  Line 390:7:  'getElementByNote' is assigned a value but never used  no-unused-vars
+  Line 27:7:  'getElementByNote' is assigned a value but never used  no-unused-vars
 
 src\scales\state.js
   Line 74:5:    'scalePositionDarkDuplicate' is assigned a value but never used  no-unused-vars

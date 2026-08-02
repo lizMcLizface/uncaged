@@ -19,11 +19,13 @@
 // module top-level.
 
 import {processChord, generateSyntheticChords} from '../theory/chords';
-import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, translateNotes, stripOctave} from '../scales';
+import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from '../scales';
 import {createHeptatonicScaleTable, createQuickScalePicker, getPrimaryScale, getPrimaryRootNote} from '../scaleGenerator';
 import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from '../chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from '../midi';
 import {
+    translateNotes,
+    stripOctave,
     translateNotes as notationTranslateNotes,
     stripOctave as notationStripOctave,
     filterEnharmonicMatches
