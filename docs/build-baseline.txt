@@ -228,7 +228,7 @@ src\progression\parse.js
   Line 394:41:  Expected '===' and instead saw '=='  eqeqeq
 
 src\progression\scaleSync.js
-  Line 75:9:  'lastDisplayedNotes' is assigned a value but never used  no-unused-vars
+  Line 78:9:  'lastDisplayedNotes' is assigned a value but never used  no-unused-vars
 
 src\progression\share.js
   Line 137:10:  'encodeStateToURL' is defined but never used  no-unused-vars

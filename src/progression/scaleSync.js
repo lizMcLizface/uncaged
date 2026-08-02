@@ -6,12 +6,13 @@
 // list and the main fretboard so mini pianos/staves and Roman numerals
 // reflect the new context.
 //
-// precomputeAllPatternData/updateProgressionDisplay/displaySingleChordPattern/
-// displayAllChordPatterns are imported back from progressionBuilder.js -
-// none have moved out of it yet (they belong to the not-yet-extracted
-// progression-list and fretboard-display clusters, see
-// REFACTOR_PLAN.md's Phase 4 investigation note). Same two-way-import shape
-// as the rest of src/progression/ (ARCHITECTURE.md §6.13-§6.15).
+// precomputeAllPatternData/updateProgressionDisplay are imported back from
+// progressionBuilder.js - neither has moved out of it yet (they belong to
+// the not-yet-extracted progression-list cluster, see REFACTOR_PLAN.md's
+// Phase 4 investigation note). displaySingleChordPattern/
+// displayAllChordPatterns moved to fretboardDisplay.js in a later step and
+// are imported from there instead. Same two-way-import shape as the rest
+// of src/progression/ (ARCHITECTURE.md §6.13-§6.16).
 //
 // Lifted from progressionBuilder.js as part of REFACTOR_PLAN.md Phase 4.
 
@@ -22,10 +23,12 @@ import { resolveRomanChord } from '../theory/roman';
 import { progressionState } from './state';
 import {
     precomputeAllPatternData,
-    updateProgressionDisplay,
+    updateProgressionDisplay
+} from '../progressionBuilder';
+import {
     displaySingleChordPattern,
     displayAllChordPatterns
-} from '../progressionBuilder';
+} from './fretboardDisplay';
 
 /**
  * Set up listener for scale changes to update Roman numeral chords
