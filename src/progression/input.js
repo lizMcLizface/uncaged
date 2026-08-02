@@ -3,9 +3,11 @@
 // of inactivity), and the playback-blocking behavior that disables typing/
 // keyboard shortcuts/paste while the built-in sequencer is running.
 //
-// updateProgression is imported back from progressionBuilder.js - it
-// hasn't moved out of it (core residual orchestration). Same two-way-import
-// shape as the rest of src/progression/ (ARCHITECTURE.md §6.13-§6.19).
+// updateProgression is imported back from the barrel
+// (src/progression/index.js, formerly progressionBuilder.js, renamed in
+// Phase 4's final step) - core residual orchestration. Same
+// two-way-import shape as the rest of src/progression/
+// (ARCHITECTURE.md §6.13-§6.21).
 //
 // window.polySynthRef here is the progression-sequencer-control surface
 // ARCHITECTURE.md §5.1 documents as still live and unmigrated - untouched
@@ -14,7 +16,7 @@
 // Lifted from progressionBuilder.js as part of REFACTOR_PLAN.md Phase 4.
 
 import { progressionState, INPUT_DEBOUNCE_DELAY } from './state';
-import { updateProgression } from '../progressionBuilder';
+import { updateProgression } from '.';
 
 /**
  * Create the input section of the UI

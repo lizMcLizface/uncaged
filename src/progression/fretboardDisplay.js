@@ -1,23 +1,23 @@
 // Draws chord/scale content on the main chord-progression fretboard (not
-// the per-card mini fretboards, see the chord-card cluster still in
-// progressionBuilder.js). Used when a chord is hovered/selected, when the
-// active scale changes, and to reset the display when the progression is
-// cleared.
+// the per-card mini fretboards, see src/progression/chordCard.js). Used
+// when a chord is hovered/selected, when the active scale changes, and to
+// reset the display when the progression is cleared.
 //
-// getFretboardForProgression is imported back from progressionBuilder.js
-// rather than moved here - despite sitting right next to this block by file
-// position, grepping its call sites found its three real callers are these
-// three functions, not anything in progressionBuilder.js's own residual
-// (REFACTOR_PLAN.md's Phase 4 investigation note, and the same "verify
-// before trusting proximity" lesson ARCHITECTURE.md §6.15 already caught
-// once). Same two-way-import shape as the rest of src/progression/
-// (ARCHITECTURE.md §6.13-§6.16).
+// getFretboardForProgression is imported back from the barrel
+// (src/progression/index.js, formerly progressionBuilder.js, renamed in
+// Phase 4's final step) rather than moved here - despite sitting right
+// next to this block by file position, grepping its call sites found its
+// three real callers are these three functions, not anything in the
+// residual (REFACTOR_PLAN.md's Phase 4 investigation note, and the same
+// "verify before trusting proximity" lesson ARCHITECTURE.md §6.15 already
+// caught once). Same two-way-import shape as the rest of src/progression/
+// (ARCHITECTURE.md §6.13-§6.21).
 //
 // Lifted from progressionBuilder.js as part of REFACTOR_PLAN.md Phase 4.
 
 import { progressionState, CHORD_LINE_CONFIG } from './state';
 import { precomputePatternData } from './parse';
-import { getFretboardForProgression } from '../progressionBuilder';
+import { getFretboardForProgression } from '.';
 
 /**
  * Display a single chord pattern on the fretboard
