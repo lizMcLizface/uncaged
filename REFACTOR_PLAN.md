@@ -1233,3 +1233,117 @@ anything, the same way the last session did.
 To pick up mid-checkpoint within step 6 (e.g. controls.js half-done),
 append what was already extracted and what remains, same as any other
 mid-phase resume.
+
+### 6.2 Starting Phase 4's second half: `scaleGenerator.js`/`scales.js` -> `src/scales/`
+
+Paste the block below in a fresh session when ready to start this. Unlike
+`progressionBuilder.js`, this side of Phase 4 has **not** had a
+call-graph investigation yet - the prompt below asks for that pass first,
+not a module layout. The unverified line/function inventory in it is a
+`wc -l`/grep skim done while writing this prompt, offered only as a
+starting point - treat it the same way §6.1's `frets.js` categorization
+told the next session to treat its own first pass: verify before trusting.
+
+```
+Start REFACTOR_PLAN.md Phase 4's second half: split scaleGenerator.js
+and scales.js into src/scales/.
+
+Read REFACTOR_PLAN.md section 3 (working rules) and the Phase 4 Result
+notes (steps 1-11, the progressionBuilder.js -> src/progression/ split)
+first, plus ARCHITECTURE.md §6.12-§6.22. Do NOT re-derive that work - it's
+a different pair of files, but the *lessons* from it apply directly here
+and are listed below. Do NOT start editing scaleGenerator.js/scales.js
+yet either - investigate first, the way the Phase 4 Investigation note
+(before progressionBuilder.js step 6) did for that file, and report a
+verified module breakdown before touching any code.
+
+Unverified starting inventory (grep skim, line numbers as of the
+Phase 4 step-11 commit - confirm before trusting):
+
+- scaleGenerator.js: 2,515 lines, ~44 top-level functions. Rough clusters
+  by name/position only (NOT by traced call sites):
+  - selection state + persistence: loadSavedScaleSelection,
+    persistScaleSelection, getPrimaryScale/RootNote,
+    setPrimaryRootNote/Scale, getSelectedScales, clearSelectedScales,
+    addSelectedScale, removeSelectedScale, toggleSelectionMode, the
+    navigate*Exclusive family, navigateToNext/PreviousScale/RootNote
+  - root note table UI: createRootNoteTable (~737 lines, one function -
+    572-1308)
+  - scale info panel: updateScaleInfoPanel (~200 lines), buildDegreeChords,
+    buildChordSection, makeChordCardDivider, bumpOctave
+  - scale table UI: createQuickScalePicker, createHeptatonicScaleTable
+    (~440 lines)
+  - misc/glue, cluster unclear without tracing: positionTooltipSmart,
+    getChromaticPosition, getPreferredDisplay, setEnharmonicPreference,
+    sortRootNotesChronomatically(AndUpdateIndex), highlightScaleNotes,
+    updateCurrentScaleDisplay, intToRoman, getPrimaryScaleChords,
+    getAllSelectedScaleChords, refreshChordsForRootNote,
+    initializeNavigationButtons(Direct)
+- scales.js: 638 lines, ~11 top-level functions - chord-cache management
+  (precompute/get/clear) plus getScaleNotes, getScaleFromId,
+  highlightKeysForScales. Much smaller; may not need splitting at all,
+  or may turn out to be this phase's "state.js" (scales.js already looks
+  data/cache-shaped, not UI-shaped - worth checking whether it's
+  the right home for scaleGenerator.js's own selection-state functions,
+  or a separate concern).
+- Blast radius is wider than progressionBuilder.js was: 15 files import
+  from scaleGenerator.js, 14 from scales.js (vs. progressionBuilder.js's
+  handful). Grep every one before assuming an export is safe to drop or
+  an import path is safe to bulk-rename.
+
+The plan's original (pre-investigation) sketch for the target layout:
+
+    src/scales/state.js           selection state + persistence
+    src/scales/ui/rootNoteTable.js
+    src/scales/ui/scaleTable.js
+    src/scales/ui/infoPanel.js
+    src/scales/index.js           barrel
+
+Treat this the same way the progressionBuilder.js sketch was treated:
+a starting hypothesis to verify against actual call sites, not a plan to
+execute as-is - the progression split's own investigation found the real
+boundaries didn't match its sketch (six clusters instead of five, one
+function that looked misplaced by position but wasn't).
+
+Lessons from the progressionBuilder.js split (Phase 4 steps 1-11) that
+apply here too:
+
+1. Verify a function's real callers by grep before assuming it belongs to
+   a cluster by name or file position - the progression split's own
+   investigation caught `getFretboardForProgression` this way (looked
+   adjacent to one cluster, actually called only from another), twice.
+2. Cross-imports back into whatever residual/barrel remains are the norm,
+   not the exception. Every extracted progression module needed at least
+   one. Use the bare-specifier barrel-import convention already
+   established: `from '.'` for a same-directory barrel, `from '..'` for
+   a parent-directory one (src/fretboard/ui/*.js already does the
+   latter).
+3. If two or three things are entangled by shared event-listener wiring
+   or a tight internal call chain, keep them one function/file rather
+   than forcing a 1:1 split - the progression split did this twice
+   (chordCard.js's internal cluster, controls.js's mini-fretboard and
+   mini-staves groups) and it was the right call both times.
+4. Before a bulk mechanical rename, grep for the spread-operator trap:
+   `[...someVar]` has a `.` immediately before the identifier, which a
+   naive "not preceded by a dot" regex misreads as property access.
+5. After each move, check scripts/check-build.sh's diff for now-unused
+   imports (their only call site moved) - every progression step had 0-3
+   of these, always caught as new no-unused-vars warnings, never left in.
+   Also check for now-dead *exports* (grep every import path across all
+   of src/, not just the files you touched) - step 1 and step 11 of the
+   progression split each found one dead export this way.
+6. If something looks like a regression during run-app verification,
+   check it against the prior commit before assuming you broke it:
+   `git stash` the edit (not new untracked files), re-run the same
+   Playwright check, compare. This caught two false alarms in the
+   progression split (a pre-existing display bug in step 5, a pre-existing
+   clipboard/TypeError pair in step 10) that both turned out unrelated to
+   the move.
+7. Verify with plain `npm run build`, not `CI=true npm run build` - this
+   repo has ~219 pre-existing warnings unrelated to the refactor.
+
+Work in the same checkpoint style as the progression split: investigate
+and report a verified module breakdown first (wait for go-ahead before
+editing), then one commit per module, tests+build green before each
+commit, ARCHITECTURE.md and the Status table updated per-checkpoint.
+```
