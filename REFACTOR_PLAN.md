@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | Step 8/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js`, `chordCard.js`, `progressionList.js` landed (`ARCHITECTURE.md` §6.12-§6.19). Remaining: `input.js`, `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
+| 4 — Split progression + scales | in progress | this commit | Step 9/? - `src/progression/state.js`, `parse.js`, `share.js`, `playback.js`, `scaleSync.js`, `fretboardDisplay.js`, `chordCard.js`, `progressionList.js`, `input.js` landed (`ARCHITECTURE.md` §6.12-§6.20). Remaining: `controls.js`, the barrel; then `scaleGenerator.js`/`scales.js` -> `src/scales/` as a separate checkpoint. |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -897,6 +897,24 @@ green highlight at a time, confirming `window.highlightCurrentChord` ->
 `highlightCurrentChord` works end-to-end from its new location - zero
 console errors. Remaining steps: `input.js`, `controls.js`, then the
 barrel.
+
+**Progress (2026-08-02), step 9 - `src/progression/input.js`:** landed -
+self-contained exactly as the investigation note predicted, one function
+(`createInputSection`) cut and pasted as-is. Only cross-import is
+`updateProgression` (core residual orchestration, already exported for
+`share.js`'s cross-import in step 3 - this step just added a second
+consumer to that export's comment). `INPUT_DEBOUNCE_DELAY` fell out of
+`progressionBuilder.js`'s import as dead, caught by
+`scripts/check-build.sh`'s diff. Full detail in `ARCHITECTURE.md` §6.20.
+`npm test` (28/28) and plain `npm run build` pass - 219 warnings, unchanged,
+with zero line-number shifts (the first step where `check-build.sh`
+reported no diff at all). Verified via `run-app`: typed a progression
+character-by-character to exercise the actual debounce timer (4 cards
+appeared), appended a chord (5 cards), then selected-all and retyped a
+shorter progression (3 cards) - each transition confirming the `input`
+event -> debounce -> cross-imported `updateProgression` path works from
+the new module - zero console errors. Remaining steps: `controls.js`, then
+the barrel.
 
 ### Phase 5 — Replace `window` with an event bus
 
