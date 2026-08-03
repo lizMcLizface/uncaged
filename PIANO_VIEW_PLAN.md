@@ -632,11 +632,16 @@ notes on how it came out:
   `F#` both land on 6 — and it also handles `Cb`/`B#`, which cross an octave
   boundary.
 
-Labels render rotated, bottom-to-top at the near end of each key, because
-that is what the dormant CSS's `writing-mode: vertical-rl` specifies. It
-works and needed no layout code, as this section predicted; whether it reads
-well for two-character labels (`F♯`, `m3`) is a taste call now visible on
-screen and cheap to change.
+**Labels are horizontal, and the dormant CSS was wrong about this.** This
+section originally endorsed `writing-mode: vertical-rl` — rotated,
+bottom-to-top — on the grounds that the CSS already positioned labels for
+free. Seeing it rendered settled it the other way: **a rotated flat sign (♭)
+does not read as a flat**, which makes every flat-spelled scale look wrong,
+and that is exactly what requirement 2 exists to get right. Changed to
+horizontal, bottom-centre, matching `MiniPiano.js`'s SVG text
+(`text-anchor: middle`, `y = height - 8`) so the big piano and the mini
+pianos read identically. The root is bold, the same cue `MiniPiano.js:380`
+uses.
 
 ---
 
