@@ -16,7 +16,8 @@ import {
     getPrimaryRootNote,
     toggleSelectionMode
 } from '../state';
-import { highlightKeysForScales, updateCurrentScaleDisplay } from '..';
+import { updateCurrentScaleDisplay } from '..';
+import { pushScalePreview, popPreviewLayer } from '../../fretboard';
 import { createRootNoteTable, positionTooltipSmart } from './rootNoteTable';
 
 function intToRoman(num){
@@ -487,7 +488,7 @@ function createHeptatonicScaleTable() {
                         let scaleNotes = getScaleNotes(getPrimaryRootNote(), currentScale[j-1]?.intervals);
                         // console.log("Scale Notes for", scaleName, ":", scaleNotes);
                         if (currentScale[j-1]?.intervals) {
-                            highlightKeysForScales(scaleNotes);
+                            pushScalePreview(scaleNotes, getPrimaryRootNote());
                         }
                         
                         // Add mini piano visualization
@@ -532,12 +533,7 @@ function createHeptatonicScaleTable() {
                             document.body.removeChild(tooltip);
                             cell.onmousemove = null;
                             cell.onmouseleave = null;
-                            let firstScaleId = scaleState.selectedScales[0];
-                            let [family, mode] = firstScaleId.split('-');
-                            let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-                            let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
-                            // console.log("Scale Notes for", scaleName, ":", scaleNotes);
-                            highlightKeysForScales(scaleNotes);
+                            popPreviewLayer();
                         };
                     };
                 } else {

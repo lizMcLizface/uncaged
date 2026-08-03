@@ -15,7 +15,7 @@
 //
 // This creates a two-way import between this file and ../index.js: it
 // imports createFretboardControls from here, and the button handlers below
-// import glue functions (showChordOnFretboard, popChordHoverLayer,
+// import glue functions (showChordOnFretboard, popPreviewLayer,
 // reapplySelection, updateChordButtonStyles, updateChordInfoDisplay)
 // back from there. This is safe the same way the pre-existing chords.js
 // <-> theory/chords.js cycle is (see ARCHITECTURE.md §6.1): every
@@ -41,7 +41,7 @@ import { createChordProgressionUI, loadSharedStateFromURL } from '../../progress
 import {
     showChordOnFretboard,
     showScaleOnFretboard,
-    popChordHoverLayer,
+    popPreviewLayer,
     popChordLayers,
     reapplySelection,
     updateChordButtonStyles,
@@ -1257,7 +1257,7 @@ function buildChordVisualizationControls(fretboard) {
                 chordButton.style.transform = 'translateY(0)';
                 // Pop the preview; whatever it covered is revealed again. No
                 // flag says what that was, because nothing needs to know.
-                popChordHoverLayer();
+                popPreviewLayer();
             }
         });
 

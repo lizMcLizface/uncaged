@@ -45,6 +45,8 @@ import {
     triggerChordProgression
 } from './playback';
 import { displaySingleChordPattern, displayAllChordPatterns } from './fretboardDisplay';
+import { addInteractiveEvent } from '../fretboard/Fretboard';
+import { pushChordPreview, popPreviewLayer } from '../fretboard';
 import { updateProgressionDisplay } from './progressionList';
 
 /**
@@ -584,15 +586,18 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
         transition: all 0.2s ease;
     `;
 
-    // Add hover effect
+    // Add hover effect, and put the chord on the main display while the
+    // pointer is here (VISUALIZATION_STACK_PLAN.md step 8f).
     wrapper.addEventListener('mouseenter', () => {
         wrapper.style.transform = 'scale(1.02)';
         wrapper.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+        pushChordPreview(chordNotes, chordNotes && chordNotes[0], chordName);
     });
 
     wrapper.addEventListener('mouseleave', () => {
         wrapper.style.transform = 'scale(1)';
         wrapper.style.boxShadow = 'none';
+        popPreviewLayer();
     });
 
     // Create copy button
@@ -773,7 +778,16 @@ function createChordElement(chord, index) {
             if (miniPiano) {
                 miniPiano.style.cssText = `
                     margin: 8px auto;
+                    cursor: pointer;
                 `;
+                // Hovering a card's mini piano puts that chord on the main
+                // display, over the dimmed scale (VISUALIZATION_STACK_PLAN.md
+                // step 8f). Pitch classes, matching what the mini piano
+                // itself shows - see pushChordPreview.
+                addInteractiveEvent(miniPiano, 'enter', () => {
+                    pushChordPreview(notes, notes[0], displayName);
+                });
+                addInteractiveEvent(miniPiano, 'leave', () => popPreviewLayer());
                 element.appendChild(miniPiano);
             }
         }

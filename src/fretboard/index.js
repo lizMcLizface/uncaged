@@ -184,20 +184,26 @@ function subscribeRenderersToVisualization() {
 }
 
 /**
- * The two ids a chord can occupy, and why there are two.
+ * The two ids the main display's content can occupy, and why there are two.
  *
- * A *selected* chord is pinned (`transient: false`) and survives a scale
- * change; a *hovered* one is transient and is popped on `mouseleave`. If
- * they shared an id, hovering while a chord was selected would replace the
- * selection and leaving would pop it - losing it. Two ids is what
- * `restoreFretboardState` used to hand-roll by re-deriving the selection
- * from `fretboardState` flags and re-running its producer.
+ * A *selection* is pinned (`transient: false`) and survives a scale change;
+ * a *preview* is transient and is popped on `mouseleave`. If they shared an
+ * id, hovering while something was selected would replace the selection and
+ * leaving would pop it - losing it. Two ids is what `restoreFretboardState`
+ * used to hand-roll by re-deriving the selection from `fretboardState` flags
+ * and re-running its producer.
+ *
+ * There is one preview id, not one per source, and that is deliberate: only
+ * one thing can be under the pointer at a time, so a chord-grid cell, a
+ * Roman numeral, a scale-table cell and a root-note cell can all reuse it -
+ * and whichever fires last simply replaces the previous preview rather than
+ * stacking on it.
  */
 const CHORD_LAYER_ID = 'chord';
-const CHORD_HOVER_LAYER_ID = 'chord-hover';
+const PREVIEW_LAYER_ID = 'preview';
 
 function chordLayerIdFor(isTemporary) {
-    return isTemporary ? CHORD_HOVER_LAYER_ID : CHORD_LAYER_ID;
+    return isTemporary ? PREVIEW_LAYER_ID : CHORD_LAYER_ID;
 }
 
 /**
@@ -211,8 +217,69 @@ function chordLayerIdFor(isTemporary) {
  * own (tab switch, element replaced under the pointer) pops nothing and
  * notifies nobody.
  */
-function popChordHoverLayer() {
-    popLayer(CHORD_HOVER_LAYER_ID);
+function popPreviewLayer() {
+    popLayer(PREVIEW_LAYER_ID);
+}
+
+/**
+ * Preview a scale that is not the selected one - hovering a cell in the
+ * scale table or the root-note table.
+ *
+ * `hideBelow` rather than `dimBelow`: this is "what would *this* scale look
+ * like", so showing it against the current one would read as a chord over a
+ * scale, which it is not. Both tables used to do this by calling
+ * `highlightKeysForScales`, and undo it by recomputing the selected scale's
+ * notes and re-highlighting those - the same push/pop, hand-rolled, against
+ * a keyboard that never existed (VISUALIZATION_STACK_PLAN.md section 1.3).
+ *
+ * @param {string[]} scaleNotes - spelled, as getScaleNotes returns them
+ * @param {string} rootNote
+ */
+function pushScalePreview(scaleNotes, rootNote) {
+    if (!Array.isArray(scaleNotes) || !rootNote) return;
+
+    pushLayer({
+        ...scaleLayer(scaleNotes, rootNote, fretboardState.mainFretboardLabelMode),
+        id: PREVIEW_LAYER_ID,
+        hideBelow: true,
+        transient: true
+    });
+}
+
+/**
+ * Preview a chord from somewhere that already draws it small - a chord
+ * card's mini piano or mini fretboard.
+ *
+ * `dimBelow` rather than `hideBelow`, unlike a scale preview: a chord is
+ * *part of* the scale under it, and seeing which scale tones it uses is the
+ * reason to look at the big display at all.
+ *
+ * **Octaves are stripped deliberately**, which is the opposite of what a
+ * selected chord does (section 5.2 keeps a fingering's real pitches). The
+ * source here is a mini piano showing pitch classes in one octave, and a
+ * preview that lights different keys from the thing being hovered would read
+ * as a mismatch rather than as extra precision.
+ *
+ * @param {string[]} notes - chord notes, with or without octaves
+ * @param {string} rootNote
+ * @param {string} [label]
+ */
+function pushChordPreview(notes, rootNote, label = '') {
+    if (!Array.isArray(notes) || notes.length === 0) return;
+
+    const pitchClasses = notes
+        .filter(note => typeof note === 'string')
+        .map(note => (note.includes('/') ? note.split('/')[0] : note.replace(/-?\d+$/, '')));
+
+    pushLayer(chordLayer({
+        id: PREVIEW_LAYER_ID,
+        label,
+        rootNote: rootNote || pitchClasses[0],
+        labelMode: fretboardState.mainFretboardLabelMode,
+        notes: pitchClasses,
+        dimBelow: true,
+        transient: true
+    }));
 }
 
 /**
@@ -234,7 +301,7 @@ function showFingeringShape(shapeIndex) {
     const current = getLayers()
         .slice()
         .reverse()
-        .find(layer => layer.id === CHORD_HOVER_LAYER_ID || layer.id === CHORD_LAYER_ID);
+        .find(layer => layer.id === PREVIEW_LAYER_ID || layer.id === CHORD_LAYER_ID);
     if (!current) return;
 
     // Both halves move together: a different fingering of the same chord is a
@@ -264,7 +331,7 @@ function showFingeringShape(shapeIndex) {
  * Drop the selected chord as well as any preview, leaving the bare scale.
  */
 function popChordLayers() {
-    popLayer(CHORD_HOVER_LAYER_ID);
+    popLayer(PREVIEW_LAYER_ID);
     popLayer(CHORD_LAYER_ID);
 }
 
@@ -396,7 +463,7 @@ function initializeScalesInFretboard() {
  * label-mode `change` handler and (differently again) inside
  * `updateFretboardsForScaleChange` - and the copies had already drifted:
  * only one of them cleared the fingering tabs. Restoring after a *hover* is
- * no longer one of its jobs; that is `popChordHoverLayer`.
+ * no longer one of its jobs; that is `popPreviewLayer`.
  *
  * `currentDisplayedChord` and `currentChordGridSelection` survive only to
  * answer "which button is active", here and for button styling. They no
@@ -733,7 +800,7 @@ function showScaleOnFretboard(isTemporary = false) {
         if (isTemporary) {
             pushLayer({
                 ...scaleLayer(scaleNotes, rootNote, labelMode),
-                id: CHORD_HOVER_LAYER_ID,
+                id: PREVIEW_LAYER_ID,
                 hideBelow: true,
                 transient: true
             });
@@ -1209,7 +1276,9 @@ export {
 // note at the top of this file for why this is safe.
 export {
     showChordPatternOnFretboard,
-    popChordHoverLayer,
+    popPreviewLayer,
+    pushScalePreview,
+    pushChordPreview,
     popChordLayers,
     showFingeringShape,
     reapplySelection,

@@ -2,13 +2,15 @@
 // src/scales.js were reduced to across REFACTOR_PLAN.md Phase 4's
 // extraction steps: state.js, scaleData.js, ui/infoPanel.js,
 // ui/rootNoteTable.js, ui/scaleTable.js all moved out (see ARCHITECTURE.md
-// §6.23-6.26); what's left here is pure glue - the DOM key-highlighting
-// function highlightKeysForScales (from scales.js; its similarly-named
-// neighbour highlightScaleNotes, from scaleGenerator.js, was deleted in
-// PIANO_VIEW_PLAN.md step 4 - see the note at its former site),
-// updateCurrentScaleDisplay (the hub every UI cluster calls to refresh after
-// a selection change), and the navigation-button wiring - plus the re-exports
-// that make this folder's public surface a single import.
+// §6.23-6.26); what's left here is pure glue - updateCurrentScaleDisplay
+// (the hub every UI cluster calls to refresh after a selection change) and
+// the navigation-button wiring, plus the re-exports that make this folder's
+// public surface a single import.
+//
+// The two DOM key-highlighting functions this file used to own are both
+// gone: highlightScaleNotes in PIANO_VIEW_PLAN.md step 4, and
+// highlightKeysForScales (with its keys_chords lookup table) in
+// VISUALIZATION_STACK_PLAN.md step 8f - see the note at their former site.
 //
 // External callers previously split their imports between
 // `from './scaleGenerator'` and `from './scales'`; both files are deleted
@@ -17,16 +19,15 @@
 // export surface below is the union of what both files exported - this
 // step is a pure move, not a public-API change.
 //
-// scales.js's own module-evaluation order is preserved: its content
-// (including the `keys_chords` DOM-lookup table, built once at import time)
-// runs before scaleGenerator.js's content below it, same as when
-// scaleGenerator.js used to `import` from scales.js.
+// scales.js's own module-evaluation order used to matter here, because
+// `keys_chords` resolved DOM elements once at import time. That table is gone
+// (step 8f) and nothing in this file reads the DOM at module scope any more,
+// so the ordering constraint ARCHITECTURE.md §6.27 recorded no longer binds.
 //
 // Two-way imports with ./state.js, ./ui/scaleTable.js and
 // ./ui/rootNoteTable.js are expected, not a sign of a design problem - see
 // their own file headers for why.
 
-import { noteToMidi } from '../midi';
 import { HeptatonicScales, HexatonicScales, PentatonicScales, scales, getScaleNotes, precomputeScaleChords, precomputeChordsForScales, getPrecomputedChords, getChordsForScale, clearChordCache, getChordCacheStats } from './scaleData';
 import { updateScaleInfoPanel } from './ui/infoPanel';
 import { createHeptatonicScaleTable, createQuickScalePicker } from './ui/scaleTable';
@@ -52,68 +53,7 @@ import {
     refreshChordsForRootNote
 } from './state';
 
-// NOT the same lookup as src/midi.js's getElementByMIDI: this one queries a
-// separate `midi="N_scale"` attribute namespace, and `keys_chords` below is
-// its table. **No markup in src/ or public/ has ever carried that attribute**
-// (verified 2026-08-03) - it is the surviving sibling of the `midi="N_chord"`
-// namespace Phase 4c deleted with `highlightKeysForChords` (ARCHITECTURE.md
-// §6.28). Three namespaces were designed - plain, `_scale`, `_chord` - which
-// is what `theory/intervals.js`'s header means by "the scale piano, every
-// chord piano, and the fretboard": three separate keyboards, only one of
-// which (the plain one, now built by src/piano/) was ever rendered.
-//
-// So `highlightKeysForScales` below is dead for a reason repopulating this
-// table cannot fix, unlike src/midi.js's `keys` - see PIANO_VIEW_PLAN.md §1.3.
-const getElementByMIDI = (note) =>
-  note && document.querySelector(`[midi="${note}_scale"]`);
 
-const keys_chords = {
-    60 : { element: getElementByMIDI("60"), note: "C",  octave: 4 },
-    61 : { element: getElementByMIDI("61"), note: "C#", octave: 4 },
-    62 : { element: getElementByMIDI("62"), note: "D",  octave: 4 },
-    63 : { element: getElementByMIDI("63"), note: "D#", octave: 4 },
-    64 : { element: getElementByMIDI("64"), note: "E",  octave: 4 },
-    65 : { element: getElementByMIDI("65"), note: "F",  octave: 4 },
-    66 : { element: getElementByMIDI("66"), note: "F#", octave: 4 },
-    67 : { element: getElementByMIDI("67"), note: "G",  octave: 4 },
-    68 : { element: getElementByMIDI("68"), note: "G#", octave: 4 },
-    69 : { element: getElementByMIDI("69"), note: "A",  octave: 4 },
-    70 : { element: getElementByMIDI("70"), note: "A#", octave: 4 },
-    71 : { element: getElementByMIDI("71"), note: "B",  octave: 4 },
-    72 : { element: getElementByMIDI("72"), note: "C",  octave: 5 },
-    73 : { element: getElementByMIDI("73"), note: "C#", octave: 5 },
-    74 : { element: getElementByMIDI("74"), note: "D",  octave: 5 },
-    75 : { element: getElementByMIDI("75"), note: "D#", octave: 5 },
-    76 : { element: getElementByMIDI("76"), note: "E",  octave: 5 },
-    77 : { element: getElementByMIDI("77"), note: "F",  octave: 5 },
-    78 : { element: getElementByMIDI("78"), note: "F#", octave: 5 },
-    79 : { element: getElementByMIDI("79"), note: "G",  octave: 5 },
-    80 : { element: getElementByMIDI("80"), note: "G#", octave: 5 },
-    81 : { element: getElementByMIDI("81"), note: "A",  octave: 5 },
-    82 : { element: getElementByMIDI("82"), note: "A#", octave: 5 },
-    83 : { element: getElementByMIDI("83"), note: "B",  octave: 5 },
-    84 : { element: getElementByMIDI("84"), note: "C",  octave: 6 },
-};
-
-function highlightKeysForScales(notes){
-    for(var key in keys_chords) {
-        if (keys_chords[key].element) {
-            keys_chords[key].element.classList.remove('highlightedKey');
-        }
-    }
-    // console.log("Highlighting keys for notes:", notes);
-    if (notes && notes.length > 0) {
-        notes.forEach(note => {
-            var n = noteToMidi(note) + 12;
-            let key = keys_chords[n];
-            // console.log("Key for note:", note, "is", key, "MIDI:", n);
-            if (key && key.element) {
-                // console.log("Highlighting key:", key.note, "Octave:", key.octave);
-                key.element.classList.add('highlightedKey');
-            }
-        });
-    }
-}
 
 // `highlightScaleNotes` was deleted in PIANO_VIEW_PLAN.md step 4, which is
 // where §1.3 said the decision fell due. It applied `scaleKey` to
@@ -128,11 +68,14 @@ function highlightKeysForScales(notes){
 // than one flat purple, correct enharmonic spelling, and the displayed range
 // as the visibility gate the phantom selects were reaching for.
 //
-// `highlightKeysForScales` above survives for now. It cannot contend with the
-// piano - it queries the `midi="N_scale"` namespace, which no markup has ever
-// had - and it has ten call sites across ui/rootNoteTable.js and
-// ui/scaleTable.js, so retiring it (with `keys_chords` and this file's
-// `getElementByMIDI`) is its own dead-code cleanup, not step 4's business.
+// `highlightKeysForScales`, `keys_chords` and this file's own
+// `getElementByMIDI` were retired in VISUALIZATION_STACK_PLAN.md step 8f.
+// They were the third and last mechanism for "show a scale on the keyboard",
+// and the only one that never worked: the `midi="N_scale"` attribute they
+// queried has never existed in any markup. Their twelve call sites were all
+// hover previews - push on enter, hand-rolled restore on leave - and they are
+// now real pushes and pops against the visualization stack, which paints both
+// the piano and the fretboard.
 
 // Function to update the current scale display in the HTML
 function updateCurrentScaleDisplay() {
@@ -188,12 +131,13 @@ function updateCurrentScaleDisplay() {
 
     // Update keyboard highlighting for the primary scale
     const intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-    console.log('Updating scale notes for display:', rootNote, intervals);
     const scaleNotes = getScaleNotes(rootNote, intervals);
 
-    console.log('Scale notes for display:', scaleNotes);
-    highlightKeysForScales(scaleNotes);
-
+    // The keyboard used to be highlighted from here, through
+    // highlightKeysForScales. The 'scaleChanged' event below already tells
+    // src/fretboard/index.js to rebuild the visualization stack's base layer,
+    // which paints the piano AND the fretboard - so this was the third
+    // mechanism for one job, and the only one that never worked.
     // Notify fretboards about scale changes via custom event
     const scaleChangeEvent = new CustomEvent('scaleChanged', {
         detail: {
@@ -475,7 +419,6 @@ export {
     HexatonicScales,
     PentatonicScales,
     scales,
-    highlightKeysForScales,
     getScaleNotes,
     precomputeScaleChords,
     precomputeChordsForScales,
