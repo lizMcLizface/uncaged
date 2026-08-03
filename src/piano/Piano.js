@@ -18,17 +18,22 @@
  * the view toggle's job and is a visibility change only - it must never be
  * torn down and rebuilt, because `#fretNotPlaceholder` also hosts the
  * Synthesizer tab's React portal target (see src/index.js's note).
+ *
+ * **What is shown on it is not decided here.** Since
+ * VISUALIZATION_STACK_PLAN.md step 8b this file paints whatever
+ * `src/visualization/` resolves and holds no opinion about scales or chords;
+ * `renderStack` is the whole of its content API. It deliberately does not
+ * import the stack - `src/fretboard/index.js` subscribes it, the same
+ * division that keeps `midi.js` and `keyboard.js` out of this folder.
  */
 
 import {
     buildKeyRange,
     countWhiteKeys,
     octaveSpanToMidiRange,
-    pitchClassOf,
     LOWEST_KEY_MIDI,
     HIGHEST_KEY_MIDI
 } from './keyModel';
-import { buildScaleKeyStyles } from './labels';
 import { pianoState, persistPianoSettings, RANGE_OCTAVES, RANGE_FULL } from './state';
 
 /**
@@ -86,8 +91,12 @@ export function createPiano(container, options = {}) {
         keyElements: new Map(),
         lowMidi: 0,
         highMidi: 0,
-        // Last scale painted, so setRange can restore it on the new keys
-        scale: null,
+        // Last flattened stack painted, so setRange can restore it on the new
+        // key elements. The piano holds this rather than asking the stack for
+        // it, which is what keeps src/piano/ from importing
+        // src/visualization/ at all - the mount site owns that wiring, the
+        // same division syncPianoKeyState already uses.
+        resolved: null,
 
         /**
          * Rebuild every key. Safe to call repeatedly - the keyboard element
@@ -112,51 +121,58 @@ export function createPiano(container, options = {}) {
 
             // The new elements have never been painted; repaint before the
             // caller's hook runs, so onRender sees a complete keyboard.
-            if (piano.scale) {
-                const { scaleNotes, rootNote, labelMode } = piano.scale;
-                piano.showScale(scaleNotes, rootNote, labelMode);
-            }
+            if (piano.resolved) piano.renderStack(piano.resolved);
 
             if (onRender) onRender(piano);
             return piano;
         },
 
         /**
-         * Paint a scale across the keyboard: `scaleKey` on every in-scale
-         * key in every octave, coloured by semitone from the root, labelled
-         * per `labelMode`.
+         * Paint the visualization stack across the keyboard.
          *
-         * Held on `piano.scale` so a re-render (octave change) can repaint
-         * itself without the caller having to know it needs to.
+         * The piano is a pure function of what it is handed: every key either
+         * has a resolved entry - `scaleKey`, coloured by that entry, labelled
+         * by it - or has none and is unlit. There is no per-source state here
+         * and no notion of what a "scale" or a "chord" is; the layers already
+         * decided (VISUALIZATION_STACK_PLAN.md section 4).
+         *
+         * **This method only ever touches the three classes it owns**:
+         * `scaleKey`, `rootKey`, `dimKey`. `pressedKey` is live input
+         * feedback on its own class, applied by src/midi.js's mouse handler
+         * and src/index.js's keydown handler, and a key held down must stay
+         * lit across every repaint here (section 2.5). Adding it to the
+         * remove list below is the way to break that, and nothing about the
+         * rendering needs to.
+         *
+         * Held on `piano.resolved` so a range re-render repaints itself
+         * without the caller having to know it needs to.
+         *
+         * @param {{resolve: (midi: number) => object|null}|null} resolved -
+         *        `flattenLayers(getLayers())`, or null to clear the keyboard.
          */
-        showScale(scaleNotes, rootNote, labelMode = 'note') {
-            piano.scale = { scaleNotes, rootNote, labelMode };
-            const styles = buildScaleKeyStyles(scaleNotes, rootNote, labelMode);
+        renderStack(resolved) {
+            piano.resolved = resolved || null;
 
             piano.keyElements.forEach((keyElement, midi) => {
-                const style = styles.get(pitchClassOf(midi));
-                if (style) {
+                const entry = piano.resolved ? piano.resolved.resolve(midi) : null;
+
+                if (entry) {
                     keyElement.classList.add('scaleKey');
-                    keyElement.classList.toggle('rootKey', style.semitone === 0);
-                    keyElement.style.setProperty('--scale-key-color', style.color);
-                    keyElement.textContent = style.label;
+                    keyElement.classList.toggle('rootKey', entry.isRoot);
+                    keyElement.classList.toggle('dimKey', entry.dimmed);
+                    if (entry.color) {
+                        keyElement.style.setProperty('--scale-key-color', entry.color);
+                    } else {
+                        keyElement.style.removeProperty('--scale-key-color');
+                    }
+                    keyElement.textContent = entry.label;
                 } else {
-                    keyElement.classList.remove('scaleKey', 'rootKey');
+                    keyElement.classList.remove('scaleKey', 'rootKey', 'dimKey');
                     keyElement.style.removeProperty('--scale-key-color');
                     keyElement.textContent = '';
                 }
             });
 
-            return piano;
-        },
-
-        clearScale() {
-            piano.scale = null;
-            piano.keyElements.forEach(keyElement => {
-                keyElement.classList.remove('scaleKey', 'rootKey');
-                keyElement.style.removeProperty('--scale-key-color');
-                keyElement.textContent = '';
-            });
             return piano;
         },
 
@@ -193,8 +209,8 @@ export function getPiano() {
  * Change how much of the keyboard is shown, and remember it.
  *
  * The rebuild this triggers is the only routine re-render the piano has, and
- * everything hanging off a key element has to survive it: the scale layer
- * repaints itself from `piano.scale`, and `createPiano`'s `onRender` hook
+ * everything hanging off a key element has to survive it: the stack
+ * repaints itself from `piano.resolved`, and `createPiano`'s `onRender` hook
  * re-resolves `src/midi.js`'s key table, rebinds mouse input and reapplies
  * any notes currently held on the computer keyboard. That last one is why
  * `keyboardState.currentPressed` was lifted out of `src/index.js` in step 3 -

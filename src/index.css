@@ -287,6 +287,20 @@ body {
   );
 }
 
+/* A key lit by a layer that something else is stacked over
+   (VISUALIZATION_STACK_PLAN.md section 2.4). Saturation and brightness only,
+   never hue: the point of dimming rather than hiding is that the scale stays
+   *readable* underneath the chord on top of it, and a shifted hue would make
+   it read as a different interval.
+
+   Excludes pressed keys deliberately. `pressedKey` is transient input
+   feedback that must visually win and must never be confused with harmonic
+   information (see the colour contract at the top of this block); dimming a
+   key the user is holding down would do exactly that. */
+#keyboard li.dimKey:not(.pressedKey) {
+  filter: saturate(0.3) brightness(0.72);
+}
+
 .black.pressed {
   box-shadow: -1px -1px 2px var(--white-20) inset,
     0 -2px 2px rgba(123, 0, 200, 0.6) inset, 0 1px 2px var(--black-50);

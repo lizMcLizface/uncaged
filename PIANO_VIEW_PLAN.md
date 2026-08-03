@@ -688,6 +688,10 @@ look like a bug.
 select — whose `change` handler now also calls `refreshPianoScale()`. Two
 notes on how it came out:
 
+*(`labels.js` was folded into `src/visualization/layers.js` in
+`VISUALIZATION_STACK_PLAN.md` step 8b, so both renderers share one scale
+palette. Everything below is still the contract; only its address changed.)*
+
 - **Spelling comes from the scale's own note list, not from `midiToNote`.**
   §9 flags `currentScaleContext` as a module-level singleton set as a *side
   effect* of `getScaleNotes`, and warns the piano must not assume it is

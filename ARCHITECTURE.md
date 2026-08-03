@@ -370,7 +370,7 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/scales/ui/rootNoteTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The detailed "Root Note Selection" table (`createRootNoteTable`) plus `positionTooltipSmart`. See §6.26. | `src/scales/scaleData`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createHeptatonicScaleTable` from `./scaleTable` | two-way with `src/scales/ui/scaleTable.js` - see §6.26 for why |
 | `src/scales/ui/scaleTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The compact top-bar quick-picker (`createQuickScalePicker`), the detailed "Heptatonic Scales" browsing table (`createHeptatonicScaleTable`), and `intToRoman`. See §6.26. | `src/scales/scaleData`, `theory/chords`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createRootNoteTable`/`positionTooltipSmart` from `./rootNoteTable` | two-way with `src/scales/ui/rootNoteTable.js` - see §6.26 for why |
 | `src/scales/index.js` *(Phase 4 second half, fifth and final step, landed 2026-08-03 - `scaleGenerator.js`/`scales.js` deleted)* | The public barrel for `src/scales/`: `highlightKeysForScales`/`highlightScaleNotes` (two unrelated DOM key-highlighting functions, not merged - see §6.27), `updateCurrentScaleDisplay` (the hub every UI cluster calls after a selection change), navigation-button wiring, plus the re-exports that make this folder's surface a single import. Everything else that used to live in `scaleGenerator.js`/`scales.js` moved to `state.js`/`scaleData.js`/`ui/infoPanel.js`/`ui/rootNoteTable.js`/`ui/scaleTable.js` across this phase's earlier steps (§6.23-6.26); this file is what remained from both plus the barrel role. See §6.27. **Not moved into `src/theory/` in Phase 2** — see §6.1/§6.2 correction; still not moved here either, pending a real `Scale` data model (see the project memory this session recorded). | `../midi`, `src/scales/scaleData`, `src/scales/ui/infoPanel`, `src/scales/ui/scaleTable`, `src/scales/state` | two-way with `src/scales/state.js`, `src/scales/ui/rootNoteTable.js`, `src/scales/ui/scaleTable.js` (§6.23/§6.26); every former `scaleGenerator.js`/`scales.js` external importer now pulls from here (`from './scales'` / `from '../scales'` etc., repointed in this step) |
-| `src/piano/` *(`PIANO_VIEW_PLAN.md` steps 1-7, landed 2026-08-03 — a feature, not a refactor phase)* | The piano view. `keyModel.js`: which keys exist in a MIDI range, which are black, the white-key count `--num-keys` is set from, octave-span → MIDI range. `range.js`: the active instrument's playable range as `{ lowMidi, highMidi, openStrings }`. Both pure. `Piano.js`: the `<ul id="keyboard">` markup and the only DOM-touching file here — `<li midi="N" class="white\|black">` is a contract with `midi.js`/`scales/index.js`/`index.css`, not a free choice. `labels.js`: scale + root + label mode -> per-pitch-class colour and text, pure. `state.js`: `pianoState` (view mode, displayed range) + persistence. `index.js`: the barrel. Standard MIDI (60 = C4) throughout, forced by `midi.js`'s `keys` table; see §6.29 for the conversion trap at the `tuning.js` boundary. | `keyModel.js`: nothing at all. `range.js`: `tuning.js` (`getNoteAtStringFret`), `theory/notation` (`noteToMidi`). `Piano.js`: `./keyModel` only | `src/fretboard/index.js`'s `initializeFretboard` builds the keyboard into `#fretNotPlaceholder` after the fretboard element, hidden |
+| `src/piano/` *(`PIANO_VIEW_PLAN.md` steps 1-7, landed 2026-08-03 — a feature, not a refactor phase)* | The piano view. `keyModel.js`: which keys exist in a MIDI range, which are black, the white-key count `--num-keys` is set from, octave-span → MIDI range. `range.js`: the active instrument's playable range as `{ lowMidi, highMidi, openStrings }`. Both pure. `Piano.js`: the `<ul id="keyboard">` markup and the only DOM-touching file here — `<li midi="N" class="white\|black">` is a contract with `midi.js`/`scales/index.js`/`index.css`, not a free choice. Its content API is `renderStack(resolved)` alone; **what** to show is `src/visualization/`'s (§6.31). `state.js`: `pianoState` (view mode, displayed range) + persistence. `index.js`: the barrel. Standard MIDI (60 = C4) throughout, forced by `midi.js`'s `keys` table; see §6.29 for the conversion trap at the `tuning.js` boundary. | `keyModel.js`: nothing at all. `range.js`: `tuning.js` (`getNoteAtStringFret`), `theory/notation` (`noteToMidi`). `Piano.js`: `./keyModel` and `./state` only — **not** `src/visualization/`; the mount site subscribes it | `src/fretboard/index.js`'s `initializeFretboard` builds the keyboard into `#fretNotPlaceholder` after the fretboard element, hidden |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`src/scales/` to consume. 262 lines (was 5,777 before Phase 1, 281 after it, then Phase 1b stripped the inert cruft Phase 1 deferred - see §7). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
 | `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`/`window.polySynthEnabled` and registers the `'synth'` channel with `src/audio/dispatch.js` (Phase 2b). | `src/audio/dispatch.js` | — |
@@ -2419,6 +2419,19 @@ label, m3 colour, consistent colour across octaves, sharp spelling preserved,
 out-of-scale keys unlabelled, all three label modes, and a root change
 repainting. 34 warnings unchanged, zero console errors.
 
+> **Superseded in part by `VISUALIZATION_STACK_PLAN.md` step 8b
+> (2026-08-03), §6.31.** The behaviour described above is unchanged — the
+> rendered output was proved byte-identical across the swap — but three
+> names in it are gone. `src/piano/labels.js` was deleted and its work moved
+> to `src/visualization/layers.js`, where **both** renderers share it;
+> `Piano.js`'s `showScale`/`clearScale` became the single
+> `renderStack(resolved)`; and `refreshPianoScale` became `refreshScaleLayer`,
+> because it now sets the stack's base layer rather than painting a piano.
+> Everything above about *how a scale looks* — semitone colour, pitch-class
+> matching through `noteToMidi`, verbatim spelling from `scaleNotes`, the
+> shared `Labels` select, the `'finger'` fallback — is still true and still
+> the contract; only the file it lives in changed.
+
 **Step 7 (2026-08-03) made the displayed range adjustable**, and with it the
 piano's only routine re-render. `setPianoOctaveSpan(lowOctave, octaveCount)`
 writes `pianoState`, persists, and rebuilds; the control (start octave, span,
@@ -2519,8 +2532,10 @@ the piano was already right, the fretboard was the exception.
 display?" — a persistent base layer plus overlays pushed on top of it, and
 the rules for resolving them into per-key output.
 
-**What depends on it:** nothing yet. Step 8a is pure and unreferenced by
-design; 8b and 8c subscribe the two renderers, 8d moves the producers.
+**What depends on it:** `src/fretboard/index.js`, which subscribes the piano
+(`subscribePianoToVisualization`) and sets the base layer from the app's
+scale (`refreshScaleLayer`). The fretboard joins in 8c and the producers move
+in 8d.
 
 **What it depends on:** `theory/notation` (note name → MIDI) and
 `theory/intervals` (the semitone palette). Nothing else — and specifically
@@ -2573,10 +2588,14 @@ a layer the specific entry wins; between layers the higher layer wins even if
 it is the less specific one. Enharmonics collapse through MIDI, so a `Gb`
 layer and an `F#` layer address the same key without any string comparison.
 
-**Known duplication, deliberate, one step long.** `layers.js`'s `scaleLayer`
-and `piano/labels.js`'s `buildScaleKeyStyles` compute the same colours and
-labels in two shapes. 8a could not delete the latter without touching
-`Piano.js`; **8b does.** Both headers say so.
+**The piano renders it as of 8b** (2026-08-03). `Piano.renderStack(resolved)`
+is the whole content API: every key either resolves to an entry — `scaleKey`,
+coloured and labelled by it, `dimKey` if a layer above dims it — or is unlit.
+It touches only those three classes and never `pressedKey`, so a key held on
+the computer keyboard stays lit across every repaint. The piano repaints
+whether or not it is the visible view, which is why `setMainViewMode` no
+longer repaints on the way in. `src/piano/labels.js` was deleted here, its
+work absorbed into `layers.js` where both renderers share it.
 
 **Verified** with 59 new tests (124 total), 34 build warnings unchanged, and
 a direct ESLint run over the new folder — the build check alone cannot

@@ -49,6 +49,12 @@ import {
     VIEW_FRETBOARD,
     VIEW_PIANO
 } from '../piano';
+import {
+    setBaseLayer,
+    subscribe as subscribeToVisualization,
+    flattenLayers,
+    scaleLayer
+} from '../visualization';
 import { createFretboardControls } from './ui/controls';
 import {
     buildIntervalLabelMap,
@@ -113,23 +119,25 @@ function syncPianoKeyState(piano) {
 }
 
 /**
- * Repaint the piano's scale layer from the app's current scale and label
- * mode.
+ * Rebuild the visualization stack's base layer from the app's current scale
+ * and label mode.
  *
- * Lives here rather than in `src/piano/` on purpose: this is the file that
- * already knows about `src/scales/` and `fretboardState`, and keeping the
- * reads on this side is what lets `src/piano/labels.js` stay a pure function
- * of its arguments. Same division as `syncPianoKeyState`.
+ * Was `refreshPianoScale` until VISUALIZATION_STACK_PLAN.md step 8b, when it
+ * stopped being about the piano: it now sets the base layer, and whichever
+ * renderers are subscribed repaint themselves. The old name would have
+ * described a third of what it does.
+ *
+ * Lives here rather than in `src/visualization/` on purpose: this is the file
+ * that already knows about `src/scales/` and `fretboardState`, and keeping
+ * those reads on this side is what lets `layers.js` stay a pure function of
+ * its arguments. Same division as `syncPianoKeyState`.
  *
  * @param {{rootNote?: string, scaleNotes?: string[]}} [scaleData] - the
  *        `'scaleChanged'` event's detail, when there is one. Omitted on the
  *        initial paint and on a label-mode change, where the scale hasn't
  *        moved and is read from `src/scales/` instead.
  */
-function refreshPianoScale(scaleData) {
-    const piano = getPiano();
-    if (!piano) return;
-
+function refreshScaleLayer(scaleData) {
     let rootNote = scaleData && scaleData.rootNote;
     let scaleNotes = scaleData && scaleData.scaleNotes;
 
@@ -147,8 +155,23 @@ function refreshPianoScale(scaleData) {
         scaleNotes = getScaleNotes(rootNote, scaleMode.intervals);
     }
 
-    // 'finger' is guitar-only; labels.js falls it back to note names (§8.3).
-    piano.showScale(scaleNotes, rootNote, fretboardState.mainFretboardLabelMode);
+    // 'finger' is guitar-only; layers.js falls it back to note names (§8.3).
+    setBaseLayer(scaleLayer(scaleNotes, rootNote, fretboardState.mainFretboardLabelMode));
+}
+
+/**
+ * Point the piano at the stack, and keep it pointed there.
+ *
+ * The piano repaints on every stack change whether or not it is the visible
+ * view. That is deliberate and it is what let `setMainViewMode` stop
+ * repainting on the way in: a hidden piano stays current, so there is no
+ * "it may have gone stale while hidden" case left to handle.
+ */
+function subscribePianoToVisualization() {
+    subscribeToVisualization(layers => {
+        const piano = getPiano();
+        if (piano) piano.renderStack(flattenLayers(layers));
+    });
 }
 
 /**
@@ -174,11 +197,10 @@ function setMainViewMode(mode) {
     }
     const piano = getPiano();
     if (piano) {
+        // Visibility only. The piano no longer needs a repaint on the way in:
+        // since step 8b it renders every stack change whether shown or not,
+        // so a hidden piano is never stale.
         piano.setVisible(viewMode === VIEW_PIANO);
-        // Repaint on the way in: the scale may have moved while the piano was
-        // hidden, and its own 'scaleChanged' listener has nothing to do with
-        // visibility.
-        if (viewMode === VIEW_PIANO) refreshPianoScale();
     }
 
     document.dispatchEvent(new CustomEvent('mainViewModeChanged', { detail: { viewMode } }));
@@ -212,13 +234,16 @@ function initializeFretboard() {
         visible: false,
         onRender: syncPianoKeyState
     });
+    subscribePianoToVisualization();
 
     // setMainViewMode reads the main-fretboard pointer, which
     // initializeFretboardWithScale otherwise only assigns once this function
     // has returned - too late to apply the persisted view on first paint.
     fretboardState.mainFretboard = mainFretboard;
     setMainViewMode(pianoState.viewMode);
-    refreshPianoScale();
+    // Sets the base layer, which notifies the subscription above - so this is
+    // also the piano's first paint.
+    refreshScaleLayer();
 
     // Set the scale button as active by default and show the scale
     fretboardState.currentDisplayedChord = 0; // Scale button is index 0
@@ -710,15 +735,15 @@ function updateFretboardsForScaleChange(scaleData) {
     }
 }
 
-// The piano's own scale subscription, deliberately separate from the
-// fretboard's below: that one debounces and drops events whose root+scale key
-// matches the last one, which is right for its expensive re-render and wrong
-// here (a re-selection of the same scale should still repaint a piano that was
-// hidden at the time). A CustomEvent listener rather than an entry in
-// window.updateFretboardsForScaleChange - PIANO_VIEW_PLAN.md §7 - so the piano
-// costs REFACTOR_PLAN.md Phase 5 nothing.
+// The visualization stack's own scale subscription, deliberately separate
+// from the fretboard's below: that one debounces and drops events whose
+// root+scale key matches the last one, which is right for its expensive
+// re-render and wrong here (a re-selection of the same scale should still
+// repaint a renderer that was hidden at the time). A CustomEvent listener
+// rather than an entry in window.updateFretboardsForScaleChange -
+// PIANO_VIEW_PLAN.md §7 - so this costs REFACTOR_PLAN.md Phase 5 nothing.
 window.addEventListener('scaleChanged', (event) => {
-    refreshPianoScale(event.detail);
+    refreshScaleLayer(event.detail);
 });
 
 // Listen for scale change events from the scale generator
@@ -1047,7 +1072,7 @@ export {
     initializeFretboard,
     setMainViewMode,
     getMainViewMode,
-    refreshPianoScale,
+    refreshScaleLayer,
     createSubscaleBoxPattern,
     searchFretboardNote,
     searchFretboardNotes,
