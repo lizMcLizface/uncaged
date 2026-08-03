@@ -19,23 +19,21 @@
 // module top-level.
 
 import {processChord, generateSyntheticChords} from '../theory/chords';
-import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, createHeptatonicScaleTable, createQuickScalePicker, getPrimaryScale, getPrimaryRootNote} from '../scales';
-import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from '../chords';
-import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from '../midi';
+import {HeptatonicScales, getScaleNotes, createHeptatonicScaleTable, createQuickScalePicker, getPrimaryScale, getPrimaryRootNote} from '../scales';
+import {highlightKeysForChords} from '../chords';
+import {noteToMidi, noteToName} from '../midi';
 import {
     translateNotes,
     stripOctave,
     translateNotes as notationTranslateNotes,
-    stripOctave as notationStripOctave,
-    filterEnharmonicMatches
+    stripOctave as notationStripOctave
 } from '../theory/notation';
 import { CHROMATIC } from '../theory/notes';
 import { getChannel } from '../audio/dispatch';
 import {getChordPatterns, getPatternsByChordType} from '../chordPatterns';
 import {
     getActiveConfig as getActiveInstrumentConfig,
-    subscribe as subscribeToInstrumentChanges,
-    toSlashFormat as tuningToSlashFormat
+    subscribe as subscribeToInstrumentChanges
 } from '../tuning';
 import { fretboardState, refreshScalePositionTuning } from './state';
 import { getIntervalLabelFromRoot } from './geometry';

@@ -3,18 +3,12 @@ import ReactDOM from 'react-dom/client';
 import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
-import $ from 'jquery';
-import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, createHeptatonicScaleTable, scaleState, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scales';
-import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
+import {HeptatonicScales, getScaleNotes, scaleState, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scales';
+import {noteToMidi, keys, initializeMouseInput} from './midi';
 import {keyToNote} from './keyboard';
-import {initializeFretboard, getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState} from './fretboard';
+import {getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState} from './fretboard';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { getChannel, isChannelEnabled } from './audio/dispatch';
-
-// If you want to start measuring performance in your app, pass a function
-// to log results (for example: reportWebVitals(console.log))
-// or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
-reportWebVitals();
 
 window.$ = window.jQuery = require('jquery');
 
@@ -23,11 +17,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // Initialize chord cache for default selected scales
     refreshChordsForRootNote();
 });
-
-let firstScaleId = scaleState.selectedScales[0];
-let [family, mode] = firstScaleId.split('-');
-let intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
-let scaleNotes = getScaleNotes(scaleState.selectedRootNote[0], intervals);
 
 // Export scale and fretboard functions for chord button grid
 window.getPrimaryScale = getPrimaryScale;
@@ -40,23 +29,12 @@ window.showScaleOnFretboard = showScaleOnFretboard;
 window.currentDisplayedChord = fretboardState.currentDisplayedChord;
 
 const { Vex, Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, Dot, StaveConnector, Voice, GhostNote } = require("vexflow");
-const { Factory } = Vex.Flow;
 
 // Make VexFlow available globally for other modules
 window.Vex = Vex;
 window.VexFlowComponents = { Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, Dot, StaveConnector, Voice, GhostNote };
 
-function drawNotes(div, noteArray, stacked = false) {}
-let outputNoteArray = [];
-function advanceSelectedPosition() {}
-function highlightBothPositions() {}
-function clearNoteHighlighting() {}
-function highlightSelectedNotesSecondary() {}
-function updateOutputText() {}
-
 var currentPressed = [];
-
-var currentSynthNotes = {};
 
 let baseOctave = 4;
 
