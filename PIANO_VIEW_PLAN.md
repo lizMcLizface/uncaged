@@ -38,8 +38,8 @@ Decisions taken 2026-08-03, before any code:
 | 5 — Convert the fretboard to the semitone palette | **done** 2026-08-03 | The only step that changed existing behavior. §2.1 |
 | 6 — The view toggle | **done** 2026-08-03 | **Pulled ahead of 4-5** at the user's request, so the piano is reachable to play with. Hide/show only. §6.1 |
 | 7 — Octave-count control | **done** 2026-08-03 | **Other Controls tab, not the top bar** — §6.2. Start octave + span, persisted |
-| 8 — Chord superimposition | not started | §5.1 |
-| 9 — Instrument range overlay | not started | §8.2 |
+| 8 — Chord superimposition | **superseded** 2026-08-03 | Widened into `VISUALIZATION_STACK_PLAN.md` — see §10.1 below. Lands as its step 8e |
+| 9 — Instrument range overlay | not started | §8.2. Its shape is settled in advance by `VISUALIZATION_STACK_PLAN.md` §2.5: a renderer-level property of the keys, **not** a stack layer |
 | 10 — Repoint `MiniPiano.js` *(optional)* | not started | Judge on merit — §3 |
 
 ---
@@ -790,6 +790,28 @@ Then:
 ```
 
 To resume mid-step, append what landed and what remains.
+
+### 10.1 Step 8 became its own plan (2026-08-03)
+
+Investigating step 8 found that "superimpose a chord on the piano" cannot be
+done in the shape §6 assumed. `Piano.js` has one content writer
+(`showScale`) and one remembered layer (`piano.scale`); the fretboard has no
+representation of what it is showing at all, only six `fretboardState` flags
+and a re-derivation ladder (`restoreFretboardState`,
+`src/fretboard/index.js:437`) copied four times, already divergent. Adding
+chords to the piano the current way means a second remembered layer, a
+seventh flag, and a fifth copy of the ladder.
+
+`VISUALIZATION_STACK_PLAN.md` is the alternative: one stack of layers with a
+persistent base and pushable transient layers, rendered by both the
+fretboard and the piano, with the `dimBelow` flag the user asked for. Step 8
+lands as its **step 8e**, after the stack exists. Its §1.3 also finds that
+the same design was attempted in 2019 and is still in the tree —
+`highlightKeysForScales` and its ten hover call sites, dead for the selector
+reason this document's §1.3 already recorded.
+
+Nothing in steps 1-7 changes. §5.1's periodic/specific note-list model is
+carried over unchanged as the new plan's layer payload.
 
 **Verification for this feature specifically.** `REFACTOR_PLAN.md` §2.2's
 tooling applies unchanged (`npm test -- --watchAll=false`,
