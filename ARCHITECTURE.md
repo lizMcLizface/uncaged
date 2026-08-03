@@ -1,10 +1,15 @@
 # unCAGED Architecture
 
 Living document. Updated as `REFACTOR_PLAN.md` phases land — see that file for
-why this exists and the documentation discipline it follows (§3). Seeded
-2026-08-01 as the Phase 0 baseline (the pre-refactor shape, warts included)
-and updated as Phases 1, 2 and 2b landed the same day. Sections describe the
-*current* shape, not an aspirational one.
+what's left to do (its §1) and the documentation discipline this follows
+(its §2.4). Seeded 2026-08-01 as the Phase 0 baseline (the pre-refactor
+shape, warts included); current through Phase 1c, 2026-08-03. Sections
+describe the *current* shape, not an aspirational one.
+
+**Where the detail lives:** §6 is indexed by *module* (§6.1-§6.27, one per
+extracted module, in the order they landed) rather than by phase, so it stays
+useful once the phases are history. §5 is the shrinking list of surviving
+`window.*` globals and is what Phase 5 should be read against.
 
 ---
 
@@ -264,13 +269,38 @@ re-exported onto `window` for `progressionBuilder.js`/`index.js` to call
 state (`getPrimaryScale`, `getPrimaryRootNote`, `getScaleNotes`,
 `HeptatonicScales`, `setScale`, `setRootNote`); and progression/selection
 state (`currentProgression`, `processedProgression`, `selectedBarIndex`,
-`selectedNoteIndex`, and similar). These become ordinary imports once Phases
-3-4 give each of these files a real module boundary — most don't need
-Phase 5's event bus at all, just an import statement.
+`selectedNoteIndex`, and similar). These become ordinary imports now that
+Phases 3-4 have given each of these files a real module boundary — most
+don't need Phase 5's event bus at all, just an import statement.
 
-### 5.3 Correction to `REFACTOR_PLAN.md` §2.1: `gridData`/`outputNoteArray` are dead, not live
+**Six of them are not live at all (measured 2026-08-03).** `notationStripOctave`,
+`noteArray`, `setRootNote`, `setScale`, `updateChordButtonStyles` and
+`updateScaleContextDisplay` are **read but never assigned anywhere in `src/`**,
+so every one of their call sites permanently takes its else-branch:
 
-`REFACTOR_PLAN.md` §2.1 counted `window.gridData` (52 refs) and
+| Global | Read at | Guard that always fails |
+|---|---|---|
+| `notationStripOctave` | `PolySynth.jsx:1218` | ternary, falls back to `note.replace(/\d+$/, '')` |
+| `noteArray` | `PolySynth.jsx:3525` | ternary, falls back to `[]` |
+| `updateChordButtonStyles` | `progression/index.js:241` | `typeof === 'function'` |
+| `setRootNote` / `setScale` | `progression/share.js:220-224` | truthiness — and they are only a *catch-block fallback* behind the imported `setPrimaryRootNote`/`setPrimaryScale`, so nothing is lost |
+| `updateScaleContextDisplay` | `progression/share.js:236` | truthiness |
+
+These need **deletion, not migration** — the same class of dead code
+`window.updateCrossReferenceDisplay` turned out to be in Phase 1b (§7).
+Finding them required splitting writers from readers; a reference count hides
+them completely, which is how they survived four phases. Re-run that split
+before Phase 5 rather than trusting this table, since it drifts:
+
+```sh
+# for each window.<name>, count assignments vs total references
+grep -rE "window\.<name> *=[^=]" src --include=*.js --include=*.jsx
+```
+
+### 5.3 Correction to the original survey: `gridData`/`outputNoteArray` are dead, not live
+
+The original survey (now `REFACTOR_PLAN.md` §4.1, problem 1) counted
+`window.gridData` (52 refs) and
 `window.outputNoteArray` (27 refs) as live module-bus traffic and Phase 5
 step 3 listed `gridData` as a migration target. Verified during this
 session: **every one of those references is inside either `src/staves.js`
@@ -284,8 +314,8 @@ only live "reader" is inside a `/* */`-commented example block
 
 Consequence: these two globals need no migration. They disappear for free
 when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
-`REFACTOR_PLAN.md` has been updated accordingly (§2.1, §2.5, Phase 1, Phase
-5).
+`REFACTOR_PLAN.md` was updated accordingly. Both globals are now gone
+entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 
 ---
 
@@ -370,10 +400,11 @@ src/theory/roman.js       roman-numeral parsing/resolution, lifted from
   (`resolveRomanChord(romanChord, useSeventhChords)`, default `false`) so
   this module doesn't reach back into the file it was extracted from.
 
-### 6.2 Corrections to `REFACTOR_PLAN.md`'s Phase 2 bullet list
+### 6.2 Corrections to the Phase 2 bullet list
 
 Investigating the "20 duplicate arrays / duplicate helpers" inventory in
-`REFACTOR_PLAN.md` §2.2 while doing the move surfaced several pairs that are
+the original survey's duplication list (now `REFACTOR_PLAN.md` §4.1, problem
+2) while doing the move surfaced several pairs that are
 **not** safe drop-in duplicates, despite having matching or near-matching
 names. Each was left in place rather than merged, to keep this a
 restructuring-only phase:
@@ -685,7 +716,7 @@ screenshots already in hand.
 The Chord Pattern Grid (the 12-note x 12-chord-type color-coded button
 table) plus the entire chord-fingering-shape pipeline it shares with the
 Roman-numeral chord display, matching the categorization sketched in
-`REFACTOR_PLAN.md`'s §6.1 resume block, verified against the current
+the Phase 3 resume block (since retired into `REFACTOR_PLAN.md` §2.3), verified against the current
 function list rather than assumed - one addition surfaced that the sketch
 missed: `normalizeIntervalLabel`, used only by `buildIntervalLabelMap`,
 belongs with this group too (kept private, not exported - it has no
@@ -927,7 +958,7 @@ entirely (e.g. `MiniPiano.js`'s comment already referred to
 this step's job any more than step 6 rewriting `chords.js`'s pre-existing
 quirks was its job. This document's own present-tense sections (§1, §3, §5,
 the module ownership table) were updated instead, since keeping *this* file
-accurate is what §3 of `REFACTOR_PLAN.md` requires.
+accurate is what `REFACTOR_PLAN.md` §2.4 (documentation discipline) requires.
 
 Verified via `npm test` (28/28, including `fretboard.test.js` importing
 correctly under its new name and path), plain `npm run build` (total
@@ -2031,8 +2062,8 @@ also closes out Phase 4 as a whole - both halves
 
 ## 7. Known-dead code (Phases 1 and 1b)
 
-**Removed in Phase 1 (2026-08-01):** everything `REFACTOR_PLAN.md` §2.5
-listed - `App_new.js`, `App_backup.js`, `chord-examples.js`,
+**Removed in Phase 1 (2026-08-01):** everything the original survey's dead-weight
+list named - `App_new.js`, `App_backup.js`, `chord-examples.js`,
 `metronome-example.js`, `util/dutyCycleDemo.js`, `components/RouteHelper.js`,
 `staves.js` (173 lines, imported by nothing - its only reference was a
 commented-out `// import './staves';` in `index.js:17`), the empty

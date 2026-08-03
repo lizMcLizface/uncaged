@@ -106,4 +106,4 @@ actually listening on port 3000 instead.)
 
 For ESLint-warning regression checks (not visual ones), use the
 `check-build` skill (`scripts/check-build.sh` + `docs/build-baseline.txt`
-- see `REFACTOR_PLAN.md` §3 for what the baseline is and when to update it).
+- see `REFACTOR_PLAN.md` §2.2 for what the baseline is and when to update it).
