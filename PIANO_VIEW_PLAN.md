@@ -1,6 +1,6 @@
 # Piano View — Implementation Plan
 
-Investigated 2026-08-03. Not started.
+Investigated 2026-08-03. Step 1 landed 2026-08-03.
 
 Goal: let the user hide the main fretboard at the top of the page and show a
 multi-octave piano keyboard in its place, carrying the same scale
@@ -30,7 +30,7 @@ Decisions taken 2026-08-03, before any code:
 
 | Step | State | Notes |
 |---|---|---|
-| 1 — `keyModel.js` + `range.js` + tests | not started | Pure. The only step whose bugs stay invisible |
+| 1 — `keyModel.js` + `range.js` + tests | **done** 2026-08-03 | Pure. 25 tests in `src/piano.test.js` (53 total). Surfaced §4.1, the MIDI-convention seam |
 | 2 — `Piano.js` renders static `<ul id="keyboard">` | not started | Includes the §5.2 CSS variable work. First proof the dormant CSS works |
 | 3 — Rebuild the element tables, wire mouse + held keys | not started | **The ordering trap — §7.** Makes §1.1's machinery live |
 | 4 — Scale highlighting + labels | not started | §2 palette, `mainFretboardLabelMode`, `'scaleChanged'` |
@@ -200,6 +200,30 @@ on, what depends on it; `chordFingering.js:1-7` is the standard.
 
 `keyModel.js` is worth getting right first: everything is a function of it,
 and it is the only part `MiniPiano.js` would ever want back.
+
+### 4.1 The MIDI-convention seam — found building step 1
+
+**`src/piano/` is standard MIDI throughout: 60 = C4.** That is not a free
+choice; it is forced, and the codebase disagrees with itself about it:
+
+| Module | `C4` is | Used by the piano? |
+|---|---|---|
+| `theory/notation.js` — `noteToMidi`/`midiToNote` | **60** (`(octave + 1) * 12 + …`, `:100`) | **Yes** — the conversion everything goes through |
+| `midi.js`'s `keys` table | **60** (`60: { note: "C", octave: 4 }`) | **Yes** — a descriptor's `midi` indexes it directly, and is the `midi="N"` attribute the CSS selects on |
+| `theory/notes.js` — `noteToMidi`/`noteToName` | 48 | No. Its header already documents the divergence |
+| `tuning.js` — `noteOctaveToSemitones` (`:41`) | 48 | No, and this is the trap |
+
+`getNoteAtStringFret` returns `{letter, octave, name}` with **no MIDI
+number**, so `range.js` has to derive one — and reusing `tuning.js`'s own
+semitone math would put the entire instrument-range overlay an octave low,
+invisibly, until step 9. It converts via `notation.js`'s `noteToMidi` on
+slash-form input (`` `${letter}/${octave}` `` — `noteToMidi('E2')` silently
+parses as E**4**, since `basicNoteToMidi` only reads an octave after a `/`).
+
+A `TODO` at `tuning.js:41` records the underlying cleanup: collapse that
+function onto standard MIDI and have `getNoteAtStringFret` return a `midi`
+field, which would delete this conversion rather than document it. Not done
+inside a feature step.
 
 ---
 
