@@ -46,7 +46,8 @@ import {
     updateChordButtonStyles,
     updateChordInfoDisplay,
     setMainViewMode,
-    getMainViewMode
+    getMainViewMode,
+    refreshPianoScale
 } from '..';
 import { VIEW_FRETBOARD, VIEW_PIANO } from '../../piano';
 import {
@@ -1187,6 +1188,10 @@ function buildChordVisualizationControls(fretboard) {
 
     intervalsToggleSelect.addEventListener('change', (e) => {
         fretboardState.mainFretboardLabelMode = e.target.value;
+
+        // The piano honours this same switch rather than adding a second one
+        // (PIANO_VIEW_PLAN.md §8.3), so it needs relabelling too.
+        refreshPianoScale();
 
         if (fretboardState.currentChordGridSelection) {
             showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);

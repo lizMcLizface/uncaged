@@ -20,7 +20,8 @@
  * Synthesizer tab's React portal target (see src/index.js's note).
  */
 
-import { buildKeyRange, countWhiteKeys, octaveSpanToMidiRange } from './keyModel';
+import { buildKeyRange, countWhiteKeys, octaveSpanToMidiRange, pitchClassOf } from './keyModel';
+import { buildScaleKeyStyles } from './labels';
 
 /**
  * Hardcoded until the octave-count control lands (PIANO_VIEW_PLAN.md step 7)
@@ -68,6 +69,8 @@ export function createPiano(container, options = {}) {
         keyElements: new Map(),
         lowMidi: 0,
         highMidi: 0,
+        // Last scale painted, so setRange can restore it on the new keys
+        scale: null,
 
         /**
          * Rebuild every key. Safe to call repeatedly - the keyboard element
@@ -90,7 +93,52 @@ export function createPiano(container, options = {}) {
                 piano.keyElements.set(key.midi, keyElement);
             });
 
+            // The new elements have never been painted; repaint before the
+            // caller's hook runs, so onRender sees a complete keyboard.
+            if (piano.scale) {
+                const { scaleNotes, rootNote, labelMode } = piano.scale;
+                piano.showScale(scaleNotes, rootNote, labelMode);
+            }
+
             if (onRender) onRender(piano);
+            return piano;
+        },
+
+        /**
+         * Paint a scale across the keyboard: `scaleKey` on every in-scale
+         * key in every octave, coloured by semitone from the root, labelled
+         * per `labelMode`.
+         *
+         * Held on `piano.scale` so a re-render (octave change) can repaint
+         * itself without the caller having to know it needs to.
+         */
+        showScale(scaleNotes, rootNote, labelMode = 'note') {
+            piano.scale = { scaleNotes, rootNote, labelMode };
+            const styles = buildScaleKeyStyles(scaleNotes, rootNote, labelMode);
+
+            piano.keyElements.forEach((keyElement, midi) => {
+                const style = styles.get(pitchClassOf(midi));
+                if (style) {
+                    keyElement.classList.add('scaleKey');
+                    keyElement.style.setProperty('--scale-key-color', style.color);
+                    keyElement.textContent = style.label;
+                } else {
+                    keyElement.classList.remove('scaleKey');
+                    keyElement.style.removeProperty('--scale-key-color');
+                    keyElement.textContent = '';
+                }
+            });
+
+            return piano;
+        },
+
+        clearScale() {
+            piano.scale = null;
+            piano.keyElements.forEach(keyElement => {
+                keyElement.classList.remove('scaleKey');
+                keyElement.style.removeProperty('--scale-key-color');
+                keyElement.textContent = '';
+            });
             return piano;
         },
 
