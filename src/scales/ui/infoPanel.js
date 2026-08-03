@@ -12,7 +12,7 @@
 // scaleGenerator.js/scales.js -> src/scales/ half).
 
 import { matchChord } from '../../theory/chords';
-import { chords } from '../../chords';
+import { chords } from '../../theory/chordSuffixes';
 import { createScalePiano, createIntervalPiano, getIntervalInfo, getSynthBaseOctave, DEFAULT_BASE_OCTAVE } from '../../components/MiniPiano/MiniPiano';
 import { getPrimaryScale, getPrimaryRootNote } from '../state';
 import { HeptatonicScales, getScaleNotes } from '../scaleData';

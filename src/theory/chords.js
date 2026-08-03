@@ -1,22 +1,31 @@
 /**
  * Chord spelling and resolution engine: chord-name parsing, interval
- * derivation, and note-name generation. Framework-free except for the
- * `chords` import below.
+ * derivation, and note-name generation. Its own code touches neither the
+ * DOM nor React; see the note on `../scales` below for the one import that
+ * still drags both in.
  *
  * Moved from src/intervals.js (Phase 2). One unused import was dropped in
  * the move - `scales` (only referenced in commented-out code). `chords`
- * (the chord-suffix-list data from src/chords.js, a DOM-heavy file) looked
- * like the same kind of dead weight at first glance - it's shadowed by
- * matchChord's own `chords` parameter everywhere matchChord is defined -
- * but identifySyntheticChords calls `matchChord(chord, chords, ...)` using
- * this exact module-level binding as the argument, so it's live. Importing
- * it means merely importing this engine also runs chords.js's module-scope
- * `document.getElementById('chordPlaceholderContent')` - pre-existing
- * behavior (src/intervals.js already imported chords.js the same way),
- * not something this move introduced.
+ * (the chord-suffix vocabulary) looks like the same kind of dead weight at
+ * first glance - it's shadowed by matchChord's own `chords` parameter
+ * everywhere matchChord is defined - but identifySyntheticChords calls
+ * `matchChord(chord, chords, ...)` using this exact module-level binding as
+ * the argument, so it's live.
+ *
+ * That import used to reach src/chords.js, a DOM-heavy file that imported
+ * processChord back out of this one - the circular import Phase 2 recorded
+ * in ARCHITECTURE.md 6.1. Phase 4c deleted that file and moved the data to
+ * ./chordSuffixes.js, which has no imports at all, so the cycle is gone.
+ *
+ * `getScaleNotes` is the one import left that pulls in more than theory:
+ * '../scales' resolves to the src/scales/ barrel, so importing this engine
+ * still evaluates jQuery and that barrel's module-scope DOM lookups. The
+ * function itself is pure and defined in ../scales/scaleData.js - narrowing
+ * the specifier is a scales-barrel decision, not this file's, so it is left
+ * pointing at the public surface.
  */
 import { getScaleNotes } from '../scales';
-import { chords } from '../chords';
+import { chords } from './chordSuffixes';
 import { areArraysEnharmonicEquivalent, noteToMidi as notationNoteToMidi, midiToNote as notationMidiToNote } from './notation';
 
 function intervalToSemitones(interval) {
