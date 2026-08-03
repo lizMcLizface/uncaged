@@ -9,6 +9,14 @@
 // this module never calls back into chordGrid.js's own UI (the Chord
 // Pattern Grid button table), so the dependency runs one way, not a cycle.
 //
+// getFretboard and the visualization-stack producers (pushChordPreview,
+// pushPositionPreview, popPreviewLayer, bindPreviewSource) are imported back
+// from ../index.js - the same safe two-way shape chordGrid.js documents:
+// every one of them is only touched inside a function body invoked later,
+// never at module top-level. Each cell and column header of this grid is a
+// preview *source* for the main display and never subscribes to it
+// (src/visualization/index.js's boundary).
+//
 // Lifted from src/frets.js as part of REFACTOR_PLAN.md Phase 3, step 8/8.
 
 import {
@@ -25,6 +33,13 @@ import { assignFingers, selectGripFromPositions } from '../../chordFingering';
 import { fretboardState, persistScalePositionGridSettings } from '../state';
 import { FRET_COUNT } from '../Fretboard';
 import { createNoteShapeMarker } from '../markers';
+import {
+    getFretboard,
+    pushChordPreview,
+    pushPositionPreview,
+    popPreviewLayer,
+    bindPreviewSource
+} from '..';
 import {
     getSemitoneFromReference,
     getFingeringMarkerLabel,
@@ -129,6 +144,112 @@ export function getContrastTextColor(hexColor) {
     return luminance > 0.6 ? '#000000' : '#ffffff';
 }
 
+/**
+ * Which dots a cell's mini board shows, and what each one means - one entry
+ * per (string, absolute fret) the cell renders.
+ *
+ * **Extracted so the mini board and the main-display preview cannot disagree
+ * about a cell's contents.** Hovering a cell in absolute mode puts *these*
+ * positions on the main fretboard, and the only way that can stay true as
+ * this function's filters change is for both to read the same list - the
+ * same argument `buildFingeringPositions` settled for chord shapes in step
+ * 8d (VISUALIZATION_STACK_PLAN.md §6.4).
+ *
+ * SVG geometry (x/y) is deliberately *not* here: it is the renderer's, and
+ * the preview has no use for it.
+ *
+ * @returns {{rowRootAbsoluteFret: number|null, candidates: Array<object>}}
+ */
+export function buildScalePositionCandidates(
+    scaleNoteNames,
+    displayedNotes,
+    referenceRootNote,
+    rowStringIndex,
+    rowScaleRootNote,
+    showOnlyDisplayedNotes = false
+) {
+    const rowRootAbsoluteFret = findRowRootAbsoluteFret(rowStringIndex, rowScaleRootNote, SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET);
+    if (rowRootAbsoluteFret === null) {
+        return { rowRootAbsoluteFret: null, candidates: [] };
+    }
+
+    const scaleArray = Array.isArray(scaleNoteNames) ? scaleNoteNames : [];
+    const displayedArray = Array.isArray(displayedNotes) ? displayedNotes : [];
+    const colorReferenceRoot = fretboardState.scalePositionKeepColorConstant ? rowScaleRootNote : referenceRootNote;
+    const shapeReferenceRoot = fretboardState.scalePositionKeepShapeConstant ? rowScaleRootNote : referenceRootNote;
+
+    const candidates = [];
+
+    for (let stringIndex = 0; stringIndex < fretboardState.MINI_SCALE_STRING_TUNING.length; stringIndex++) {
+        const openMidi = notationNoteToMidi(fretboardState.MINI_SCALE_STRING_TUNING[stringIndex]);
+
+        for (let displayColumn = 0; displayColumn <= MINI_SCALE_FRET_COUNT; displayColumn++) {
+            const absoluteFret = getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn);
+            if (absoluteFret < -1) {
+                continue;
+            }
+            const midi = openMidi + absoluteFret;
+            const noteName = notationStripOctave(notationMidiToNote(midi));
+
+            const isInScale = noteArrayContains(scaleArray, noteName);
+            const isDisplayed = noteArrayContains(displayedArray, noteName);
+
+            if (!isInScale) {
+                continue;
+            }
+
+            if (showOnlyDisplayedNotes && !isDisplayed) {
+                continue;
+            }
+
+            const isRoot = areEnharmonicEquivalent(noteName, referenceRootNote);
+            const isTargetRootString = stringIndex === rowStringIndex;
+            const colorSemitone = getSemitoneFromReference(colorReferenceRoot, noteName);
+            const shapeSemitone = getSemitoneFromReference(shapeReferenceRoot, noteName);
+
+            // "This dot is a duplicate of one already in the window" - the
+            // wrap-around columns at either end. Recorded as a fact about the
+            // dot rather than only as a colour, so the main-display preview
+            // can recede the same dots the cell greys out (it does that with
+            // opacity, keeping the hue, per section 2.4).
+            const isDuplicate = (displayColumn >= 6 && stringIndex !== 2)
+                || (displayColumn >= 5 && stringIndex === 2)
+                || displayColumn === 0;
+
+            const baseIntervalColor = getIntervalColor(colorSemitone);
+            const intervalColor = (fretboardState.scalePositionDarkDuplicate && isDuplicate)
+                ? shadeColor(baseIntervalColor, -70)
+                : baseIntervalColor;
+
+            const baseRadius = isRoot ? 3.4 : 2.9;
+            const radius = baseRadius * fretboardState.scalePositionDotScale;
+            const shapeType = fretboardState.scalePositionUseNoteShapes
+                ? NOTE_SHAPE_TYPES[shapeSemitone % NOTE_SHAPE_TYPES.length]
+                : 'circle';
+
+            candidates.push({
+                string: stringIndex,
+                fret: absoluteFret,
+                midi,
+                displayColumn,
+                radius,
+                shapeType,
+                noteName,
+                note: noteName,
+                isRoot,
+                isTargetRootString,
+                isDuplicate,
+                colorSemitone,
+                baseIntervalColor,
+                intervalColor,
+                intervalLabel: SEMITONE_TO_SCALE_INTERVAL_LABEL[getSemitoneFromReference(referenceRootNote, noteName)]
+            });
+        }
+    }
+
+    return { rowRootAbsoluteFret, candidates };
+}
+
 export function createScalePositionMiniFretboard(
     scaleNoteNames,
     displayedNotes,
@@ -193,83 +314,26 @@ export function createScalePositionMiniFretboard(
         svg.appendChild(line);
     }
 
-    const scaleArray = Array.isArray(scaleNoteNames) ? scaleNoteNames : [];
-    const displayedArray = Array.isArray(displayedNotes) ? displayedNotes : [];
-    const rowRootAbsoluteFret = findRowRootAbsoluteFret(rowStringIndex, rowScaleRootNote, SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET);
-    const colorReferenceRoot = fretboardState.scalePositionKeepColorConstant ? rowScaleRootNote : referenceRootNote;
-    const shapeReferenceRoot = fretboardState.scalePositionKeepShapeConstant ? rowScaleRootNote : referenceRootNote;
+    const { rowRootAbsoluteFret, candidates: rawCandidates } = buildScalePositionCandidates(
+        scaleNoteNames,
+        displayedNotes,
+        referenceRootNote,
+        rowStringIndex,
+        rowScaleRootNote,
+        showOnlyDisplayedNotes
+    );
 
     if (rowRootAbsoluteFret === null) {
         wrapper.appendChild(svg);
         return wrapper;
     }
 
-    const candidates = [];
-
-    for (let stringIndex = 0; stringIndex < fretboardState.MINI_SCALE_STRING_TUNING.length; stringIndex++) {
-        const openMidi = notationNoteToMidi(fretboardState.MINI_SCALE_STRING_TUNING[stringIndex]);
-
-        for (let displayColumn = 0; displayColumn <= MINI_SCALE_FRET_COUNT; displayColumn++) {
-            const absoluteFret = getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn);
-            if (absoluteFret < -1) {
-                continue;
-            }
-            const midi = openMidi + absoluteFret;
-            const noteName = notationStripOctave(notationMidiToNote(midi));
-
-            const isInScale = noteArrayContains(scaleArray, noteName);
-            const isDisplayed = noteArrayContains(displayedArray, noteName);
-
-            if (!isInScale) {
-                continue;
-            }
-
-            if (showOnlyDisplayedNotes && !isDisplayed) {
-                continue;
-            }
-
-            const x = startX + displayColumn * fretGap;
-            const y = startY + stringIndex * stringGap;
-            const isRoot = areEnharmonicEquivalent(noteName, referenceRootNote);
-            const isTargetRootString = stringIndex === rowStringIndex;
-            const colorSemitone = getSemitoneFromReference(colorReferenceRoot, noteName);
-            const shapeSemitone = getSemitoneFromReference(shapeReferenceRoot, noteName);
-            let intervalColor = getIntervalColor(colorSemitone);
-            if(fretboardState.scalePositionDarkDuplicate){
-                // If the note is on an x-position of 4 or higher, darken the color to indicate it's a duplicate note in the scale position grid.
-                if(displayColumn >= 6 && stringIndex !== 2){
-                    intervalColor = shadeColor(intervalColor, -70);
-                }
-                else if(displayColumn >= 5 && stringIndex === 2){
-                    intervalColor = shadeColor(intervalColor, -70);
-                }
-                if(displayColumn === 0){
-                    intervalColor = shadeColor(intervalColor, -70);
-                }
-            }
-
-            const baseRadius = isRoot ? 3.4 : 2.9;
-            const radius = baseRadius * fretboardState.scalePositionDotScale;
-            const shapeType = fretboardState.scalePositionUseNoteShapes
-                ? NOTE_SHAPE_TYPES[shapeSemitone % NOTE_SHAPE_TYPES.length]
-                : 'circle';
-
-            candidates.push({
-                string: stringIndex,
-                fret: absoluteFret,
-                x,
-                y,
-                radius,
-                shapeType,
-                noteName,
-                note: noteName,
-                isRoot,
-                isTargetRootString,
-                intervalColor,
-                intervalLabel: SEMITONE_TO_SCALE_INTERVAL_LABEL[getSemitoneFromReference(referenceRootNote, noteName)]
-            });
-        }
-    }
+    // x/y are this renderer's alone; the shared list carries (string, fret).
+    const candidates = rawCandidates.map(candidate => ({
+        ...candidate,
+        x: startX + candidate.displayColumn * fretGap,
+        y: startY + candidate.string * stringGap
+    }));
 
     // For chord cells (not the full-scale reference), pick one playable grip
     // (one dot per string, nearest to the row's root column) and give it a
@@ -371,6 +435,99 @@ export function createScalePositionMiniFretboard(
 
     wrapper.appendChild(svg);
     return wrapper;
+}
+
+/**
+ * Turn a cell's candidates into what the main fretboard and piano need: a
+ * marker per (string, fret), plus the pitches those frets sound.
+ *
+ * Marker styling matches `Fretboard.renderStack`'s own note pass (border
+ * 4/3, size 28/24, interval colour) rather than the mini board's dot
+ * styling, so a pushed pattern looks like everything else on the main
+ * display instead of like a blown-up thumbnail.
+ *
+ * **The duplicate dots recede by `opacity`, not by colour.** The cell greys
+ * them with `shadeColor`; here the hue is kept and only presence drops, which
+ * is the same rule dimming follows everywhere else in the stack
+ * (VISUALIZATION_STACK_PLAN.md section 2.4) - and it is why the candidate
+ * carries `baseIntervalColor` alongside the shaded one.
+ *
+ * @param {Array<object>} candidates - from buildScalePositionCandidates
+ * @param {number} fretCount - the main fretboard's fret count; a mini board's
+ *        window can run past the end of the real neck
+ * @param {'note'|'interval'|'finger'} labelMode
+ */
+export function buildScalePositionMarkers(candidates, fretCount, labelMode) {
+    const positions = [];
+    const notes = [];
+
+    candidates.forEach(candidate => {
+        if (candidate.fret < 0 || candidate.fret > fretCount) return;
+
+        const dimmed = fretboardState.scalePositionDarkDuplicate && candidate.isDuplicate;
+        positions.push({
+            string: candidate.string,
+            fret: candidate.fret,
+            backgroundColor: '#ffffff',
+            borderColor: candidate.baseIntervalColor,
+            borderWidth: candidate.isRoot ? 4 : 3,
+            textColor: '#333333',
+            size: candidate.isRoot ? 28 : 24,
+            label: labelMode === 'interval' ? candidate.intervalLabel : candidate.noteName,
+            isRoot: candidate.isRoot,
+            useCustomStyle: true,
+            disableAnimation: true,
+            opacity: dimmed ? 0.4 : 1
+        });
+        notes.push(notationMidiToNote(candidate.midi));
+    });
+
+    return { positions, notes };
+}
+
+/**
+ * Put a grid cell on the main display, in whichever of the two languages the
+ * grid is currently speaking.
+ *
+ * The **Fret Labels** toggle is what selects between them, and that is not a
+ * coincidence: relative labels mean the cell is showing a *movable shape*, so
+ * the useful answer is "where do these notes live everywhere on the neck";
+ * absolute labels mean it is showing *one position*, so the useful answer is
+ * that position and nothing else. Same for the full-scale column boards.
+ *
+ * @param {{scale: string[], displayed: string[], referenceRoot: string,
+ *          rowStringIndex: number, rowScaleRoot: string,
+ *          showOnlyDisplayed: boolean, label: string}} cell
+ */
+function pushScalePositionPreview(cell) {
+    if (!fretboardState.scalePositionUseAbsoluteFretLabels) {
+        // Pitch classes, over the dimmed scale - the same preview every other
+        // chord source pushes.
+        pushChordPreview(cell.displayed, cell.referenceRoot, cell.label);
+        return;
+    }
+
+    const { candidates } = buildScalePositionCandidates(
+        cell.scale,
+        cell.displayed,
+        cell.referenceRoot,
+        cell.rowStringIndex,
+        cell.rowScaleRoot,
+        cell.showOnlyDisplayed
+    );
+    const fretboard = getFretboard('fretNotPlaceholder');
+    const { positions, notes } = buildScalePositionMarkers(
+        candidates,
+        fretboard ? fretboard.fretCount : FRET_COUNT,
+        fretboardState.mainFretboardLabelMode
+    );
+
+    pushPositionPreview({
+        positions,
+        notes,
+        rootNote: cell.referenceRoot,
+        label: cell.label
+    });
 }
 
 /**
@@ -648,6 +805,12 @@ export function renderScalePositionGrid() {
     }
 
     persistScalePositionGridSettings();
+
+    // Every cell below is about to be destroyed and rebuilt. A preview whose
+    // source element disappears mid-hover never gets its `pointerleave`, so
+    // the layer would leak - VISUALIZATION_STACK_PLAN.md section 7's named
+    // risk, and this is the "clear on the re-render path" it asks for.
+    popPreviewLayer();
 
     const scaleNoteNames = getCurrentScaleNoteNames();
     const primaryScale = getPrimaryScale();
@@ -1217,7 +1380,15 @@ export function renderScalePositionGrid() {
             font-size: 11px;
             min-width: ${Math.round(130 * fretboardState.scalePositionPatternScale)}px;
             text-align: center;
+            cursor: pointer;
         `;
+        // A column header is the whole column, so it means the *notes* rather
+        // than any one position of them - pitch classes across the entire
+        // board, in absolute mode as much as in relative. That is what makes
+        // it the way back out of a single-position preview.
+        bindPreviewSource(scaleHeader, () => {
+            pushChordPreview(workingScale, normalizedRoot, `${normalizedRoot} scale`);
+        });
         headerRow.appendChild(scaleHeader);
     }
 
@@ -1231,11 +1402,12 @@ export function renderScalePositionGrid() {
         }
         const degreeChordNotes = degreeIndexes.map(index => workingScale[index]);
         const degreeChordRoot = workingScale[col % workingScale.length];
-        colHeader.textContent = buildDegreeHeaderLabel(
+        const degreeLabel = buildDegreeHeaderLabel(
             SCALE_POSITION_DEGREES[col] || String(col + 1),
             degreeChordRoot,
             degreeChordNotes
         );
+        colHeader.textContent = degreeLabel;
         colHeader.style.cssText = `
             border: 1px solid #444;
             background: #2b2b2b;
@@ -1246,7 +1418,11 @@ export function renderScalePositionGrid() {
             text-align: center;
             white-space: pre-line;
             line-height: 1.2;
+            cursor: pointer;
         `;
+        bindPreviewSource(colHeader, () => {
+            pushChordPreview(degreeChordNotes, degreeChordRoot, degreeLabel.replace(/\n/g, ' '));
+        });
         headerRow.appendChild(colHeader);
     }
     table.appendChild(headerRow);
@@ -1294,6 +1470,16 @@ export function renderScalePositionGrid() {
                     true,
                     fretboardState.scalePositionUseAbsoluteFretLabels
                 );
+                fullScaleCell.style.cursor = 'pointer';
+                bindPreviewSource(fullScaleCell, () => pushScalePositionPreview({
+                    scale: workingScale,
+                    displayed: workingScale,
+                    referenceRoot: normalizedRoot,
+                    rowStringIndex,
+                    rowScaleRoot: normalizedRoot,
+                    showOnlyDisplayed: false,
+                    label: `${normalizedRoot} scale - Root ${rowLabel}`
+                }));
                 fullScaleCell.appendChild(fullScaleMini);
             } else {
                 fullScaleCell.appendChild(createScalePositionPlaceholderCell(() => {
@@ -1332,6 +1518,16 @@ export function renderScalePositionGrid() {
                     true,
                     fretboardState.scalePositionUseAbsoluteFretLabels
                 );
+                td.style.cursor = 'pointer';
+                bindPreviewSource(td, () => pushScalePositionPreview({
+                    scale: workingScale,
+                    displayed: chordPatternNotes,
+                    referenceRoot: chordRoot,
+                    rowStringIndex,
+                    rowScaleRoot: normalizedRoot,
+                    showOnlyDisplayed: true,
+                    label: `${SCALE_POSITION_DEGREES[col] || col + 1} (${chordRoot}) - Root ${rowLabel}`
+                }));
                 td.appendChild(mini);
             } else {
                 td.appendChild(createScalePositionPlaceholderCell(() => {

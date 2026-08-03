@@ -46,7 +46,6 @@ import {
 } from './playback';
 import { displaySingleChordPattern, displayAllChordPatterns } from './fretboardDisplay';
 import { addInteractiveEvent } from '../fretboard/Fretboard';
-import { pushChordPreview, popPreviewLayer } from '../fretboard';
 import { updateProgressionDisplay } from './progressionList';
 
 /**
@@ -586,18 +585,21 @@ function createMiniFretboardVisualization(pattern, chordNotes, chordName = 'Chor
         transition: all 0.2s ease;
     `;
 
-    // Add hover effect, and put the chord on the main display while the
-    // pointer is here (VISUALIZATION_STACK_PLAN.md step 8f).
+    // Hover effect only. This mini fretboard sits *inside* a chord card, and
+    // the card already pushes that same chord onto the main display for as
+    // long as the pointer is anywhere within it (createChordElement). Pushing
+    // again here was harmless; popping on the way out was not - `mouseleave`
+    // fires when the pointer moves from the mini fretboard back onto the card
+    // that still contains it, so leaving this element tore down a preview the
+    // card had not finished with, and the neck lost its dimming mid-hover.
     wrapper.addEventListener('mouseenter', () => {
         wrapper.style.transform = 'scale(1.02)';
         wrapper.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
-        pushChordPreview(chordNotes, chordNotes && chordNotes[0], chordName);
     });
 
     wrapper.addEventListener('mouseleave', () => {
         wrapper.style.transform = 'scale(1)';
         wrapper.style.boxShadow = 'none';
-        popPreviewLayer();
     });
 
     // Create copy button
@@ -780,14 +782,11 @@ function createChordElement(chord, index) {
                     margin: 8px auto;
                     cursor: pointer;
                 `;
-                // Hovering a card's mini piano puts that chord on the main
-                // display, over the dimmed scale (VISUALIZATION_STACK_PLAN.md
-                // step 8f). Pitch classes, matching what the mini piano
-                // itself shows - see pushChordPreview.
-                addInteractiveEvent(miniPiano, 'enter', () => {
-                    pushChordPreview(notes, notes[0], displayName);
-                });
-                addInteractiveEvent(miniPiano, 'leave', () => popPreviewLayer());
+                // No preview handlers of its own: like the mini fretboard
+                // below it, this sits inside a chord card that already
+                // previews the same chord for the whole time the pointer is
+                // in it. Its own `leave` used to pop that preview on the way
+                // back out onto the card.
                 element.appendChild(miniPiano);
             }
         }
@@ -901,8 +900,16 @@ function createChordElement(chord, index) {
         element.appendChild(patternSelector);
     }
 
-    // Add hover effects with dynamic highlighting
-    element.addEventListener('mouseenter', () => {
+    // Hover effects with dynamic highlighting. The whole card is the preview
+    // source - its mini piano and mini fretboard deliberately have no
+    // handlers of their own, so the chord on the main display does not change
+    // as the pointer moves around inside the card.
+    //
+    // `addInteractiveEvent` rather than raw mouse events so a press on a
+    // touch screen previews too, which is what the mini piano's own handlers
+    // used to provide before they were removed as the source of that
+    // mid-hover flicker.
+    addInteractiveEvent(element, 'enter', () => {
         if (!chord.isInvalid) {
             element.style.borderColor = '#4CAF50';
             element.style.background = '#555';
@@ -911,7 +918,7 @@ function createChordElement(chord, index) {
         }
     });
 
-    element.addEventListener('mouseleave', () => {
+    addInteractiveEvent(element, 'leave', () => {
         element.style.borderColor = borderColor; // Restore original border color
         element.style.background = '#444';
         progressionState.hoveredChordIndex = null;

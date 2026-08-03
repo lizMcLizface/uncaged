@@ -48,13 +48,15 @@ import {
     updateChordInfoDisplay,
     setMainViewMode,
     getMainViewMode,
-    refreshScaleLayer
+    refreshScaleLayer,
+    refreshPianoBounds
 } from '..';
 import { clearLayers } from '../../visualization';
 import {
     VIEW_FRETBOARD,
     VIEW_PIANO,
     pianoState,
+    persistPianoSettings,
     setPianoOctaveSpan,
     setPianoFullRange,
     RANGE_FULL,
@@ -215,6 +217,7 @@ function attachHotkeyFooter(container) {
         <div><strong>Home row (A S D F G H J K L ; ')</strong> - white keys</div>
         <div><strong>Row above (W E T Y U I O)</strong> - black keys</div>
         <div><strong>z / x</strong> - shift the synth down/up an octave</div>
+        <div><strong>1-7</strong> - play scale degree, <strong>+shift</strong> triad, <strong>+ctrl</strong> seventh, <strong>+alt</strong> ninth</div>
     `;
     footer.appendChild(rows);
 
@@ -1624,6 +1627,63 @@ function buildPianoRangeControls() {
     container.appendChild(startSelect);
     container.appendChild(countSelect);
     container.appendChild(summary);
+
+    // The two range markers (PIANO_VIEW_PLAN.md step 9), each switchable.
+    // Here rather than in their own row because all three settings answer the
+    // same question - how much of the keyboard am I looking at, and how much
+    // of it can I use - and separating them would make the panel say it twice.
+    //
+    // Two checkboxes, not one: the markers answer unrelated questions ("can I
+    // play this on the guitar" and "where is my keyboard right now"), so
+    // someone who wants the octave bracket without the instrument veil should
+    // not have to give up both.
+    const marker = (id, labelText, title, read, write) => {
+        const wrapper = document.createElement('label');
+        wrapper.style.cssText = `
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+        `;
+        wrapper.title = title;
+
+        const toggle = document.createElement('input');
+        toggle.type = 'checkbox';
+        toggle.id = id;
+        toggle.checked = read();
+
+        const text = document.createElement('span');
+        text.textContent = labelText;
+        text.style.cssText = labelStyle;
+
+        toggle.addEventListener('change', (event) => {
+            write(event.target.checked);
+            persistPianoSettings();
+            // One call for both, and it reads the flags rather than being told
+            // which changed - so the two checkboxes cannot drift apart.
+            refreshPianoBounds();
+        });
+
+        wrapper.appendChild(toggle);
+        wrapper.appendChild(text);
+        return wrapper;
+    };
+
+    container.appendChild(marker(
+        'pianoShowInstrumentRange',
+        'Instrument range',
+        'Veil the keys the selected instrument cannot reach',
+        () => pianoState.showInstrumentRange,
+        (value) => { pianoState.showInstrumentRange = value; }
+    ));
+    container.appendChild(marker(
+        'pianoShowOctaveMarker',
+        'Octave marker',
+        'Bracket the octave the computer keyboard is playing (z / x)',
+        () => pianoState.showOctaveMarker,
+        (value) => { pianoState.showOctaveMarker = value; }
+    ));
+
     return container;
 }
 

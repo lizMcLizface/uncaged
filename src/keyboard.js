@@ -8,13 +8,40 @@
 // happens mid-press builds fresh <li> elements that have never seen the
 // keydown, so it has to reapply `pressedKey` from the held set itself.
 
-/**
- * Notes currently held on the computer keyboard, in `Name/Octave` form
- * ('E/4') - the same shape src/piano/ and Fretboard.markNote use.
- */
+const MIN_BASE_OCTAVE = 0;
+const MAX_BASE_OCTAVE = 8;
+
 const keyboardState = {
-    currentPressed: []
+    /**
+     * Notes currently held on the computer keyboard, in `Name/Octave` form
+     * ('E/4') - the same shape src/piano/ and Fretboard.markNote use.
+     */
+    currentPressed: [],
+    /**
+     * The register Z/X shifts, and the anchor every keyboard-triggered note
+     * is spelled against.
+     *
+     * It was a `let` inside src/index.js's key handler, readable from
+     * elsewhere only through `window.getSynthBaseOctave` - one strand of the
+     * bus REFACTOR_PLAN.md Phase 5 exists to cut. It moved here when
+     * src/degreeKeys.js became a second reader: "which octave is the computer
+     * keyboard playing in" is this module's subject, and the alternative was
+     * a second module reaching through `window`. The global still exists and
+     * still answers, reading from here - MiniPiano.js consumes it and is not
+     * Phase 5's to change today.
+     */
+    baseOctave: 4
 };
+
+/**
+ * Move the played register up or down, clamped to the 0-8 the synth covers.
+ * @returns {number} the octave actually in effect afterwards
+ */
+function shiftBaseOctave(delta) {
+    const next = keyboardState.baseOctave + delta;
+    keyboardState.baseOctave = Math.min(MAX_BASE_OCTAVE, Math.max(MIN_BASE_OCTAVE, next));
+    return keyboardState.baseOctave;
+}
 
 // Maps a physical key to a note name, in the two-row piano layout the
 // on-screen keyboard uses: the home row plays the naturals, the row above
@@ -45,4 +72,4 @@ function keyToNote(event, octave){
     return undefined;
 }
 
-export {keyToNote, keyboardState}
+export {keyToNote, keyboardState, shiftBaseOctave, MIN_BASE_OCTAVE, MAX_BASE_OCTAVE}

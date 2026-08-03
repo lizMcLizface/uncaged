@@ -44,6 +44,7 @@ Decisions taken 2026-08-03, before any code:
 | 6 — The view toggle | **done** 2026-08-03 | **Pulled ahead of 4-5** at the user's request, so the piano is reachable to play with. Hide/show only. §6.1 |
 | 7 — Octave-count control | **done** 2026-08-03 | **Other Controls tab, not the top bar** — §6.2. Start octave + span, persisted |
 | 8 — Chord superimposition | **done** 2026-08-03 | Widened into `VISUALIZATION_STACK_PLAN.md` (§10.1 below) and landed as its step 8e. The piano shows the fingering's real sounding pitches, over a dimmed scale |
+| 9 — Instrument-range overlay | **done** 2026-08-03 | Plus a bracket for the octave Z/X selects, which the user asked for alongside it. `range.js` finally has a caller. §6.3 |
 | 9 — Instrument range overlay | not started | §8.2. Its shape is settled in advance by `VISUALIZATION_STACK_PLAN.md` §2.5: a renderer-level property of the keys, **not** a stack layer |
 | 10 — Repoint `MiniPiano.js` *(optional)* | not started | Judge on merit — §3 |
 
@@ -516,8 +517,17 @@ fits are not always the same: the 88-key window ends at A0 and C8.
   expressing it as a count would either clip A0-B0 off the bottom or overshoot
   the top. `pianoState.rangeMode` (`'octaves'` | `'full'`) carries it, and the
   start-octave select disables while it is active because it means nothing
-  there. The labels do bottom out at their floor at 52 white keys; that is
-  accepted deliberately - the keys stay pressable and the board still works as
+  there. **This became the default on 2026-08-03**, at the user's request: a
+  piano is 88 keys, and opening on three octaves of one made the view read as
+  a controller strip rather than an instrument - and pushed a fingering's real
+  octaves off the ends, which is the thing `VISUALIZATION_STACK_PLAN.md` step
+  8e added the piano to show (its §5.2 named the C2 default as the reason that
+  would happen and accepted it; the chord layers landing is what stopped it
+  being worth accepting). A settings blob written before `rangeMode` existed
+  now keeps the *default* rather than being read as `'octaves'`, so returning
+  users get the new default too. The labels do bottom out at their floor at 52
+  white keys; that is accepted deliberately - the keys stay pressable and the
+  board still works as
   an input display, which is the point of the mode.
 - **The read-back is computed, not observed.** This panel is built *before*
   `createPiano` runs, so asking the live piano for its range leaves the
@@ -720,6 +730,69 @@ horizontal, bottom-centre, matching `MiniPiano.js`'s SVG text
 (`text-anchor: middle`, `y = height - 8`) so the big piano and the mini
 pianos read identically. The root is bold, the same cue `MiniPiano.js:380`
 uses.
+
+### 6.3 Step 9 as it landed (2026-08-03)
+
+`src/piano/range.js` had existed since step 1 with **no caller anywhere** -
+built, tested, exported from the barrel, and never rendered. This is its
+caller, and it arrived alongside a second range the user asked for at the same
+time.
+
+**Two markers, and they are deliberately different shapes**, because they say
+different kinds of thing:
+
+| Marker | Class | Looks like | Why |
+|---|---|---|---|
+| Outside the instrument's playable span | `outOfRangeKey` | a translucent veil over the key | "you cannot play this" - whatever the key is showing stays legible under it |
+| The octave Z/X is playing in | `octaveKey` | a bracket along the key's bottom edge | it marks a *boundary*; twelve tinted keys would read as a twelve-note highlight |
+
+**Neither is a stack layer**, as `VISUALIZATION_STACK_PLAN.md` §2.5 settled in
+advance: a range is a property of the *keys*, not a highlight competing with
+the scale, and it has to show under an empty stack. `Piano.renderBounds` owns
+exactly those two classes and `renderStack` owns exactly three others, so the
+two run in any order and neither blinks when the other changes. `pressedKey`
+remains a third party to both.
+
+**Neither uses `filter`,** which is what `dimKey` uses. A key can be both out
+of the instrument's range *and* dimmed by a layer above it, and two filters
+would compound into something neither rule intended - so the range markers are
+pseudo-element paint instead.
+
+**Three ranges now exist and none may be conflated** (§8.2 warned about two;
+the third arrived with the octave bracket):
+
+1. the piano's *displayed* range - `setRange`, user-chosen, now 88 keys by default;
+2. the *instrument's* playable span - `range.js`, from the tuning;
+3. the *played* octave - `keyboardState.baseOctave`, C-to-B, moved by Z/X.
+
+`refreshPianoBounds` in `src/fretboard/index.js` feeds 2 and 3, for the reason
+`refreshScaleLayer` lives there: that file already knows about `src/tuning.js`
+and `src/keyboard.js`, and keeping those reads on that side is what lets
+`src/piano/` stay a renderer of things it is handed.
+
+**Each marker can be switched off**, from the same Other Controls row as the
+piano range - added straight after, at the user's request. Two checkboxes
+rather than one, because the markers answer unrelated questions ("can I play
+this on the guitar", "where is my keyboard right now") and wanting the bracket
+without the veil should not cost both. Off is expressed as **passing `null`**
+to `setBounds`, not as a flag the renderer checks: `renderBounds` stays a
+function of the bounds it is handed, and "no range" is already a state it has
+to handle - an unresolvable tuning produces the identical call. `pianoState`
+carries and persists both, defaulting on.
+
+**Open strings are not marked**, though `range.js` returns them and §8.2 calls
+it "a cheap addition". Nothing asked for it, and a per-string marker is a
+different kind of statement from a range.
+
+**Verified** with a 24-check Playwright run
+(`.tmp/verify-instrument-keys-bounds.js`): the guitar's range comes out MIDI
+40-82 and the bass's 28-61, the bracket is exactly C-to-B of the selected
+octave and follows Z/X, both pseudo-elements are confirmed to actually paint,
+and the markers survive an instrument change. The toggles have their own
+13-check run (`.tmp/verify-bounds-toggles.js`), which asserts the thing most
+likely to break: a disabled marker must not come back on any of the four
+paths that reapply them - an instrument change, a Z/X press, a keyboard
+rebuild, or a reload.
 
 ---
 

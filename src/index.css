@@ -301,6 +301,58 @@ body {
   filter: saturate(0.3) brightness(0.72);
 }
 
+/* ---------------------------------------------------------------------------
+   Range markers (PIANO_VIEW_PLAN.md step 9). NOT highlights: these say what
+   the *keys* are, not what is being shown on them, so they are drawn as a
+   veil and a bracket rather than as colour, and they stay visible when the
+   stack is empty. Piano.js's renderBounds owns both classes; renderStack
+   never touches them.
+
+   Deliberately not `filter`, which is what dimKey uses: a key can be both
+   out of the instrument's range and dimmed by a layer above, and two filters
+   would compound into something neither rule intended.
+   --------------------------------------------------------------------------- */
+
+/* Outside the active instrument's playable span. A veil over the key rather
+   than a change to it: whatever the key is showing stays legible underneath,
+   which is the difference between "you cannot play this" and "this is not
+   part of the scale". */
+#keyboard li.outOfRangeKey::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: hsla(0, 0%, 0%, 0.42);
+  pointer-events: none;
+  z-index: 3;
+}
+
+#keyboard li.black.outOfRangeKey::before {
+  background: hsla(0, 0%, 0%, 0.55);
+}
+
+/* The octave the computer keyboard is currently playing (Z/X). A bracket
+   along the playing edge of the key, not a wash: it marks a boundary, and
+   twelve tinted keys would read as a twelve-note highlight. */
+#keyboard li.octaveKey::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 0;
+  height: 4px;
+  border-radius: 2px 2px 0 0;
+  background: hsl(180, 70%, 45%);
+  pointer-events: none;
+  z-index: 4;
+}
+
+#keyboard li.black.octaveKey::after {
+  left: 12%;
+  right: 12%;
+  height: 3px;
+}
+
 .black.pressed {
   box-shadow: -1px -1px 2px var(--white-20) inset,
     0 -2px 2px rgba(123, 0, 200, 0.6) inset, 0 1px 2px var(--black-50);

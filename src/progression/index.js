@@ -20,7 +20,6 @@ import {
     initializeScaleNotesDisplay
 } from './scaleSync';
 import {
-    displayScaleContext,
     displayAllChordPatterns
 } from './fretboardDisplay';
 import {
@@ -217,32 +216,20 @@ function clearProgression() {
 
     updateProgressionDisplay();
 
-    const fretboard = getFretboardForProgression();
-    if (fretboard) {
-        fretboard.clearMarkers();
-        fretboard.clearChordLines();
-
-        // Default back to scale display and activate scale button
-        displayScaleContext();
-
-        // Activate the scale button (first button in Roman numeral controls)
-        const scaleButton = document.querySelector('[data-chord-index="0"]');
-        if (scaleButton) {
-            // Set visual state to active
-            scaleButton.style.background = 'linear-gradient(to bottom, #d4edda, #c3e6cb)';
-            scaleButton.style.color = '#155724';
-
-            // Update the current displayed chord state in the parent context
-            if (typeof window.currentDisplayedChord !== 'undefined') {
-                window.currentDisplayedChord = 0; // Scale button
-            }
-
-            // Update button styles if the function exists
-            if (typeof window.updateChordButtonStyles === 'function') {
-                window.updateChordButtonStyles();
-            }
-        }
-    }
+    // Drops the chord lines and pops whatever chord was being previewed,
+    // which reveals the base scale layer underneath - the whole of "revert to
+    // scale view". It used to `clearMarkers()` first and then try to redraw
+    // the scale through `displayScaleContext`, which wiped the neck and, with
+    // "Show Scale Context" off, left it wiped.
+    //
+    // The Roman-numeral button restyling that lived here is gone with it: it
+    // painted the Scale button active and wrote to `window.currentDisplayedChord`,
+    // a load-time snapshot copy with no effect on anything
+    // (VISUALIZATION_STACK_PLAN.md section 10.2). Clearing a progression does
+    // not change which chord the *fretboard* tab has selected, and popping
+    // reveals that selection if there is one, so the buttons were being made
+    // to lie about state nothing had touched.
+    displayAllChordPatterns();
 }
 
 // Public barrel surface for src/progression/ - same pattern as

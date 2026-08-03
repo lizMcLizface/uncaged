@@ -5,8 +5,9 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import {HeptatonicScales, getScaleNotes, scaleState, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scales';
 import {noteToMidi, keys, initializeMouseInput} from './midi';
-import {keyToNote, keyboardState} from './keyboard';
-import {getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState} from './fretboard';
+import {keyToNote, keyboardState, shiftBaseOctave} from './keyboard';
+import {handleDegreeKey, releaseAllDegrees} from './degreeKeys';
+import {getFretboard, showChordOnFretboard, showScaleOnFretboard, refreshPianoBounds, fretboardState} from './fretboard';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { getChannel, isChannelEnabled } from './audio/dispatch';
 
@@ -34,13 +35,16 @@ const { Vex, Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, D
 window.Vex = Vex;
 window.VexFlowComponents = { Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, Dot, StaveConnector, Voice, GhostNote };
 
-let baseOctave = 4;
-
 // Expose the synth's currently selected reference octave (shifted via Z/X)
 // so other modules - e.g. the mini pianos' click-to-play - can align their
 // own playback octave with whatever register the on-screen keyboard is in.
+//
+// The value itself lives in keyboardState now, not in a `let` here: src/
+// degreeKeys.js is a second reader, and adding a second module that reaches
+// through `window` for it would be growing exactly the bus REFACTOR_PLAN.md
+// Phase 5 is meant to cut. The global stays because MiniPiano.js consumes it.
 if (typeof window !== 'undefined') {
-    window.getSynthBaseOctave = () => baseOctave;
+    window.getSynthBaseOctave = () => keyboardState.baseOctave;
 }
 
 // Function to check if a text input element is currently focused
@@ -72,18 +76,23 @@ function onKeyPress(event, up) {
     if (isTextInputFocused()) {
         return;
     }
+    // The number row plays scale degrees (1-7, with shift/ctrl/alt stacking
+    // thirds on top). Before the octave keys, because it claims its own
+    // events and must not fall through to anything below.
+    if (handleDegreeKey(event)) {
+        return;
+    }
+
     // Handle octave and navigation keys
     if (event.type === 'keydown' && event.code === 'KeyZ'){
-        console.log('Reducing Base Octave: ', baseOctave);
-        baseOctave -= 1;
-        if(baseOctave < 0) baseOctave = 0;
+        console.log('Reducing Base Octave: ', shiftBaseOctave(-1));
         updateCurrentScaleDisplay(); // Refresh Scale Information pianos to the new octave
+        refreshPianoBounds();        // ...and the octave bracket on the big one
     }
     if (event.type === 'keydown' && event.code === 'KeyX'){
-        console.log('Increasing Base Octave: ', baseOctave);
-        baseOctave += 1;
-        if(baseOctave > 8) baseOctave = 8;
+        console.log('Increasing Base Octave: ', shiftBaseOctave(1));
         updateCurrentScaleDisplay(); // Refresh Scale Information pianos to the new octave
+        refreshPianoBounds();
     }
 
     // Scale/root navigation hotkeys. In exclusive mode (single selection),
@@ -144,7 +153,7 @@ function onKeyPress(event, up) {
         return;
     }
 
-    var note = keyToNote(event, baseOctave);
+    var note = keyToNote(event, keyboardState.baseOctave);
 
     if (!note) {
         return; // Key not mapped to a musical note
@@ -203,6 +212,9 @@ function onKeyPress(event, up) {
 
 document.addEventListener('keydown', onKeyPress);
 document.addEventListener('keyup', onKeyPress);
+// alt+tab is one of the degree bindings plus tab, so a held chord can very
+// easily lose its keyup. Without this it sounds until the tab is closed.
+window.addEventListener('blur', releaseAllDegrees);
 
 // Initialize mouse input for piano keys when PolySynth is available.
 //

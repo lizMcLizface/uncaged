@@ -22,9 +22,9 @@ different colors. Measured before the change: E Aeolian's ♭3 and E Ionian's
 `rgb(210, 242, 95)`. `SCALE_COLORS` is deleted. The claim now holds for every
 instrument in the app. See §6.30.
 
-**Where the detail lives:** §6 is indexed by *module* (§6.1-§6.31, one per
+**Where the detail lives:** §6 is indexed by *module* (§6.1-§6.34, one per
 extracted module, in the order they landed) rather than by phase, so it stays
-useful once the phases are history. **§6.31 is the one to read first for
+useful once the phases are history. **§6.31 (with §6.32-§6.33) is the one to read first for
 anything that draws on the fretboard or the piano**: since
 `VISUALIZATION_STACK_PLAN.md` step 8d, a single layer stack decides what the
 main display shows, and the `fretboardState` flags that used to imply it are
@@ -347,6 +347,7 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/theory/chordSuffixes.js` *(Phase 4c, second step, landed 2026-08-03 - `src/chords.js` deleted)* | The chord-suffix vocabulary (`chords`): which chord qualities the app can name, grouped by the category headings the UI shows them under, plus the standing TODO list of suffixes not yet in it. Pure data, **no imports at all** - which is what breaks the §6.1 cycle. Consumed by `theory/chords.js`'s `identifySyntheticChords` and `scales/ui/infoPanel.js`, both passing it to `matchChord` as the candidate set. See §6.28. | nothing | must stay import-free; anything it imported would re-enter the cycle |
 | `src/audio/` *(Phase 2b landed 2026-08-01: `context.js`/`bus.js`/`dispatch.js`; `clock.js`/`scheduler.js` belong to `SESSION_MODE_FEASIBILITY.md` Stage 2's Timing Grid, not a `REFACTOR_PLAN.md` phase)* | The shared `AudioContext`, master bus, note-event/channel registry dispatch. | nothing app-specific today | UI modules should depend on it, not the reverse |
 | `src/nodes/` | Framework-free Web Audio node wrappers (`Gain`, `Filter`, `Distortion`, …), a shared `.getNode()`/`.connect()` interface. | nothing app-specific | — |
+| `src/degreeKeys.js` *(2026-08-03)* | The number row as scale-degree keys: 1-7 play a degree of the active scale, shift/ctrl/alt stack one more third each (triad, seventh, ninth), all in the register Z/X selects. Notes are held, not fired, so a chord can sustain under a melody. Exports `handleDegreeKey(event)` (returns true when it claimed the event) and `releaseAllDegrees`; `src/index.js` calls both rather than this file registering listeners, so there stays one keyboard entry point and one text-input guard. See §6.34. | `src/scales/`, `theory/chords` (`buildStackedThirds`), `src/midi.js` (`keys`, for `pressedKey`), `src/keyboard.js` (`baseOctave`), `audio/dispatch` | — |
 | `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` — `REFACTOR_PLAN.md` Phase 3 called this out explicitly, and Phase 3's completed `src/fretboard/` split kept them where they were |
 | `src/fretboard/state.js` *(Phase 3, in progress, landed 2026-08-01)* | The ~28 module-level `let`s `frets.js` used to hold directly - Scale Position Grid row anchors/tuning + its persisted display settings, the fretboard instance registry, chord/display state, chord-fingering tab state, and the scale-change debounce timestamps - plus `refreshScalePositionTuning()` and `persistScalePositionGridSettings()`. Exported as one mutable object, `fretboardState`, not bare `let`s - see §6.3 for why. | `theory/notation`, `tuning` | everything that used to read/write these as bare identifiers now imports `fretboardState` instead |
 | `src/fretboard/geometry.js` *(Phase 3, in progress, landed 2026-08-01)* | Pure fret-position and note-at-position math: `calculateFretPositions`, `calculateFretPosition`, `calculateNote`, `extractNoteName`, `extractOctave`, `getNoteAt`, `findNotePositions`, plus `getSemitoneFromRoot`/`getIntervalLabelFromRoot` (the interval math `markScale` colors and labels from - see §6.30). No DOM, no class instance - takes plain data (tuning array, fret count, fret-position table) in, plain data out. The `Fretboard` class keeps same-named methods that delegate to these (e.g. `calculateNote(a, b) { return geometryCalculateNote(a, b); }`), so its public API is unchanged. | `theory/notation` | — |
@@ -355,14 +356,14 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/fretboard/Fretboard.js` *(Phase 3, landed 2026-08-01)* | The `Fretboard` class itself - DOM rendering (neck/fret grid, note/scale/chord marking, subscale boxes, chord-shape lines, CAGED/fingering display) for one fretboard instance. Also owns `GUITAR_TUNING`/`FRET_COUNT` (constructor defaults), `DEFAULT_COLORS` (fallback marker coloring - the degree-indexed `SCALE_COLORS` was retired in §6.30) and `addInteractiveEvent` (a generic DOM helper with no better home yet) - `./index.js` imports `GUITAR_TUNING` back for its own glue code, `ui/scalePositionGrid.js` imports `FRET_COUNT`, and `ui/controls.js`/`ui/chordGrid.js` import `addInteractiveEvent`. | theory, `chordFingering`/`chordPatterns`, `tuning.js`, `src/fretboard/state.js`, `geometry.js`, `patterns.js` | must not import `./index.js` (would be circular - `index.js` imports `Fretboard` from here) |
 | `src/fretboard/ui/controls.js` *(Phase 3, in progress, landed 2026-08-01)* | The top bar (title + instrument/tuning picker), the tabbed-panel shell, the hotkey footer, and `createFretboardControls` - the orchestrator that builds the "Other Controls" panel and assembles all six tabs (Scale Information / Chord Progression / Scale Position Grid / Scale Selection / Other Controls / Synthesizer). Called once, from `initializeFretboard()` in `frets.js`. | `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), `src/fretboard/ui/chordGrid`, `src/fretboard/ui/scalePositionGrid`, `src/scales/`, `tuning.js`, `progressionBuilder.js`, and (cross-import, see §6.8) several glue functions from `frets.js` | — (see §6.8 for the two-way relationship with `frets.js`) |
 | `src/fretboard/ui/chordGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Chord Pattern Grid (12-note x 12-chord-type button table, color coded for scale compatibility) and the chord-fingering-shape pipeline it shares with the Roman-numeral chord display: matching `chordPatterns.js` shapes to a chord, a "best-effort" fallback grip, the position-picker tab bar, and the scale/chord-interval math (`getSemitoneFromReference`, `getScaleIntervalEntries`, `deriveChordSuffix`, `getScaleDescriptor`) that both this grid and `src/fretboard/ui/scalePositionGrid.js` depend on. See §6.9. | theory, `src/scales/`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), and (cross-import, see §6.9) glue functions from `frets.js` | must not import `src/fretboard/ui/scalePositionGrid.js` (the dependency runs one way - see §6.10) |
-| `src/fretboard/ui/scalePositionGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Scale Position Grid tab: one movable mini-fretboard pattern per (root string x scale degree) cell, the Focus Selector visibility matrix, and the per-cell rendering options (pattern/dot size, fret-label mode, note shapes, chord-name headers, etc.) on `fretboardState`. See §6.10. | theory, `src/scales/`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`FRET_COUNT`), `src/fretboard/markers`, `src/fretboard/ui/chordGrid` | — |
+| `src/fretboard/ui/scalePositionGrid.js` *(Phase 3, in progress, landed 2026-08-01; became a preview source 2026-08-03)* | The Scale Position Grid tab: one movable mini-fretboard pattern per (root string x scale degree) cell, the Focus Selector visibility matrix, and the per-cell rendering options (pattern/dot size, fret-label mode, note shapes, chord-name headers, etc.) on `fretboardState`. Every cell and column header pushes onto the visualization stack on hover/tap; `buildScalePositionCandidates` is the one place that decides a cell's contents, shared by the mini board and the preview. See §6.10 and §6.33. | theory, `src/scales/`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`FRET_COUNT`), `src/fretboard/markers`, `src/fretboard/ui/chordGrid`, and (cross-import, function bodies only) `getFretboard`/`pushChordPreview`/`pushPositionPreview`/`popPreviewLayer`/`bindPreviewSource` from `../index` | two-way with `src/fretboard/index.js`, same safe shape as `ui/chordGrid.js` (ARCHITECTURE.md §6.8) |
 | `src/fretboard/index.js` *(Phase 3, done 2026-08-01 - `frets.js` deleted)* | The public barrel for `src/fretboard/`: `initializeFretboard`, chord display/search/pattern glue functions, `playChordVoicing`/`getChordVoicingNotes`, the `CHORD_TYPE_TO_PATTERN_TYPE` map, and the re-exports that make this folder's surface a single import. Everything else that used to live in `src/frets.js` moved to `state.js`/`geometry.js`/`markers.js`/`patterns.js`/`Fretboard.js`/`ui/controls.js`/`ui/chordGrid.js`/`ui/scalePositionGrid.js` across this phase's earlier steps (see §6.3-6.10); this file is what remained plus the barrel role. See §6.11. | theory, `chordFingering`/`chordPatterns`, `../chords.js`, `../progressionBuilder.js` (for the Chord Progression tab content), all of `src/fretboard/*` above, `./ui/controls.js` (for `createFretboardControls`), `./ui/chordGrid.js` (for the fingering-shape pipeline the glue functions call) | — (two-way with `../chords.js` and with `./ui/controls.js`/`./ui/chordGrid.js` - see §6.11) |
 | `src/progression/state.js` *(Phase 4, first step, landed 2026-08-01)* | The ~15 module-level `let`s `progressionBuilder.js` used to hold directly - current progression array, hovered/selected-pattern-index tracking, mini-fretboard/piano/stave display toggles, seventh-chords toggle, input-parse caches and debounce timer - plus `INPUT_DEBOUNCE_DELAY`/`CHORD_LINE_CONFIG`/`MINI_FRETBOARD_CONFIG`. Exported as one mutable object, `progressionState` (config constants as plain exports alongside it) - see §6.12 for why. | `tuning.js` | everything that used to read/write these as bare identifiers now imports `progressionState` instead |
 | `src/progression/parse.js` *(Phase 4, second step, landed 2026-08-01)* | The tokenize -> parse -> fretboard-pattern-match pipeline: `parseProgressionInput`, `updateProgressionIncremental`, `compareTokenArrays`, `precomputePatternData`, `processDefaultPatternSelections`, `getChordPatternMatches`, `collectArpeggiationNotes`, `clearCache`. Roman-numeral parsing/resolution itself stays in `theory/roman.js` (Phase 2). | `theory/roman`, `theory/notation`, `tuning.js`, `chordFingering.js`, `src/progression/state`, and (cross-import, see §6.13) `getChordDisplayName`/`getFretboardForProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js` - see §6.13, same shape as `src/fretboard/ui/{controls,chordGrid}.js` <-> `src/fretboard/index.js` in Phase 3 §6.8) |
 | `src/progression/share.js` *(Phase 4, third step, landed 2026-08-01)* | URL-based sharing: `buildShareableState`/`encodeStateToURLParams`/`decodeStateFromURLParams` (human-readable format), `encodeStateToURL`/`decodeStateFromURL` (legacy Base64 fallback), `generateShareableURL`, `copyShareableURL`, `applySharedState`, `loadSharedStateFromURL`. | `src/scales/` (`getPrimaryScale`/`getPrimaryRootNote`/`setPrimaryRootNote`/`setPrimaryScale`), `src/progression/state`, and (cross-import, see §6.14) `updateProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.8/§6.13) |
 | `src/progression/playback.js` *(Phase 4, fourth step, landed 2026-08-01)* | Turns a chord into concrete notes and plays them: `getProcessedChordNotes` (resolves the selected fretboard pattern, or falls back to chord theory), `getProcessedProgression`, `triggerChordProgression` (dispatches through the `'synth'` channel). | `theory/notation`, `tuning.js`, `audio/dispatch.js`, `src/progression/state`, `src/progression/parse` (`getChordPatternMatches`), and (cross-import, see §6.15) `getChordDisplayName` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13/§6.14) |
 | `src/progression/scaleSync.js` *(Phase 4, fifth step, landed 2026-08-01)* | Keeps the progression in sync with the active scale/root: `setupScaleChangeListener` (event + polling-fallback listener), `initializeScaleNotesDisplay`, `updateScaleNotesDisplay`, `generateFallbackScaleNotes`, `updateProgressionDisplayForScaleChange`, `updateRomanNumeralChords` (re-resolves Roman-numeral chords against the new scale). | `src/scales/`, `theory/notes`, `theory/roman`, `src/progression/state`, `src/progression/fretboardDisplay` (`displaySingleChordPattern`/`displayAllChordPatterns`, repointed here in step 6 - see §6.17), and (cross-import, see §6.16) `precomputeAllPatternData`/`updateProgressionDisplay` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13-§6.15) |
-| `src/progression/fretboardDisplay.js` *(Phase 4, sixth step, landed 2026-08-02)* | Draws chord/scale content on the main chord-progression fretboard (not the per-card mini fretboards): `displaySingleChordPattern`, `displayScaleContext`, `displayAllChordPatterns`. | `src/progression/state`, `src/progression/parse` (`precomputePatternData`), and (cross-import, see §6.17) `getFretboardForProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13-§6.16; also imported by `src/progression/scaleSync.js`, repointed from `../progressionBuilder` in this step) |
+| `src/progression/fretboardDisplay.js` *(Phase 4, sixth step, landed 2026-08-02; moved onto the visualization stack 2026-08-03)* | Draws chord/scale content on the main chord-progression fretboard (not the per-card mini fretboards): `displaySingleChordPattern`, `displayAllChordPatterns`. **Markers go through the stack** (`pushChordPreview`/`popPreviewLayer`); only the chord-line overlay is drawn directly. `displayScaleContext` is deleted - see §6.32. | `src/progression/state`, `src/progression/parse` (`precomputePatternData`), `src/fretboard` (`pushChordPreview`/`popPreviewLayer`), and (cross-import, see §6.17) `getFretboardForProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13-§6.16; also imported by `src/progression/scaleSync.js`, repointed from `../progressionBuilder` in this step) |
 | `src/progression/chordCard.js` *(Phase 4, seventh step, landed 2026-08-02; updated eighth step)* | The per-chord card in the progression display: `createChordElement` (name, notes, optional mini piano/stave, status indicator, hover/click handlers), `createPatternSelector` (the fret-pattern dropdown + prev/next buttons), `createMiniFretboardVisualization` (the SVG voicing diagram), `copySvgAsPng`, `showNotification`, `lightenColor` - all private except `createChordElement`. Also `getChordDisplayName`, moved here in step 7 rather than staying in `progressionBuilder.js` as earlier steps' notes expected - see §6.18. | theory, `src/scales/`, MiniPiano/MiniStave components, `audio/dispatch.js`, `src/progression/state`, `src/progression/parse` (`precomputePatternData`), `src/progression/playback`, `src/progression/fretboardDisplay`, and (cross-import, see §6.19) `updateProgressionDisplay` from `src/progression/progressionList` | two-way with `src/progression/parse.js`/`src/progression/playback.js` for `getChordDisplayName` (§6.18) and with `src/progression/progressionList.js` for `updateProgressionDisplay`/`createChordElement` (§6.19) - no longer any two-way relationship with `progressionBuilder.js` itself |
 | `src/progression/progressionList.js` *(Phase 4, eighth step, landed 2026-08-02)* | Renders the chord-progression display: `createProgressionDisplaySection`, `updateProgressionDisplay`, `highlightCurrentChord` (private - only reached via `window.highlightCurrentChord`, which moved here with it). See §6.19. | `src/progression/state`, and (cross-import, see §6.19) `createChordElement` from `src/progression/chordCard` | two-way with `src/progression/chordCard.js` (§6.19) - the first Phase 4 module with no cross-import back into the `progressionBuilder.js` residual |
 | `src/progression/input.js` *(Phase 4, ninth step, landed 2026-08-02)* | The chord-progression text input: `createInputSection` - the field, its debounced input handler (`updateProgression` after `INPUT_DEBOUNCE_DELAY`), and playback-blocking on input/keydown/paste while the sequencer is running. Self-contained, as the plan expected. See §6.20. | `src/progression/state`, and (cross-import, see §6.20) `updateProgression` from `../progressionBuilder` | two-way with `progressionBuilder.js` (same shape as §6.13-§6.19) |
@@ -370,11 +371,11 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/progression/index.js` *(Phase 4, eleventh and final step, landed 2026-08-02 - `progressionBuilder.js` deleted)* | The public barrel for `src/progression/`: `createChordProgressionUI`, `updateProgression`, `clearProgression`, `getFretboardForProgression`, `precomputeAllPatternData`, plus the re-exports (`loadSharedStateFromURL`/`applySharedState`) that make this folder's surface a single import. Everything else that used to live in `progressionBuilder.js` moved to `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js` across this phase's earlier steps (§6.12-§6.21); this file is what remained plus the barrel role. See §6.22. | theory, `src/scales/` (`initializeNavigationButtonsDirect`), `tuning.js`, all of `src/progression/*` above, and (cross-imported back by seven sibling modules, see §6.22) itself | two-way with `src/progression/{parse,share,scaleSync,fretboardDisplay,input,controls}.js` (§6.13-§6.21); external importer is `src/fretboard/ui/controls.js` (`createChordProgressionUI`/`loadSharedStateFromURL`, repointed from `../../progressionBuilder` to `../../progression` in this step) |
 | `src/scales/state.js` *(Phase 4 second half, first step, landed 2026-08-02)* | Scale/root-note selection state (`scaleState`, one mutable object - same reasoning as `fretboardState`/`progressionState`), persistence, and the pure chromatic/enharmonic/navigation helpers. See §6.23. | `src/scales/scaleData`, and (cross-import, see §6.23/§6.26) `updateCurrentScaleDisplay` from `.` (the barrel), `createHeptatonicScaleTable` from `./ui/scaleTable` | two-way with `src/scales/index.js` and `src/scales/ui/scaleTable.js` |
 | `src/scales/scaleData.js` *(Phase 4 second half, second step, landed 2026-08-02)* | Scale interval data (`HeptatonicScales`/`HexatonicScales`/`PentatonicScales`/`scales`), the precomputed-chord cache, `getScaleNotes`. Framework-free except for reading `theory/notation`'s scale-spelling context. See §6.24. | `../midi`, `theory/notation`, `theory/chords` | — |
-| `src/scales/ui/infoPanel.js` *(Phase 4 second half, third step, landed 2026-08-02)* | The "Scale Information" panel: interval pattern, spelled notes, alternative names, scale piano, interval-color legend, per-degree triad/seventh chord cards. See §6.25. | `theory/chords`, `theory/chordSuffixes` (was `../chords.js` until Phase 4c), MiniPiano, `src/scales/state`, `src/scales/scaleData`, and (cross-import, see §6.26) `intToRoman` from `./scaleTable` | — |
+| `src/scales/ui/infoPanel.js` *(Phase 4 second half, third step, landed 2026-08-02; chord blocks became preview sources 2026-08-03)* | The "Scale Information" panel: interval pattern, spelled notes, alternative names, scale piano, interval-color legend, per-degree triad/seventh chord cards. Each card's triad and seventh *blocks* (text + their own mini piano) are `bindPreviewSource` hover/tap sources onto the main display - see §6.25 and §6.32. | `theory/chords`, `theory/chordSuffixes` (was `../chords.js` until Phase 4c), MiniPiano, `src/scales/state`, `src/scales/scaleData`, `src/fretboard` (`pushChordPreview`/`bindPreviewSource`), and (cross-import, see §6.26) `intToRoman` from `./scaleTable` | — |
 | `src/scales/ui/rootNoteTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The detailed "Root Note Selection" table (`createRootNoteTable`) plus `positionTooltipSmart`. See §6.26. | `src/scales/scaleData`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createHeptatonicScaleTable` from `./scaleTable` | two-way with `src/scales/ui/scaleTable.js` - see §6.26 for why |
 | `src/scales/ui/scaleTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The compact top-bar quick-picker (`createQuickScalePicker`), the detailed "Heptatonic Scales" browsing table (`createHeptatonicScaleTable`), and `intToRoman`. See §6.26. | `src/scales/scaleData`, `theory/chords`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createRootNoteTable`/`positionTooltipSmart` from `./rootNoteTable` | two-way with `src/scales/ui/rootNoteTable.js` - see §6.26 for why |
 | `src/scales/index.js` *(Phase 4 second half, fifth and final step, landed 2026-08-03 - `scaleGenerator.js`/`scales.js` deleted)* | The public barrel for `src/scales/`: `highlightKeysForScales`/`highlightScaleNotes` (two unrelated DOM key-highlighting functions, not merged - see §6.27), `updateCurrentScaleDisplay` (the hub every UI cluster calls after a selection change), navigation-button wiring, plus the re-exports that make this folder's surface a single import. Everything else that used to live in `scaleGenerator.js`/`scales.js` moved to `state.js`/`scaleData.js`/`ui/infoPanel.js`/`ui/rootNoteTable.js`/`ui/scaleTable.js` across this phase's earlier steps (§6.23-6.26); this file is what remained from both plus the barrel role. See §6.27. **Not moved into `src/theory/` in Phase 2** — see §6.1/§6.2 correction; still not moved here either, pending a real `Scale` data model (see the project memory this session recorded). | `../midi`, `src/scales/scaleData`, `src/scales/ui/infoPanel`, `src/scales/ui/scaleTable`, `src/scales/state` | two-way with `src/scales/state.js`, `src/scales/ui/rootNoteTable.js`, `src/scales/ui/scaleTable.js` (§6.23/§6.26); every former `scaleGenerator.js`/`scales.js` external importer now pulls from here (`from './scales'` / `from '../scales'` etc., repointed in this step) |
-| `src/piano/` *(`PIANO_VIEW_PLAN.md` steps 1-7, landed 2026-08-03 — a feature, not a refactor phase)* | The piano view. `keyModel.js`: which keys exist in a MIDI range, which are black, the white-key count `--num-keys` is set from, octave-span → MIDI range. `range.js`: the active instrument's playable range as `{ lowMidi, highMidi, openStrings }`. Both pure. `Piano.js`: the `<ul id="keyboard">` markup and the only DOM-touching file here — `<li midi="N" class="white\|black">` is a contract with `midi.js`/`scales/index.js`/`index.css`, not a free choice. Its content API is `renderStack(resolved)` alone; **what** to show is `src/visualization/`'s (§6.31). `state.js`: `pianoState` (view mode, displayed range) + persistence. `index.js`: the barrel. Standard MIDI (60 = C4) throughout, forced by `midi.js`'s `keys` table; see §6.29 for the conversion trap at the `tuning.js` boundary. | `keyModel.js`: nothing at all. `range.js`: `tuning.js` (`getNoteAtStringFret`), `theory/notation` (`noteToMidi`). `Piano.js`: `./keyModel` and `./state` only — **not** `src/visualization/`; the mount site subscribes it | `src/fretboard/index.js`'s `initializeFretboard` builds the keyboard into `#fretNotPlaceholder` after the fretboard element, hidden |
+| `src/piano/` *(`PIANO_VIEW_PLAN.md` steps 1-9, landed 2026-08-03 — a feature, not a refactor phase)* | The piano view. `keyModel.js`: which keys exist in a MIDI range, which are black, the white-key count `--num-keys` is set from, octave-span → MIDI range. `range.js`: the active instrument's playable range as `{ lowMidi, highMidi, openStrings }`, rendered as of step 9 (§6.34). Both pure. `Piano.js`: the `<ul id="keyboard">` markup and the only DOM-touching file here — `<li midi="N" class="white\|black">` is a contract with `midi.js`/`scales/index.js`/`index.css`, not a free choice. Its content API is `renderStack(resolved)` alone (**what** to show is `src/visualization/`'s, §6.31); `renderBounds` is the separate, non-layer range overlay and owns its own two classes. `state.js`: `pianoState` (view mode, displayed range) + persistence. `index.js`: the barrel. Standard MIDI (60 = C4) throughout, forced by `midi.js`'s `keys` table; see §6.29 for the conversion trap at the `tuning.js` boundary. | `keyModel.js`: nothing at all. `range.js`: `tuning.js` (`getNoteAtStringFret`), `theory/notation` (`noteToMidi`). `Piano.js`: `./keyModel` and `./state` only — **not** `src/visualization/`; the mount site subscribes it | `src/fretboard/index.js`'s `initializeFretboard` builds the keyboard into `#fretNotPlaceholder` after the fretboard element, hidden |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`src/scales/` to consume. 262 lines (was 5,777 before Phase 1, 281 after it, then Phase 1b stripped the inert cruft Phase 1 deferred - see §7). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
 | `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`/`window.polySynthEnabled` and registers the `'synth'` channel with `src/audio/dispatch.js` (Phase 2b). | `src/audio/dispatch.js` | — |
@@ -2456,7 +2457,12 @@ Two behaviours worth knowing:
   count.** A full keyboard is A0-C8, which is not a whole number of C-to-B
   octaves; as a count it would clip the bottom or overshoot the top. At 52
   white keys the labels bottom out, accepted deliberately - the keys stay
-  pressable and the board still reads as an input display.
+  pressable and the board still reads as an input display. **It is the default
+  since 2026-08-03** (user's call): three octaves made the piano read as a
+  controller strip and cut off the real octaves a guitar fingering sounds,
+  which is what the piano exists to show. An absent or unrecognised saved
+  `rangeMode` keeps the default instead of falling back to `'octaves'`, so
+  blobs predating the field don't opt returning users out.
 
 **The re-render path is now exercised, and everything hanging off a key
 element survives it**: the scale layer repaints from `piano.scale`, and
@@ -2555,7 +2561,7 @@ who renders it.
 |---|---|
 | `stack.js` | `visualizationState` (`base` + `overlays`), `setBaseLayer`/`pushLayer`/`popLayer`/`clearTransient`/`clearLayers`, `subscribe` |
 | `flatten.js` | `parseLayerNote`, `flattenLayers` — the ordering, specificity, dimming and hiding rules, in one place |
-| `layers.js` | `scaleLayer`, `chordLayer`, `noteLayer` — the only place that knows what a layer is made of, so the two renderers cannot disagree about a scale |
+| `layers.js` | `scaleLayer`, `chordLayer`, `positionLayer`, `noteLayer` — the only place that knows what a layer is made of, so the two renderers cannot disagree about a scale |
 | `index.js` | barrel; its header carries the sources-not-targets boundary below |
 
 **Why it exists.** What the main display shows was never represented
@@ -2650,7 +2656,8 @@ those two Sets. It now draws what it is told and holds nothing.
 
 Two live direct writers remain outside the stack, both deliberate:
 `progression/fretboardDisplay.js` (§6.17) and the `Show All Notes` debugging
-button. Both paint over the stack and are painted over by it.
+button. Both paint over the stack and are painted over by it. **The first of
+those was moved onto the stack afterwards** — see §6.32.
 
 **8e closed the loop to the piano** (2026-08-03), completing
 `PIANO_VIEW_PLAN.md` step 8. A chord layer's `positions` are the fingering
@@ -2702,6 +2709,190 @@ does not have, and not worth inventing to finish a step.
 a direct ESLint run over the new folder — the build check alone cannot
 validate it, because nothing imports it yet and webpack never compiles it
 (`REFACTOR_PLAN.md` §2.3 lesson 11, applied rather than rediscovered).
+
+### 6.32 The last legacy fretboard writer, and hover-or-tap sources (2026-08-03)
+
+`VISUALIZATION_STACK_PLAN.md` §8.2 left `progression/fretboardDisplay.js`
+outside the stack as "the one documented legacy writer", noting it would
+visibly fight a pushed layer. It did, and every symptom that section
+predicted was reported as a bug once the tab was used:
+
+| Reported | Cause |
+|---|---|
+| Clear Progression blanks the neck instead of reverting to the scale | `clearProgression` ran `clearMarkers()` and then tried to redraw the scale through `displayScaleContext` |
+| Leaving a chord card does not reset either | `displayAllChordPatterns` did the same, and skipped the redraw entirely with "Show Scale Context" off |
+| A card, its mini piano and its mini fretboard render the same chord three different ways | the card drew directly (plain white markers, no dimming); the children pushed stack previews (dimmed, labelled); and a child's `mouseleave` fires when the pointer moves back onto the card that still contains it, popping a preview the card had not finished with |
+
+**Markers now go through the stack; chord lines still do not.** A hovered
+card is `pushChordPreview` / `popPreviewLayer` like every other preview
+source, so "what is underneath" is the base scale layer and was never
+destroyed — popping is the whole of the restore, and `displayScaleContext`
+is deleted (it reached for `window.showScaleOnFretboard` and, failing that,
+dispatched a synthetic `mouseenter` at the Scale button; both re-derived a
+scale the base layer had never stopped holding). Chord *lines* stay a direct
+`drawChordLine`/`clearChordLines` call: a separate SVG overlay with its own
+keyed lifecycle, which the stack does not model (§2.5 of that plan).
+
+**The card is the preview source; its children have no handlers.** That is
+what makes the three renderings one rendering. The card's own hover moved to
+`addInteractiveEvent` so a press still previews on a touch screen, which is
+what the mini piano's handlers used to provide.
+
+**"Show Scale Context" survives as `hideBelow`.** Unchecked used to mean
+`clearMarkers()`; it now hides the base rather than erasing it, so the scale
+returns when the preview pops. A missing checkbox counts as *enabled* — it
+is created checked, so "absent" only happens before the tab is built, and
+defaulting to hidden would blank the neck for a reason the user never chose.
+
+**`bindPreviewSource` (`src/fretboard/index.js`)** marks an element as a
+preview source: hover pushes and leave pops, while on touch a tap pushes and
+the preview *stays* until the next tap lands outside any source (one lazily
+attached document listener — there is a single preview layer, so one
+listener can end any of them). `addInteractiveEvent` cannot express this: it
+maps 'leave' onto `touchend`, so a tap pushes and pops as the finger lifts.
+
+It uses **pointer events, and `pointerType` is the reason**. Written first
+with `mouseenter`/`mouseleave` plus `touchstart` it looked right and did
+nothing: a tap makes the browser emulate a mouse over the tapped element and
+then move that phantom pointer away, so the synthesized `mouseleave` popped
+what the tap had just pushed. Net effect zero, invisible to any static check,
+caught by the Playwright run. Pointer events report which device caused them,
+so hovering and tapping stop having to be inferred from event order.
+
+**The Scale Information panel's chord cards are preview sources per
+*section*, not per card** (`scales/ui/infoPanel.js`). A card holds two
+chords, so the triad block previews the triad and the seventh block the
+seventh; each block includes its own mini piano, so hovering the keys and
+hovering the text beside them do the same thing.
+
+**Verified** with a 20-check Playwright run (`.tmp/verify-progression-stack.js`),
+plus 8b/8d/8e/8f re-run unchanged as regression (17/17, 16/16, 7/7, 9/9).
+Two mutation checks: removing the pop in `displayAllChordPatterns` fails the
+three reset checks, and restoring the mini fretboard's `popPreviewLayer`
+reproduces the reported mid-hover flicker exactly. 124 tests, 34 warnings
+unchanged, zero page errors.
+
+### 6.33 `positionLayer` and the Scale Position Grid (2026-08-03)
+
+§6.31 recorded the Scale Position Grid as unwired because it shows "a region
+of the neck rather than a note set — a layer kind the model does not have".
+`positions` had been exactly that since the model was written; what was
+missing was `VISUALIZATION_STACK_PLAN.md` §2.2's rule that **the fretboard
+renders `positions` instead of `notes`**, which `Fretboard.renderStack` never
+implemented and which chord layers have relied on the absence of since 8d
+(a hovered chord lights every position of its sounding pitches *and* draws
+its fingering on top).
+
+So the new layer kind is `chordLayer` plus one flag. `positionLayer` sets
+`positionsOnly: true`; `renderStack` excludes such a layer from the note
+pass. **Opt-in rather than the default**, deliberately: enabling §2.2's rule
+globally would change every chord source's fretboard output, which nobody has
+asked for and 8d's checks assert. `notes` are still carried, because the
+piano has no other way to be told what a fret pattern sounds.
+
+**Which preview a cell pushes is chosen by the Fret Labels toggle**, and not
+as an extra setting — that toggle is already how the user says which of two
+things the grid is about:
+
+| Fret labels | Hovering a cell shows | Because |
+|---|---|---|
+| Relative (`R`, `+1`) | the cell's notes as pitch classes **across the whole neck**, over the dimmed scale | the cell is a *movable shape* |
+| Absolute (real frets) | **only that pattern**, scale hidden | the cell is *one position* |
+
+Column headers push the pitch-class preview in either mode — a header is the
+whole column, so it means the notes rather than any one position of them, and
+that makes it the way back out of a single-position preview. The full-scale
+column's boards follow the same two rules as the chord cells.
+
+Duplicate dots recede by **opacity, not colour**: the cell greys them with
+`shadeColor`, the preview keeps the hue and drops to 0.4, which is how every
+other dim in the stack works (§2.4). Both follow the Dark Duplicate checkbox.
+
+`buildScalePositionCandidates` was extracted so the mini board and the
+preview read one list — 8d's `buildFingeringPositions` argument. Verified as
+a non-change: all 40 mini boards' `outerHTML` byte-compared against the
+pre-extraction tree, 0 differing. `renderScalePositionGrid` pops the preview
+on entry, since it destroys every cell it might have been hovering
+(`VISUALIZATION_STACK_PLAN.md` §7's named risk).
+
+**Verified** with a 15-check Playwright run (`.tmp/verify-position-grid.js`)
+plus 8b/8d/8e/8f/8g re-run unchanged. 128 tests, 34 warnings unchanged, zero
+page errors. Mutation-checked: disabling the `positionsOnly` skip turns "only
+that pattern" from 11 markers over 5 frets into 25 over 19.
+
+### 6.34 Instrument changes, degree hotkeys and piano range markers (2026-08-03)
+
+Three unrelated pieces of work that share one theme: state that lived in the
+wrong place, or nowhere.
+
+**An instrument change left the neck blank, and un-hid it in piano view.**
+Two independent causes behind one report:
+
+- `setTuning` rebuilds the neck's DOM, so every marker is gone while the stack
+  still says they belong there. Nothing repainted afterwards — and because a
+  no-op `popLayer` deliberately does **not** notify (`stack.js`), the
+  `showScaleOnFretboard()` in the instrument handler notified nobody either.
+  Fixed by extracting the subscription body as `renderMainDisplay()` and
+  calling it explicitly after the rebuild. *The bug is a direct consequence of
+  a property the stack is right to have*: "no change, no notification" is what
+  makes hover handlers safe, and it means a renderer that loses its own DOM
+  has to say so.
+- `buildFretboardElement` rewrites the element's whole `cssText`, wiping the
+  `display: none` that `setMainViewMode` had set from outside. The fretboard
+  now owns a `visible` flag and a `setVisible` method (mirroring the piano's)
+  and reapplies it at the end of every rebuild.
+
+**Degree hotkeys** (`src/degreeKeys.js`): 1-7 play a scale degree, with
+shift/ctrl/alt stacking one more third each — triad, seventh, ninth. **One
+rule, four bindings**, which is why the fourth is a ninth rather than a
+separately-defined chord vocabulary. `theory/chords.js`'s new
+`buildStackedThirds` does the stacking, shared with the Scale Information
+panel's chord cards, which had the only correct copy. It is *not*
+`generateSyntheticChords`: that wraps the scale index without bumping the
+octave, so its wrapped tones fall below the root and the result is a scrambled
+inversion — fine for its callers, which want only letters, wrong for a
+voicing. Notes are held, not fired, so a chord can sustain under a melody, and
+`window.blur` releases everything (alt+tab is literally one of these bindings
+plus tab).
+
+`keyboardState.baseOctave` absorbed the `let` that was in `src/index.js`,
+readable elsewhere only through `window.getSynthBaseOctave`. Moved because
+`degreeKeys.js` is a second reader and the alternative was a second module
+reaching through the bus Phase 5 exists to cut. The global still exists and
+still answers, reading from `keyboardState`, because `MiniPiano.js` consumes
+it.
+
+**Piano range markers** — `PIANO_VIEW_PLAN.md` step 9, plus an octave bracket
+the user asked for alongside it. `range.js` had existed since step 1 with no
+caller anywhere. `Piano.renderBounds` owns `outOfRangeKey` (a veil: "you
+cannot play this", with whatever the key shows still legible underneath) and
+`octaveKey` (a bracket along the key's bottom edge: it marks a boundary, and
+twelve tinted keys would read as a twelve-note highlight). **Neither is a
+stack layer** (`VISUALIZATION_STACK_PLAN.md` §2.5, settled in advance) and
+neither uses `filter` — a key can be both out of range and dimmed by a layer,
+and two filters would compound into something neither rule intended.
+
+Three ranges now exist and none may be conflated: the piano's *displayed*
+range (`setRange`), the *instrument's* playable span (`range.js`), and the
+*played* octave (`keyboardState.baseOctave`). `refreshPianoBounds` in
+`src/fretboard/index.js` feeds the last two, for the reason `refreshScaleLayer`
+lives there.
+
+Both markers are switchable from the same Other Controls row as the piano
+range (`pianoState.showInstrumentRange` / `showOctaveMarker`, persisted, on by
+default). **Off is passing `null`, not a flag the renderer checks** —
+`renderBounds` stays a function of the bounds it is handed, and "no range" is
+a state it already had to handle. Since the markers are reapplied on every
+keyboard rebuild, instrument change and Z/X press, "stays off" is the property
+worth testing, and it is what `.tmp/verify-bounds-toggles.js` covers.
+
+**Verified** with a 24-check Playwright run
+(`.tmp/verify-instrument-keys-bounds.js`), a 13-check run for the marker
+toggles (`.tmp/verify-bounds-toggles.js`), and all seven earlier scripts
+re-run unchanged. 135 tests, 34 warnings unchanged, zero page errors. Both
+halves of the instrument bug were mutation-checked and each reproduces its
+reported symptom exactly: no repaint gives 0 markers, no visibility reapply
+gives `display: block` in piano view.
 
 ---
 

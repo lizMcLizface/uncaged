@@ -183,6 +183,31 @@ export function chordLayer(options = {}) {
 }
 
 /**
+ * A **region of the neck**: this exact set of (string, fret) dots and no
+ * others. The Scale Position Grid's cells, which show one movable pattern
+ * anchored at one place on the neck.
+ *
+ * VISUALIZATION_STACK_PLAN.md §10.2 recorded this as "a layer kind the model
+ * does not have"; it is a chord layer plus one flag, because §2.2 already
+ * described the flag's rule and only the *enforcement* was missing.
+ *
+ * **`positionsOnly` is that rule, made opt-in.** §2.2 says "when `positions`
+ * is present the fretboard renders it instead of `notes`" - `Fretboard.renderStack`
+ * never implemented that, and chord layers have relied on the gap since 8d: a
+ * hovered chord lights every position of its sounding pitches *and* draws its
+ * fingering on top. Turning the rule on globally would silently change every
+ * chord source, so it is a flag rather than a behaviour change, and only this
+ * builder sets it. `notes` still exist for the piano, which has no other way
+ * to be told what a fret pattern sounds.
+ *
+ * @param {object} options - as `chordLayer`, with `positions` required to
+ *        mean anything
+ */
+export function positionLayer(options = {}) {
+    return { ...chordLayer(options), positionsOnly: true };
+}
+
+/**
  * An arbitrary set of notes in one colour - a single marked note, a search
  * result, an interval being demonstrated.
  *

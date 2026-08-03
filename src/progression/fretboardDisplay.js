@@ -3,6 +3,23 @@
 // when a chord is hovered/selected, when the active scale changes, and to
 // reset the display when the progression is cleared.
 //
+// **Markers go through the visualization stack; chord lines do not.**
+// VISUALIZATION_STACK_PLAN.md section 8.2 left this file as "the one
+// documented legacy writer", fighting the stack rather than using it, and
+// every symptom that decision predicted turned up in use: clearing the
+// progression blanked the neck instead of falling back to the scale, leaving
+// a card left it blank too, and moving between a card and its mini piano
+// swapped between two different renderings of the same chord (the direct
+// path's plain white markers and the stack's dimmed-and-labelled ones).
+// A hovered chord is now `pushChordPreview` / `popPreviewLayer` like every
+// other preview source, so "what is underneath" is the base scale layer and
+// is never destroyed.
+//
+// Chord *lines* stay a direct call: they are a separate SVG overlay with
+// their own keyed lifecycle and the stack does not model them
+// (VISUALIZATION_STACK_PLAN.md section 2.5). This file still owns them, and
+// `drawChordLine`/`clearChordLines` are the only fretboard methods it calls.
+//
 // getFretboardForProgression is imported back from the barrel
 // (src/progression/index.js, formerly progressionBuilder.js, renamed in
 // Phase 4's final step) rather than moved here - despite sitting right
@@ -18,9 +35,33 @@
 import { progressionState, CHORD_LINE_CONFIG } from './state';
 import { precomputePatternData } from './parse';
 import { getFretboardForProgression } from '.';
+import { pushChordPreview, popPreviewLayer } from '../fretboard';
+
+/**
+ * Whether the tab's "Show Scale Context" checkbox wants the active scale
+ * visible under a hovered chord.
+ *
+ * A missing checkbox counts as *enabled*, which inverts the old reading
+ * (`scaleToggle && scaleToggle.checked`). The checkbox is created checked
+ * (controls.js), so "absent" only happens before the progression UI is
+ * built - and defaulting to hiding the scale there would blank the neck for
+ * a reason that has nothing to do with what the user chose.
+ */
+function isScaleContextEnabled() {
+    const scaleToggle = document.getElementById('chord-progression-scale-toggle');
+    return scaleToggle ? scaleToggle.checked : true;
+}
 
 /**
  * Display a single chord pattern on the fretboard
+ *
+ * The chord itself is a preview layer, so the active scale stays underneath
+ * it - dimmed and labelled with "Show Scale Context" on, hidden with it off -
+ * and `displayAllChordPatterns` reveals it again by popping rather than by
+ * redrawing. The marker styling is now the stack's, shared with every other
+ * chord source, which is what makes hovering a card and hovering its mini
+ * piano look the same instead of like two different features.
+ *
  * @param {Object} chord - Chord data
  * @param {number} index - Chord index
  * @param {boolean} isHighlighted - Whether this chord should be highlighted
@@ -37,56 +78,17 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
         progressionState.precomputedPatternData.set(index, patternData);
     }
 
-    // Clear only chord lines, keep scale context if enabled
+    // Chord lines are this file's own overlay and are rebuilt every call;
+    // the markers underneath them are the stack's and are pushed, not drawn.
     fretboard.clearChordLines();
 
-    // Show scale context if toggle is checked
-    const scaleToggle = document.getElementById('chord-progression-scale-toggle');
-    const showScaleContext = scaleToggle && scaleToggle.checked;
-
-    if (showScaleContext) {
-        // Re-display scale context
-        displayScaleContext();
-    } else {
-        // Clear all markers if scale context is disabled
-        fretboard.clearMarkers();
-    }
-
-    // Display chord notes regardless of whether patterns exist
-    const { chordNotes, patterns, displayName, hasPatterns } = patternData;
-    const chordIntervalLabels = chord.chordInfo && Array.isArray(chord.chordInfo.intervals)
-        ? chord.chordInfo.intervals
-        : [];
-    const chordDisplayOptions = {
-        clearFirst: false,
-        showLines: false,
-        showScaleContext: showScaleContext,
-        showIntervals: progressionState.showFretboardIntervals,
-        intervalLabels: chordIntervalLabels
-    };
-
-    // If no patterns are available, show chord notes with enhanced visibility when hovered
-    if (!hasPatterns) {
-        // Display the chord normally
-        fretboard.displayChord(chordNotes, displayName, chordDisplayOptions);
-
-        // If highlighted (hovered), add a visual indicator by displaying again with different name
-        if (isHighlighted) {
-            // Add a special indicator to the chord name to show it's being highlighted
-            const highlightedName = `🎯 ${displayName} (Notes Only)`;
-            fretboard.displayChord(chordNotes, highlightedName, {
-                ...chordDisplayOptions,
-                forceHighlight: true // If this option exists
-            });
-        }
-        return;
-    }
-
-    // Regular chord display for chords with patterns
-    fretboard.displayChord(chordNotes, displayName, chordDisplayOptions);
+    const { chordNotes, patterns, displayName } = patternData;
+    pushChordPreview(chordNotes, chordNotes && chordNotes[0], displayName, {
+        hideScale: !isScaleContextEnabled()
+    });
 
     const selectedPatternIndex = progressionState.selectedPatternIndexes.get(index) || 0;
-    if (selectedPatternIndex >= patterns.length) return;
+    if (!patterns.length || selectedPatternIndex >= patterns.length) return;
 
     const pattern = patterns[selectedPatternIndex];
 
@@ -118,45 +120,26 @@ function displaySingleChordPattern(chord, index, isHighlighted = false) {
 }
 
 /**
- * Display scale context on the fretboard
- */
-function displayScaleContext() {
-    const fretboard = getFretboardForProgression();
-    if (!fretboard) return;
-
-    // Try to access the global scale display function
-    if (typeof window.showScaleOnFretboard === 'function') {
-        window.showScaleOnFretboard(false); // false to not clear existing content
-    } else {
-        // Fallback: try to trigger scale display through button click
-        const scaleButton = document.querySelector('[data-chord-index="0"]');
-        if (scaleButton) {
-            // Simulate scale button activation without clearing other content
-            const event = new Event('mouseenter');
-            scaleButton.dispatchEvent(event);
-        }
-    }
-}
-
-/**
- * Display all chord patterns from the progression on the fretboard
+ * Display all chord patterns from the progression on the fretboard - which
+ * is also "nothing is hovered any more", and how the neck gets back to the
+ * scale after a card is left or the progression is cleared.
+ *
+ * Popping the preview is the whole of that restore. There used to be a
+ * `displayScaleContext` here that reached for `window.showScaleOnFretboard`
+ * and, failing that, dispatched a synthetic `mouseenter` at the Scale button
+ * - VISUALIZATION_STACK_PLAN.md section 8.2's legacy path. Both branches
+ * re-derived a scale that the base layer had never stopped holding, and
+ * neither ran when "Show Scale Context" was off, which is why leaving a card
+ * (and clearing the progression) left a blank neck.
  */
 function displayAllChordPatterns() {
     const fretboard = getFretboardForProgression();
     if (!fretboard) return;
 
-    // Clear only chord lines, preserve scale context if enabled
+    // Clear only chord lines; the scale under them is the base layer and
+    // comes back on its own once the hovered chord is popped.
     fretboard.clearChordLines();
-
-    // Show scale context if toggle is checked
-    const scaleToggle = document.getElementById('chord-progression-scale-toggle');
-    const showScaleContext = scaleToggle && scaleToggle.checked;
-
-    if (showScaleContext) {
-        displayScaleContext();
-    } else {
-        fretboard.clearMarkers();
-    }
+    popPreviewLayer();
 
     if (progressionState.currentProgression.length === 0) return;
 
@@ -213,6 +196,5 @@ function displayAllChordPatterns() {
 
 export {
     displaySingleChordPattern,
-    displayScaleContext,
     displayAllChordPatterns
 };

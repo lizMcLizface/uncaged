@@ -117,8 +117,32 @@ class Fretboard {
         this.markers = new Map(); // Store markers by string-fret key
         this.subscaleBoxes = new Map(); // Store subscale boxes by ID
         this.chordLines = new Map(); // Store chord lines by ID
-        
+        // Whether this fretboard is the visible half of the main display.
+        // Owned here rather than poked from outside, because
+        // buildFretboardElement rewrites the element's whole `cssText` - see
+        // setVisible.
+        this.visible = options.visible !== false;
+
         this.init();
+    }
+
+    /**
+     * Show or hide this fretboard.
+     *
+     * The main fretboard and the piano share one slot and are mutually
+     * exclusive, so hiding is a real state this class has to survive. It used
+     * to be set from outside as `fretboardElement.style.display = 'none'`,
+     * which `buildFretboardElement` then wiped on the next `setTuning` - so
+     * changing the instrument while in piano view brought the fretboard back
+     * and showed both at once. Owning the flag is what makes the rebuild
+     * reapply it.
+     */
+    setVisible(visible) {
+        this.visible = Boolean(visible);
+        if (this.fretboardElement) {
+            this.fretboardElement.style.display = this.visible ? '' : 'none';
+        }
+        return this.visible;
     }
     
     /**
@@ -171,6 +195,10 @@ class Fretboard {
                 box-shadow: 0 2px 6px rgba(0,0,0,0.2) !important;
             `;
         }
+
+        // Last, because the two cssText writes above replace the whole
+        // declaration - including any display the element was carrying.
+        this.fretboardElement.style.display = this.visible ? '' : 'none';
 
         // Add CSS animations and styles for subscale features
         this.addSubscaleStyles();
@@ -926,6 +954,13 @@ class Fretboard {
      * note pass is what lets a chord's own marker win the fret it shares
      * with the scale underneath.
      *
+     * **A `positionsOnly` layer is excluded from the note pass**, so its
+     * `positions` really are all of it - which is what "show me *this*
+     * pattern" needs, and what a chord layer deliberately does not do (see
+     * `positionLayer` in `src/visualization/layers.js` for why the rule is a
+     * flag rather than the default). Its `notes` still reach the piano, which
+     * has no other way to be told what a fret pattern sounds.
+     *
      * @param {{resolve: (midi: number) => object|null}|null} resolved -
      *        `flattenLayers(getLayers())`, or null to clear the neck.
      * @param {Array<object>} [layers] - the raw layer list, for `positions`.
@@ -934,10 +969,16 @@ class Fretboard {
         this.clearMarkers();
         if (!resolved) return;
 
+        const notePassSkips = new Set();
+        layers.forEach((layer, layerIndex) => {
+            if (layer && layer.positionsOnly) notePassSkips.add(layerIndex);
+        });
+
         this.tuning.forEach((stringNote, stringIndex) => {
             for (let fret = 0; fret <= this.fretCount; fret++) {
                 const entry = resolved.resolve(calculateMidi(stringNote, fret));
                 if (!entry) continue;
+                if (notePassSkips.has(entry.layerIndex)) continue;
 
                 this.markFret(stringIndex, fret, {
                     backgroundColor: '#ffffff',

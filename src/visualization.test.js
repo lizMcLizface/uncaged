@@ -10,7 +10,7 @@ import {
   subscribe
 } from './visualization/stack';
 import { flattenLayers, parseLayerNote } from './visualization/flatten';
-import { scaleLayer, chordLayer, noteLayer, SCALE_LAYER_ID } from './visualization/layers';
+import { scaleLayer, chordLayer, positionLayer, noteLayer, SCALE_LAYER_ID } from './visualization/layers';
 import { getIntervalColor } from './theory/intervals';
 
 // Tests for VISUALIZATION_STACK_PLAN.md step 8a. A spec, not a
@@ -490,6 +490,38 @@ describe('layers: chordLayer', () => {
     expect(layer.notes[0].color).toBeNull();
     expect(layer.notes[0].semitone).toBeNull();
     expect(layer.notes[0].isRoot).toBe(false);
+  });
+});
+
+describe('layers: positionLayer', () => {
+  const positions = [
+    { string: 5, fret: 3, opacity: 1 },
+    { string: 4, fret: 2, opacity: 0.4 }
+  ];
+
+  test('is a chord layer that marks its positions as the whole story', () => {
+    const layer = positionLayer({ notes: ['G/2', 'B/2'], rootNote: 'G', positions });
+    expect(layer.positionsOnly).toBe(true);
+    expect(layer.positions).toBe(positions);
+    expect(layer.notes.map(entry => entry.note)).toEqual(['G/2', 'B/2']);
+  });
+
+  test('a chord layer does NOT set it', () => {
+    // Deliberate: turning section 2.2's "positions instead of notes" rule on
+    // globally would change every chord source's fretboard output, which has
+    // relied on the note pass since step 8d. Only positionLayer opts in.
+    expect(chordLayer({ notes: ['G'], rootNote: 'G', positions }).positionsOnly).toBeUndefined();
+  });
+
+  test('its notes still flatten, because the piano has nothing else to render', () => {
+    // The fretboard skips them; the piano is the reason they are carried at
+    // all, so flattening must not skip them too.
+    const flat = flattenLayers([positionLayer({ notes: ['G/2'], rootNote: 'G', positions })]);
+    expect(flat.resolve(43)).not.toBeNull(); // G2
+  });
+
+  test('defaults, like every overlay, to transient', () => {
+    expect(positionLayer({ notes: ['G'], positions }).transient).toBe(true);
   });
 });
 
