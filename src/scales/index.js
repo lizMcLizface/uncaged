@@ -53,16 +53,6 @@ import {
     refreshChordsForRootNote
 } from './state';
 
-// Import progression refresh function (use dynamic import to avoid circular dependency)
-let refreshProgressionDisplay = null;
-try {
-    import('../progressions').then(module => {
-        refreshProgressionDisplay = module.refreshProgressionDisplay;
-    });
-} catch (e) {
-    console.warn('Could not import progression refresh function:', e);
-}
-
 const getElementByNote = (note) =>
   note && document.querySelector(`[note="${note}_scale"]`);
 const getElementByMIDI = (note) =>
@@ -200,11 +190,6 @@ function updateCurrentScaleDisplay() {
     console.log('Scale notes for display:', scaleNotes);
     highlightKeysForScales(scaleNotes);
     highlightScaleNotes(scaleNotes);
-
-    // Refresh progression display if available
-    if (refreshProgressionDisplay && typeof refreshProgressionDisplay === 'function') {
-        refreshProgressionDisplay();
-    }
 
     // Notify fretboards about scale changes via custom event
     const scaleChangeEvent = new CustomEvent('scaleChanged', {

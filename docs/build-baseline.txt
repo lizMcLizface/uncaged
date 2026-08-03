@@ -230,10 +230,10 @@ src\progression\share.js
   Line 138:10:  'encodeStateToURL' is defined but never used  no-unused-vars
 
 src\scales\index.js
-  Line 66:7:    'getElementByNote' is assigned a value but never used  no-unused-vars
-  Line 127:17:  'key' is already defined                               no-redeclare
-  Line 128:17:  'midi' is already defined                              no-redeclare
-  Line 137:13:  'midi' is already defined                              no-redeclare
+  Line 56:7:    'getElementByNote' is assigned a value but never used  no-unused-vars
+  Line 117:17:  'key' is already defined                               no-redeclare
+  Line 118:17:  'midi' is already defined                              no-redeclare
+  Line 127:13:  'midi' is already defined                              no-redeclare
 
 src\scales\state.js
   Line 75:5:    'scalePositionDarkDuplicate' is assigned a value but never used  no-unused-vars
