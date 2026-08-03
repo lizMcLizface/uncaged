@@ -1877,7 +1877,9 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
         stopAllNotes: stopAllNotesProgrammatic,
         isActive: () => synthActiveRef.current, // Use ref for immediate access
         activate: activateSynth,
-        // Expose pitch controls for IntervalPractice synchronization
+        // Microtonal pitch controls. Their only consumer was
+        // components/IntervalPractice/, deleted 2026-08-03 as unmounted dead
+        // code - this surface now has zero callers and can go with Phase 6.
         getPitchValues: () => {
             // console.log('Getting pitch values:', pitchEnv);
             return {
