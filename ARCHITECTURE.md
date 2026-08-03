@@ -2513,6 +2513,76 @@ script against the stashed pre-change tree fails four of the six and passes
 the piano check — which is the clearest statement of what this step fixed:
 the piano was already right, the fretboard was the exception.
 
+### 6.31 `src/visualization/` (`VISUALIZATION_STACK_PLAN.md` step 8a, 2026-08-03)
+
+**What it owns:** the answer to "what is currently shown on the main
+display?" — a persistent base layer plus overlays pushed on top of it, and
+the rules for resolving them into per-key output.
+
+**What depends on it:** nothing yet. Step 8a is pure and unreferenced by
+design; 8b and 8c subscribe the two renderers, 8d moves the producers.
+
+**What it depends on:** `theory/notation` (note name → MIDI) and
+`theory/intervals` (the semitone palette). Nothing else — and specifically
+**not** `src/fretboard/` or `src/piano/`, because the stack must not know
+who renders it.
+
+| File | Owns |
+|---|---|
+| `stack.js` | `visualizationState` (`base` + `overlays`), `setBaseLayer`/`pushLayer`/`popLayer`/`clearTransient`/`clearLayers`, `subscribe` |
+| `flatten.js` | `parseLayerNote`, `flattenLayers` — the ordering, specificity, dimming and hiding rules, in one place |
+| `layers.js` | `scaleLayer`, `chordLayer`, `noteLayer` — the only place that knows what a layer is made of, so the two renderers cannot disagree about a scale |
+| `index.js` | barrel; its header carries the sources-not-targets boundary below |
+
+**Why it exists.** What the main display shows was never represented
+anywhere. It was re-derived on demand from six `fretboardState` flags
+(`currentDisplayedChord`, `currentChordGridSelection`, `isInHoverState`,
+`fretboardsShowingScale`, `fretboardsShowingChords`, `chordFingeringShapes`)
+by a ladder that re-runs the producer — `restoreFretboardState`
+(`src/fretboard/index.js:437`), open-coded four times across three files and
+already divergent (only one copy clears the fingering tabs). The consequence
+that forced the refactor: adding chords to the piano meant a seventh flag and
+a fifth copy. `VISUALIZATION_STACK_PLAN.md` §1 has the full inventory.
+
+**The invariant that pays for it:** undoing a hover is `popLayer(id)`, not
+re-running a producer. A `mouseleave` without its `mouseenter` is a no-op
+that does not even notify subscribers.
+
+**Three contracts worth stating here, because no single file shows them:**
+
+- **`base` and `overlays` are separate fields**, not one array with the base
+  at index 0. "The base is replaced, never popped" becomes structural rather
+  than a convention two functions must each guard. `getLayers()` presents
+  them as one bottom-first list, so renderers never see the split.
+- **An overlay is transient unless it says `transient: false`.** A base
+  change drops the transient ones — which is why "the scale changed while a
+  chord was hovered" is correct by construction rather than by
+  `updateFretboardsForScaleChange`'s `isInHoverState` special case (`:669`).
+  A *selected* chord is a pinned overlay, which is how a chord shows **over**
+  its scale rather than replacing it.
+- **Mini fretboards and mini pianos push onto the stack and never subscribe
+  to it.** They render their own fixed content. If they subscribed, every
+  card in a progression would repaint on every hover anywhere, and the
+  per-instance bookkeeping the `fretboardsShowing*` Sets exist for would come
+  straight back.
+
+**Layer order beats specificity across layers, but not within one.** `'E'`
+is that pitch class in every octave and `'E/4'` is one key
+(`Fretboard.markNote`'s convention, followed rather than reinvented). Inside
+a layer the specific entry wins; between layers the higher layer wins even if
+it is the less specific one. Enharmonics collapse through MIDI, so a `Gb`
+layer and an `F#` layer address the same key without any string comparison.
+
+**Known duplication, deliberate, one step long.** `layers.js`'s `scaleLayer`
+and `piano/labels.js`'s `buildScaleKeyStyles` compute the same colours and
+labels in two shapes. 8a could not delete the latter without touching
+`Piano.js`; **8b does.** Both headers say so.
+
+**Verified** with 59 new tests (124 total), 34 build warnings unchanged, and
+a direct ESLint run over the new folder — the build check alone cannot
+validate it, because nothing imports it yet and webpack never compiles it
+(`REFACTOR_PLAN.md` §2.3 lesson 11, applied rather than rediscovered).
+
 ---
 
 ## 7. Known-dead code (Phases 1 and 1b)
