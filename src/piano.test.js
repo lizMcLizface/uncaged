@@ -9,6 +9,8 @@ import {
   HIGHEST_KEY_MIDI
 } from './piano/keyModel';
 import { getInstrumentRange, isInInstrumentRange, DEFAULT_PRACTICAL_FRET } from './piano/range';
+import { buildScaleKeyStyles, noteNameToPitchClass } from './piano/labels';
+import { getIntervalColor } from './theory/intervals';
 import { INSTRUMENT_PRESETS } from './tuning';
 
 // Tests for PIANO_VIEW_PLAN.md step 1. Unlike the Phase 0 characterization
@@ -170,6 +172,92 @@ describe('range: getInstrumentRange', () => {
   test('an empty or non-array tuning gives null, not a throw', () => {
     expect(getInstrumentRange([])).toBeNull();
     expect(getInstrumentRange(null)).toBeNull();
+  });
+});
+
+describe('labels: noteNameToPitchClass', () => {
+  test('with or without an octave', () => {
+    expect(noteNameToPitchClass('C')).toBe(0);
+    expect(noteNameToPitchClass('C/4')).toBe(0);
+    expect(noteNameToPitchClass('C/7')).toBe(0);
+  });
+
+  test('enharmonics collapse, which is what removes the need for string matching', () => {
+    expect(noteNameToPitchClass('Gb')).toBe(noteNameToPitchClass('F#'));
+    expect(noteNameToPitchClass('Eb')).toBe(noteNameToPitchClass('D#'));
+  });
+
+  test('the octave-crossing spellings', () => {
+    expect(noteNameToPitchClass('Cb/5')).toBe(11); // = B
+    expect(noteNameToPitchClass('B#/4')).toBe(0);  // = C
+  });
+
+  test('unparseable input gives null, not a throw', () => {
+    expect(noteNameToPitchClass('H')).toBeNull();
+    expect(noteNameToPitchClass('')).toBeNull();
+    expect(noteNameToPitchClass(null)).toBeNull();
+  });
+});
+
+describe('labels: buildScaleKeyStyles', () => {
+  // getScaleNotes' real output shape for E Aeolian: spelled, octave-suffixed,
+  // and it repeats the root an octave up at the end.
+  const eAeolian = ['E/5', 'F#/5', 'G/5', 'A/5', 'B/5', 'C/6', 'D/6', 'E/6'];
+
+  test('one entry per pitch class, root included once', () => {
+    const styles = buildScaleKeyStyles(eAeolian, 'E');
+    expect(styles.size).toBe(7);
+    expect(styles.has(noteNameToPitchClass('E'))).toBe(true);
+  });
+
+  test('colour comes from semitones above the root, not scale degree', () => {
+    const styles = buildScaleKeyStyles(eAeolian, 'E');
+    expect(styles.get(noteNameToPitchClass('E')).semitone).toBe(0);
+    expect(styles.get(noteNameToPitchClass('G')).semitone).toBe(3);  // m3
+    expect(styles.get(noteNameToPitchClass('B')).semitone).toBe(7);  // P5
+    expect(styles.get(noteNameToPitchClass('G')).color).toBe(getIntervalColor(3));
+  });
+
+  test('a flat 3 and a natural 3 get different colours - the whole point of §2', () => {
+    const minor = buildScaleKeyStyles(['C/5', 'Eb/5', 'G/5'], 'C');
+    const major = buildScaleKeyStyles(['C/5', 'E/5', 'G/5'], 'C');
+    const minorThird = minor.get(noteNameToPitchClass('Eb'));
+    const majorThird = major.get(noteNameToPitchClass('E'));
+    expect(minorThird.semitone).toBe(3);
+    expect(majorThird.semitone).toBe(4);
+    expect(minorThird.color).not.toBe(majorThird.color);
+  });
+
+  test("'note' mode keeps the scale's own spelling, octave stripped", () => {
+    const styles = buildScaleKeyStyles(['Bb/5', 'C/6', 'D/6'], 'Bb', 'note');
+    expect(styles.get(noteNameToPitchClass('Bb')).label).toBe('Bb');
+    expect(styles.get(noteNameToPitchClass('D')).label).toBe('D');
+  });
+
+  test("'interval' mode labels from the root", () => {
+    const styles = buildScaleKeyStyles(eAeolian, 'E', 'interval');
+    expect(styles.get(noteNameToPitchClass('E')).label).toBe('R');
+    expect(styles.get(noteNameToPitchClass('G')).label).toBe('m3');
+    expect(styles.get(noteNameToPitchClass('B')).label).toBe('P5');
+  });
+
+  test("'finger' falls back to note names rather than blanking the key (§8.3)", () => {
+    const finger = buildScaleKeyStyles(eAeolian, 'E', 'finger');
+    const note = buildScaleKeyStyles(eAeolian, 'E', 'note');
+    expect(finger.get(noteNameToPitchClass('G')).label).toBe(note.get(noteNameToPitchClass('G')).label);
+    expect(finger.get(noteNameToPitchClass('G')).label).not.toBe('');
+  });
+
+  test('an enharmonically-spelled root still measures correctly', () => {
+    const styles = buildScaleKeyStyles(['Gb/5', 'Bb/5', 'Db/6'], 'F#');
+    expect(styles.get(noteNameToPitchClass('Gb')).semitone).toBe(0);
+    expect(styles.get(noteNameToPitchClass('Bb')).semitone).toBe(4);
+  });
+
+  test('bad input gives an empty map, not a throw', () => {
+    expect(buildScaleKeyStyles(null, 'C').size).toBe(0);
+    expect(buildScaleKeyStyles(['C/4'], 'H').size).toBe(0);
+    expect(buildScaleKeyStyles(['C/4', 'nonsense'], 'C').size).toBe(1);
   });
 });
 

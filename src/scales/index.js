@@ -2,13 +2,13 @@
 // src/scales.js were reduced to across REFACTOR_PLAN.md Phase 4's
 // extraction steps: state.js, scaleData.js, ui/infoPanel.js,
 // ui/rootNoteTable.js, ui/scaleTable.js all moved out (see ARCHITECTURE.md
-// §6.23-6.26); what's left here is pure glue - the two DOM key-highlighting
-// functions (highlightKeysForScales, from scales.js, and highlightScaleNotes,
-// from scaleGenerator.js - two unrelated functions with similar names and
-// jobs, both kept as-is rather than merged), updateCurrentScaleDisplay (the
-// hub every UI cluster calls to refresh after a selection change), and the
-// navigation-button wiring - plus the re-exports that make this folder's
-// public surface a single import.
+// §6.23-6.26); what's left here is pure glue - the DOM key-highlighting
+// function highlightKeysForScales (from scales.js; its similarly-named
+// neighbour highlightScaleNotes, from scaleGenerator.js, was deleted in
+// PIANO_VIEW_PLAN.md step 4 - see the note at its former site),
+// updateCurrentScaleDisplay (the hub every UI cluster calls to refresh after
+// a selection change), and the navigation-button wiring - plus the re-exports
+// that make this folder's public surface a single import.
 //
 // External callers previously split their imports between
 // `from './scaleGenerator'` and `from './scales'`; both files are deleted
@@ -26,8 +26,7 @@
 // ./ui/rootNoteTable.js are expected, not a sign of a design problem - see
 // their own file headers for why.
 
-import $ from 'jquery';
-import { noteToMidi, keys } from '../midi';
+import { noteToMidi } from '../midi';
 import { HeptatonicScales, HexatonicScales, PentatonicScales, scales, getScaleNotes, precomputeScaleChords, precomputeChordsForScales, getPrecomputedChords, getChordsForScale, clearChordCache, getChordCacheStats } from './scaleData';
 import { updateScaleInfoPanel } from './ui/infoPanel';
 import { createHeptatonicScaleTable, createQuickScalePicker } from './ui/scaleTable';
@@ -116,43 +115,24 @@ function highlightKeysForScales(notes){
     }
 }
 
-// Unlike highlightKeysForScales above, this one keys off src/midi.js's `keys`
-// - the plain `midi="N"` namespace src/piano/ actually renders - so as of
-// PIANO_VIEW_PLAN.md step 3 its elements are real. It still highlights
-// nothing, for an unrelated second reason: the range gate below reads
-// #lowestNoteSelection/#highestNoteSelection, and **neither element exists
-// anywhere in src/ or public/** (verified 2026-08-03), so `parseInt(undefined)`
-// is NaN and every comparison is false. Pre-existing, not introduced here.
-// Step 4 decides whether to revive this or to drive the scale layer from
-// src/piano/ - see PIANO_VIEW_PLAN.md §1.3.
+// `highlightScaleNotes` was deleted in PIANO_VIEW_PLAN.md step 4, which is
+// where §1.3 said the decision fell due. It applied `scaleKey` to
+// src/midi.js's `keys` - the same class, on the same elements, that
+// src/piano/Piano.js's showScale now owns - so once step 3 made those
+// elements real it was no longer harmlessly dead, it was a second writer to
+// the piano's own state. It had also never worked: its range gate read
+// #lowestNoteSelection/#highestNoteSelection, neither of which exists
+// anywhere in src/ or public/, so every comparison was against NaN.
 //
-// The null guards are new: before step 3 every `keys[midi].element` was
-// permanently null and these lines were unreachable, so they could assume an
-// element. Now that some keys resolve and others (outside the piano's
-// displayed range) don't, the difference is a real TypeError away.
-var currentScaleHighlight = []
-function highlightScaleNotes(noteArray){
-    for( const key of currentScaleHighlight){
-        const midi = noteToMidi(key) + 12;
-        if (keys[midi] && keys[midi].element) keys[midi].element.classList.remove('scaleKey');
-    }
-    currentScaleHighlight = [];
-    if(Array.isArray(noteArray)){
-        for(const key of noteArray){
-            const midi = noteToMidi(key) + 12;
-            // console.log('key: ', key, ' midi note:', midi);
-            // console.log(keys[midi])
-            if(midi >=  parseInt($('#lowestNoteSelection').val()) && midi <=  parseInt($('#highestNoteSelection').val())){
-            if (keys[midi] && keys[midi].element) keys[midi].element.classList.add('scaleKey');
-            currentScaleHighlight.push(key);
-            }
-        }
-    }else{
-        const midi = noteToMidi(noteArray) + 12;
-        if (keys[midi] && keys[midi].element) keys[midi].element.classList.add('scaleKey');
-        currentScaleHighlight.push(noteArray);
-    }
-}
+// What replaces it is strictly more: colour by semitone from the root rather
+// than one flat purple, correct enharmonic spelling, and the displayed range
+// as the visibility gate the phantom selects were reaching for.
+//
+// `highlightKeysForScales` above survives for now. It cannot contend with the
+// piano - it queries the `midi="N_scale"` namespace, which no markup has ever
+// had - and it has ten call sites across ui/rootNoteTable.js and
+// ui/scaleTable.js, so retiring it (with `keys_chords` and this file's
+// `getElementByMIDI`) is its own dead-code cleanup, not step 4's business.
 
 // Function to update the current scale display in the HTML
 function updateCurrentScaleDisplay() {
@@ -213,7 +193,6 @@ function updateCurrentScaleDisplay() {
 
     console.log('Scale notes for display:', scaleNotes);
     highlightKeysForScales(scaleNotes);
-    highlightScaleNotes(scaleNotes);
 
     // Notify fretboards about scale changes via custom event
     const scaleChangeEvent = new CustomEvent('scaleChanged', {

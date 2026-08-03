@@ -4,7 +4,7 @@ Living document. Updated as `REFACTOR_PLAN.md` phases land — see that file for
 what's left to do (its §1) and the documentation discipline this follows
 (its §2.4). Seeded 2026-08-01 as the Phase 0 baseline (the pre-refactor
 shape, warts included); current through Phase 4c and `PIANO_VIEW_PLAN.md`
-steps 1-3 and 6, 2026-08-03. Sections describe the *current* shape, not an
+steps 1-4 and 6, 2026-08-03. Sections describe the *current* shape, not an
 aspirational one — planned features live in `SESSION_MODE_FEASIBILITY.md`
 and `PIANO_VIEW_PLAN.md`. Features land here the same way phases do (§6.29
 is the first): this file maps what exists, whichever plan produced it.
@@ -368,7 +368,7 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/scales/ui/rootNoteTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The detailed "Root Note Selection" table (`createRootNoteTable`) plus `positionTooltipSmart`. See §6.26. | `src/scales/scaleData`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createHeptatonicScaleTable` from `./scaleTable` | two-way with `src/scales/ui/scaleTable.js` - see §6.26 for why |
 | `src/scales/ui/scaleTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The compact top-bar quick-picker (`createQuickScalePicker`), the detailed "Heptatonic Scales" browsing table (`createHeptatonicScaleTable`), and `intToRoman`. See §6.26. | `src/scales/scaleData`, `theory/chords`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createRootNoteTable`/`positionTooltipSmart` from `./rootNoteTable` | two-way with `src/scales/ui/rootNoteTable.js` - see §6.26 for why |
 | `src/scales/index.js` *(Phase 4 second half, fifth and final step, landed 2026-08-03 - `scaleGenerator.js`/`scales.js` deleted)* | The public barrel for `src/scales/`: `highlightKeysForScales`/`highlightScaleNotes` (two unrelated DOM key-highlighting functions, not merged - see §6.27), `updateCurrentScaleDisplay` (the hub every UI cluster calls after a selection change), navigation-button wiring, plus the re-exports that make this folder's surface a single import. Everything else that used to live in `scaleGenerator.js`/`scales.js` moved to `state.js`/`scaleData.js`/`ui/infoPanel.js`/`ui/rootNoteTable.js`/`ui/scaleTable.js` across this phase's earlier steps (§6.23-6.26); this file is what remained from both plus the barrel role. See §6.27. **Not moved into `src/theory/` in Phase 2** — see §6.1/§6.2 correction; still not moved here either, pending a real `Scale` data model (see the project memory this session recorded). | `../midi`, `src/scales/scaleData`, `src/scales/ui/infoPanel`, `src/scales/ui/scaleTable`, `src/scales/state` | two-way with `src/scales/state.js`, `src/scales/ui/rootNoteTable.js`, `src/scales/ui/scaleTable.js` (§6.23/§6.26); every former `scaleGenerator.js`/`scales.js` external importer now pulls from here (`from './scales'` / `from '../scales'` etc., repointed in this step) |
-| `src/piano/` *(`PIANO_VIEW_PLAN.md` steps 1-3 and 6, landed 2026-08-03 — a feature, not a refactor phase)* | The piano view. `keyModel.js`: which keys exist in a MIDI range, which are black, the white-key count `--num-keys` is set from, octave-span → MIDI range. `range.js`: the active instrument's playable range as `{ lowMidi, highMidi, openStrings }`. Both pure. `Piano.js`: the `<ul id="keyboard">` markup and the only DOM-touching file here — `<li midi="N" class="white\|black">` is a contract with `midi.js`/`scales/index.js`/`index.css`, not a free choice. `state.js`: `pianoState` (view mode, displayed range) + persistence. `index.js`: the barrel. Standard MIDI (60 = C4) throughout, forced by `midi.js`'s `keys` table; see §6.29 for the conversion trap at the `tuning.js` boundary. | `keyModel.js`: nothing at all. `range.js`: `tuning.js` (`getNoteAtStringFret`), `theory/notation` (`noteToMidi`). `Piano.js`: `./keyModel` only | `src/fretboard/index.js`'s `initializeFretboard` builds the keyboard into `#fretNotPlaceholder` after the fretboard element, hidden |
+| `src/piano/` *(`PIANO_VIEW_PLAN.md` steps 1-4 and 6, landed 2026-08-03 — a feature, not a refactor phase)* | The piano view. `keyModel.js`: which keys exist in a MIDI range, which are black, the white-key count `--num-keys` is set from, octave-span → MIDI range. `range.js`: the active instrument's playable range as `{ lowMidi, highMidi, openStrings }`. Both pure. `Piano.js`: the `<ul id="keyboard">` markup and the only DOM-touching file here — `<li midi="N" class="white\|black">` is a contract with `midi.js`/`scales/index.js`/`index.css`, not a free choice. `labels.js`: scale + root + label mode -> per-pitch-class colour and text, pure. `state.js`: `pianoState` (view mode, displayed range) + persistence. `index.js`: the barrel. Standard MIDI (60 = C4) throughout, forced by `midi.js`'s `keys` table; see §6.29 for the conversion trap at the `tuning.js` boundary. | `keyModel.js`: nothing at all. `range.js`: `tuning.js` (`getNoteAtStringFret`), `theory/notation` (`noteToMidi`). `Piano.js`: `./keyModel` only | `src/fretboard/index.js`'s `initializeFretboard` builds the keyboard into `#fretNotPlaceholder` after the fretboard element, hidden |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`src/scales/` to consume. 262 lines (was 5,777 before Phase 1, 281 after it, then Phase 1b stripped the inert cruft Phase 1 deferred - see §7). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
 | `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`/`window.polySynthEnabled` and registers the `'synth'` channel with `src/audio/dispatch.js` (Phase 2b). | `src/audio/dispatch.js` | — |
@@ -2169,7 +2169,7 @@ triad and seventh through `matchChord` (`Em`/`F#o`/`GM7`/`F#ø`/`D7`), and
 produced zero page or console errors - that grid's hover handler being
 where the deleted `highlightKeysForChords` call sat.
 
-### 6.29 `src/piano/` (`PIANO_VIEW_PLAN.md` steps 1-3 and 6, 2026-08-03)
+### 6.29 `src/piano/` (`PIANO_VIEW_PLAN.md` steps 1-4 and 6, 2026-08-03)
 
 The first module here that is **not** a refactor product: new code for the
 piano view, not a relocation. Two files so far, both pure, neither reachable
@@ -2357,6 +2357,59 @@ there.
 script: default view, both switch directions, active-button state, the piano
 still playable while shown, the Synthesizer tab intact after a swap, and the
 choice surviving a reload. Zero console errors.
+
+**Step 4 (2026-08-03) put the scale on the keys.** `src/piano/labels.js` is
+the new pure module: spelled scale notes + root + label mode → a map of pitch
+class to `{semitone, color, label}`, which `Piano.js`'s `showScale` applies as
+`scaleKey` plus a per-`<li>` `--scale-key-color` and the key's text.
+
+**Colour is by semitone from the root, via `theory/intervals.js`'s palette.**
+This is the first instrument in the app to satisfy the claim that file's
+header makes; the main fretboard remains the exception this document's header
+records, until step 5. A ♭3 and a natural 3 are different colours here and
+the same colour there — that inconsistency is now visible on one screen, and
+is exactly what step 5 exists to remove.
+
+Three details worth knowing:
+
+- **Matching is by pitch class, through `noteToMidi`**, so a scale lights in
+  every rendered octave and enharmonics collapse by construction (`Gb` and
+  `F#` both → 6, and `Cb`/`B#` cross the octave boundary correctly). Nothing
+  compares note-name strings.
+- **Spelling is taken from the `scaleNotes` array verbatim**, never from
+  `midiToNote`. That deliberately avoids `theory/notation.js`'s
+  `currentScaleContext`, a module-level singleton set as a side effect of
+  `getScaleNotes` — the piano never reads it, so it can never read it stale.
+- **`labelMode` is `fretboardState.mainFretboardLabelMode`**, the existing
+  `Labels` select, not a second control. `'finger'` is guitar-only and falls
+  back to note names rather than blanking the key.
+
+`refreshPianoScale()` lives in `src/fretboard/index.js` for the same reason
+`syncPianoKeyState` does: it is the file that already knows `src/scales/` and
+`fretboardState`, and keeping those reads on this side is what lets
+`labels.js` stay a pure function of its arguments. It has its own
+`'scaleChanged'` listener, separate from the fretboard's — that one debounces
+and drops events whose root+scale matches the last, which is right for its
+expensive re-render and wrong for a piano that may have been hidden at the
+time. A CustomEvent listener rather than an entry in
+`window.updateFretboardsForScaleChange`, so the piano still costs Phase 5
+nothing.
+
+**`highlightScaleNotes` was deleted here** — the §1.3 decision falling due.
+Once step 3 made `keys[midi].element` resolve, it stopped being harmlessly
+dead and became a second writer to `scaleKey` on the piano's own elements. Its
+one call site went with it, and `keys` plus the `jquery` import in
+`src/scales/index.js` went dead and were removed (§2.3 lesson 6).
+`highlightKeysForScales` survives: it queries the `midi="N_scale"` namespace
+and so cannot contend with anything, and its ten call sites make retiring it a
+dead-code cleanup on its own schedule.
+
+**Verified** with 65/65 tests (12 new, all on `labels.js` — including that a
+♭3 and a natural 3 come out different colours) and a 14-check Playwright
+script: 7 pitch classes lit per octave across all three, root colour and
+label, m3 colour, consistent colour across octaves, sharp spelling preserved,
+out-of-scale keys unlabelled, all three label modes, and a root change
+repainting. 34 warnings unchanged, zero console errors.
 
 ---
 

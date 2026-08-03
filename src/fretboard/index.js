@@ -114,6 +114,45 @@ function syncPianoKeyState(piano) {
 }
 
 /**
+ * Repaint the piano's scale layer from the app's current scale and label
+ * mode.
+ *
+ * Lives here rather than in `src/piano/` on purpose: this is the file that
+ * already knows about `src/scales/` and `fretboardState`, and keeping the
+ * reads on this side is what lets `src/piano/labels.js` stay a pure function
+ * of its arguments. Same division as `syncPianoKeyState`.
+ *
+ * @param {{rootNote?: string, scaleNotes?: string[]}} [scaleData] - the
+ *        `'scaleChanged'` event's detail, when there is one. Omitted on the
+ *        initial paint and on a label-mode change, where the scale hasn't
+ *        moved and is read from `src/scales/` instead.
+ */
+function refreshPianoScale(scaleData) {
+    const piano = getPiano();
+    if (!piano) return;
+
+    let rootNote = scaleData && scaleData.rootNote;
+    let scaleNotes = scaleData && scaleData.scaleNotes;
+
+    if (!scaleNotes) {
+        rootNote = getPrimaryRootNote();
+        const primaryScale = getPrimaryScale();
+        if (!rootNote || !primaryScale) return;
+
+        // primaryScale is 'Family-Mode' ('Major-6'), and getScaleNotes wants
+        // the interval pattern - the same resolution showChordOnFretboard does.
+        const [family, mode] = primaryScale.split('-');
+        if (!HeptatonicScales || !HeptatonicScales[family]) return;
+        const scaleMode = HeptatonicScales[family][parseInt(mode, 10) - 1];
+        if (!scaleMode) return;
+        scaleNotes = getScaleNotes(rootNote, scaleMode.intervals);
+    }
+
+    // 'finger' is guitar-only; labels.js falls it back to note names (§8.3).
+    piano.showScale(scaleNotes, rootNote, fretboardState.mainFretboardLabelMode);
+}
+
+/**
  * Swap what occupies the slot at the top of the page: the fretboard, or the
  * piano. Persisted, so a reload comes back to the same instrument.
  *
@@ -135,7 +174,13 @@ function setMainViewMode(mode) {
         fretboard.fretboardElement.style.display = viewMode === VIEW_PIANO ? 'none' : '';
     }
     const piano = getPiano();
-    if (piano) piano.setVisible(viewMode === VIEW_PIANO);
+    if (piano) {
+        piano.setVisible(viewMode === VIEW_PIANO);
+        // Repaint on the way in: the scale may have moved while the piano was
+        // hidden, and its own 'scaleChanged' listener has nothing to do with
+        // visibility.
+        if (viewMode === VIEW_PIANO) refreshPianoScale();
+    }
 
     document.dispatchEvent(new CustomEvent('mainViewModeChanged', { detail: { viewMode } }));
     return viewMode;
@@ -176,6 +221,7 @@ function initializeFretboard() {
     // has returned - too late to apply the persisted view on first paint.
     fretboardState.mainFretboard = mainFretboard;
     setMainViewMode(pianoState.viewMode);
+    refreshPianoScale();
 
     // Set the scale button as active by default and show the scale
     fretboardState.currentDisplayedChord = 0; // Scale button is index 0
@@ -667,6 +713,17 @@ function updateFretboardsForScaleChange(scaleData) {
     }
 }
 
+// The piano's own scale subscription, deliberately separate from the
+// fretboard's below: that one debounces and drops events whose root+scale key
+// matches the last one, which is right for its expensive re-render and wrong
+// here (a re-selection of the same scale should still repaint a piano that was
+// hidden at the time). A CustomEvent listener rather than an entry in
+// window.updateFretboardsForScaleChange - PIANO_VIEW_PLAN.md §7 - so the piano
+// costs REFACTOR_PLAN.md Phase 5 nothing.
+window.addEventListener('scaleChanged', (event) => {
+    refreshPianoScale(event.detail);
+});
+
 // Listen for scale change events from the scale generator
 window.addEventListener('scaleChanged', (event) => {
     // Debounce the updates to prevent rapid-fire events
@@ -993,6 +1050,7 @@ export {
     initializeFretboard,
     setMainViewMode,
     getMainViewMode,
+    refreshPianoScale,
     createSubscaleBoxPattern,
     searchFretboardNote,
     searchFretboardNotes,

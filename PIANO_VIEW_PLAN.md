@@ -1,6 +1,7 @@
 # Piano View — Implementation Plan
 
-Investigated 2026-08-03. Steps 1-3 and 6 landed 2026-08-03.
+Investigated 2026-08-03. Steps 1-4 and 6 landed 2026-08-03. **Step 5 is next,
+and is the only remaining step that changes existing behavior.**
 
 Goal: let the user hide the main fretboard at the top of the page and show a
 multi-octave piano keyboard in its place, carrying the same scale
@@ -33,7 +34,7 @@ Decisions taken 2026-08-03, before any code:
 | 1 — `keyModel.js` + `range.js` + tests | **done** 2026-08-03 | Pure. 25 tests in `src/piano.test.js` (53 total). Surfaced §4.1, the MIDI-convention seam |
 | 2 — `Piano.js` renders static `<ul id="keyboard">` | **done** 2026-08-03 | §5.2 CSS variable work included. The dormant CSS works — see §5.3 |
 | 3 — Rebuild the element tables, wire mouse + held keys | **done** 2026-08-03 | Mouse + held keys live. `keys_chords` deliberately not touched — §1.3 |
-| 4 — Scale highlighting + labels | not started | §2 palette, `mainFretboardLabelMode`, `'scaleChanged'` |
+| 4 — Scale highlighting + labels | **done** 2026-08-03 | §2 palette, `mainFretboardLabelMode`, `'scaleChanged'`. Retired `highlightScaleNotes` — §1.3 |
 | 5 — Convert the fretboard to the semitone palette | not started | **The only step that changes existing behavior.** §2 |
 | 6 — The view toggle | **done** 2026-08-03 | **Pulled ahead of 4-5** at the user's request, so the piano is reachable to play with. Hide/show only. §6.1 |
 | 7 — Octave-count control | not started | Top bar, persisted |
@@ -114,18 +115,24 @@ Both verified 2026-08-03 by grep across all of `src/` and `public/`.
   `keys_chords` would be pure ceremony — it would still resolve nothing.
   §6's step-3 description says to do both; it is wrong and this supersedes
   it.
-- **Step 4 has a decision to make that the plan didn't know about**: revive
-  `highlightScaleNotes` by removing its phantom range gate, or drive the
-  scale layer from `Piano.js` directly and leave both functions to be deleted
-  as dead code. Deleting is probably right — `highlightScaleNotes` computes
-  MIDI via `src/midi.js`'s non-standard `noteToMidi(...) + 12`, has no notion
-  of the semitone palette §2 requires, and its "which keys are visible" gate
-  is exactly what `pianoState`'s displayed range now answers properly. But it
-  is a step-4 call, taken on the evidence, not a foregone one.
+- ~~**Step 4 has a decision to make that the plan didn't know about**~~:
+  **decided in step 4 — `highlightScaleNotes` deleted.** Once step 3 made
+  `keys[midi].element` resolve, it stopped being harmlessly dead and became a
+  *second writer* to `scaleKey` on the piano's own elements. What replaced it
+  is strictly more: colour by semitone from the root instead of one flat
+  purple, correct enharmonic spelling, and the displayed range as the
+  visibility gate its phantom `#lowestNoteSelection`/`#highestNoteSelection`
+  selects were reaching for. One call site, removed with it; `keys` and the
+  `jquery` import in `src/scales/index.js` went dead with it and were removed
+  too (§2.3 lesson 6).
 - **The two extra namespaces are dead code**, in the same class as
   §6.28's `highlightKeysForChords`. Retiring `keys_chords`,
   `highlightKeysForScales` and their `getElementByMIDI` is a cleanup for
-  after step 4 decides, not part of building the piano.
+  after step 4 decides, not part of building the piano. **Still outstanding
+  after step 4**, deliberately: unlike `highlightScaleNotes`,
+  `highlightKeysForScales` *cannot* contend with the piano (wrong namespace),
+  and it has ten call sites across `ui/rootNoteTable.js`/`ui/scaleTable.js`.
+  That makes it a dead-code cleanup on its own schedule, not a piano step.
 
 ### 1.2 Everything else already in place
 
@@ -607,6 +614,29 @@ label is just the `<li>`'s text content, no extra layout work.
 `'finger'` needs a decision recorded in code, not silence: a piano showing
 guitar finger numbers is wrong, and falling through to a blank label would
 look like a bug.
+
+**Landed in step 4**, all three modes, driven off the existing `Labels`
+select — whose `change` handler now also calls `refreshPianoScale()`. Two
+notes on how it came out:
+
+- **Spelling comes from the scale's own note list, not from `midiToNote`.**
+  §9 flags `currentScaleContext` as a module-level singleton set as a *side
+  effect* of `getScaleNotes`, and warns the piano must not assume it is
+  populated. `labels.js` sidesteps that entirely: it is handed the spelled
+  `scaleNotes` array and keeps those spellings verbatim, so it never reads
+  the singleton and there is nothing to be stale. That closes §9's fourth
+  bullet for the piano's purposes.
+- **Matching is by pitch class, computed through `noteToMidi`.** §5.1 says
+  enharmonic matching must use `areEnharmonicEquivalent` rather than string
+  equality. Going through MIDI is the same guarantee more cheaply — `Gb` and
+  `F#` both land on 6 — and it also handles `Cb`/`B#`, which cross an octave
+  boundary.
+
+Labels render rotated, bottom-to-top at the near end of each key, because
+that is what the dormant CSS's `writing-mode: vertical-rl` specifies. It
+works and needed no layout code, as this section predicted; whether it reads
+well for two-character labels (`F♯`, `m3`) is a taste call now visible on
+screen and cheap to change.
 
 ---
 
