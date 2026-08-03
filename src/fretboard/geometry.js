@@ -112,14 +112,19 @@ export function getNoteAt(tuning, fretCount, stringIndex, fret) {
 }
 
 /**
- * Interval label (from src/theory/intervals.js's INTERVAL_LABELS) between
- * a root note and a target note, ignoring octave. Used by both the
- * Fretboard class and src/fretboard/index.js's chord-display glue, so it
- * lives here rather than in either.
+ * Semitones from a root note up to a target note, 0-11, ignoring octave and
+ * spelling ('Gb' and 'F#' give the same answer).
+ *
+ * This was the discarded middle of `getIntervalLabelFromRoot`, which computed
+ * it only to index a label table. It is separate now because the *colour* is
+ * keyed by the same number: PIANO_VIEW_PLAN.md §2, which is what makes a ♭3
+ * and a natural 3 read differently instead of both being "degree 3".
+ *
+ * @returns {number|null} null if either note can't be parsed
  */
-export function getIntervalLabelFromRoot(rootNote, targetNote) {
+export function getSemitoneFromRoot(rootNote, targetNote) {
     if (!rootNote || !targetNote) {
-        return '';
+        return null;
     }
 
     try {
@@ -128,12 +133,24 @@ export function getIntervalLabelFromRoot(rootNote, targetNote) {
 
         const rootMidi = noteToMidi(`${normalizedRoot}/4`);
         const targetMidi = noteToMidi(`${normalizedTarget}/4`);
-        const semitoneDistance = (targetMidi - rootMidi + 12) % 12;
-
-        return INTERVAL_LABELS[semitoneDistance] || '';
+        return (targetMidi - rootMidi + 12) % 12;
     } catch (error) {
+        return null;
+    }
+}
+
+/**
+ * Interval label (from src/theory/intervals.js's INTERVAL_LABELS) between
+ * a root note and a target note, ignoring octave. Used by both the
+ * Fretboard class and src/fretboard/index.js's chord-display glue, so it
+ * lives here rather than in either.
+ */
+export function getIntervalLabelFromRoot(rootNote, targetNote) {
+    const semitoneDistance = getSemitoneFromRoot(rootNote, targetNote);
+    if (semitoneDistance === null) {
         return '';
     }
+    return INTERVAL_LABELS[semitoneDistance] || '';
 }
 
 /**
