@@ -2534,8 +2534,10 @@ the rules for resolving them into per-key output.
 
 **What depends on it:** `src/fretboard/index.js`, which subscribes the piano
 (`subscribePianoToVisualization`) and sets the base layer from the app's
-scale (`refreshScaleLayer`). The fretboard joins in 8c and the producers move
-in 8d.
+scale (`refreshScaleLayer`); and both renderers' `renderStack` methods. The
+producers move in 8d — until then `markScale` and `renderFingeringShape`
+still drive the fretboard, and `Fretboard.renderStack` exists but is
+uncalled.
 
 **What it depends on:** `theory/notation` (note name → MIDI) and
 `theory/intervals` (the semitone palette). Nothing else — and specifically
@@ -2596,6 +2598,24 @@ the computer keyboard stays lit across every repaint. The piano repaints
 whether or not it is the visible view, which is why `setMainViewMode` no
 longer repaints on the way in. `src/piano/labels.js` was deleted here, its
 work absorbed into `layers.js` where both renderers share it.
+
+**The fretboard can render it as of 8c**, though nothing calls it yet.
+`Fretboard.renderStack(resolved)` resolves every (string, fret) by **MIDI
+number** — via a new `geometry.js` `calculateMidi`, extracted from
+`calculateNote`, which computed it and discarded it after spelling the note
+(the same extraction `getSemitoneFromRoot` was, §6.30) — so no note-name
+string comparison happens and enharmonic layers line up for free. Its
+markers are **provably identical to `markScale`'s**: asserted on the
+`markers` map across three scales in both label modes, and mutation-checked
+so the assertion is known to fail when it should. That equivalence is what
+lets 8d move the producers without changing what is drawn.
+
+Two things it deliberately does *not* do: write display-tracking state
+(`markScale` adds to `fretboardsShowingScale`; under the stack the stack is
+the tracking), and render fingering `positions` — a fingering is a set of
+(string, fret) pairs no note list implies, and 8d moves that producer and
+renderer together. `markFret` gained an `opacity` option for the dimmed
+case, defaulting to 1 so no existing call site changes.
 
 **Verified** with 59 new tests (124 total), 34 build warnings unchanged, and
 a direct ESLint run over the new folder — the build check alone cannot

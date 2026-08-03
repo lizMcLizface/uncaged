@@ -39,7 +39,7 @@ Decisions taken 2026-08-03, before any code:
 |---|---|---|
 | 8a — `stack.js` + tests, no renderers | **done** 2026-08-03 | Pure. 59 tests in `src/visualization.test.js` (124 total). Two deviations, both §6's step 8a records: base/overlays as separate fields, and `hideBelow` |
 | 8b — Piano renderer, scale as a base layer | **done** 2026-08-03 | 17-check Playwright run, output proved identical against the stashed tree. `src/piano/labels.js` retired. §6.2 |
-| 8c — Fretboard renderer behind the same API | not started | §6 |
+| 8c — Fretboard renderer behind the same API | **done** 2026-08-03 | Marker-level parity with `markScale` asserted across 3 scales × 2 label modes, and mutation-checked. Still uncalled. §6.3 |
 | 8d — Move the Roman-numeral + chord-grid producers onto push/pop | not started | Deletes `restoreFretboardState`. §6 |
 | 8e — Chord superimposition on the piano (the original step 8) | not started | §5 |
 | 8f — Wire the hover sources that never worked | not started | The payoff. §1.3, §6 |
@@ -516,6 +516,53 @@ neither touched here:
 `renderFingeringShape` still run the show. Screenshot-compare a
 stack-rendered scale against a `markScale` scale — identical output is the
 pass condition.
+
+### 6.3 How 8c landed (2026-08-03)
+
+Done as written, and still called by nothing: `markScale` and
+`renderFingeringShape` remain the live path.
+
+**Parity is asserted structurally, not by screenshot.** The plan said to
+screenshot-compare; comparing the `markers` map is strictly better and is
+what landed. That map holds every styling option each marker was built from,
+so a divergence names the field instead of being something to spot by eye
+(§2.3 lesson 9). Asserted across three scales — C major, E aeolian for
+sharps, B♭ major for flats — in both label modes, six tests, and **the
+markers come out identical in all six**. That covers the thing most likely
+to have diverged: `markScale` labels from `notationTranslateNotes`'s output
+while `scaleLayer` keeps `getScaleNotes`'s spelling verbatim, and the two
+agree.
+
+**The parity test was mutation-checked.** Changing one number in
+`renderStack` (a non-root border from 3 to 2) fails all six. Worth the two
+minutes after step 8b shipped a CSS assertion that passed against a value it
+should have rejected.
+
+**`calculateMidi` extracted in `geometry.js`.** `calculateNote` already
+computed the MIDI number and threw it away after spelling the note — the
+same shape as `PIANO_VIEW_PLAN.md` step 5's `getSemitoneFromRoot`
+extraction, and taken for the same reason: the stack keys on MIDI numbers,
+and re-deriving one by parsing `calculateNote`'s *output* would round-trip
+through a spelling decision it has no reason to depend on. `calculateNote`
+now calls it, so there is one implementation. This touches the hottest
+function on the fretboard, so it got a browser check on top of the unit
+tests.
+
+**`markFret` gained an `opacity` option**, defaulting to 1 - so every
+existing call site is untouched - and emitting nothing at all unless it is
+set.
+
+**Fingering `positions` are deliberately NOT rendered yet.** §2.2 defines
+them and §5.1 says 8d re-expresses `renderFingeringShape` without changing
+what it draws. Building the renderer half a step early would mean guessing
+the producer's shape; 8d moves both together against that function's real
+output. `renderStack`'s header says so at the definition site.
+
+**One thing 8d inherits:** `renderStack` calls `clearMarkers`, which still
+deletes from `fretboardState.fretboardsShowingScale` (`Fretboard.js:666`).
+Harmless while nothing calls `renderStack`, and it disappears with the Set
+in 8d - but it is the one place the new renderer still touches the old
+bookkeeping.
 
 **8d — Move the producers over. The load-bearing step.**
 

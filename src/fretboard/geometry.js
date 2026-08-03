@@ -58,9 +58,17 @@ export function calculateFretPosition(fretPositions, fret) {
 }
 
 /**
- * Calculate the note at a specific string and fret using enhanced notation
+ * The MIDI number sounding at a string and fret. Standard convention,
+ * 60 = C4 - the same one src/piano/ and theory/notation.js use.
+ *
+ * Extracted from calculateNote below, which computed it and then discarded
+ * it after spelling the note. Exactly the shape of PIANO_VIEW_PLAN.md step
+ * 5's getSemitoneFromRoot extraction, and for the same reason: the
+ * visualization stack keys on MIDI numbers, and re-deriving one by parsing
+ * calculateNote's *output* would round-trip through a spelling decision it
+ * has no reason to depend on.
  */
-export function calculateNote(openStringNote, fret) {
+export function calculateMidi(openStringNote, fret) {
     // Tuning strings are stored as "D4" (no separator, see tuning.js),
     // but noteToMidi only recognizes the "D/4" slash format - without it,
     // it silently defaults every string to octave 4, discarding the
@@ -70,9 +78,14 @@ export function calculateNote(openStringNote, fret) {
     const slashed = openStringNote.includes('/')
         ? openStringNote
         : openStringNote.replace(/^([A-Ga-g][#♯b♭]*)(-?\d+)$/, '$1/$2');
-    const openMidi = noteToMidi(slashed);
-    const frettedMidi = openMidi + fret;
-    return midiToNote(frettedMidi);
+    return noteToMidi(slashed) + fret;
+}
+
+/**
+ * Calculate the note at a specific string and fret using enhanced notation
+ */
+export function calculateNote(openStringNote, fret) {
+    return midiToNote(calculateMidi(openStringNote, fret));
 }
 
 /**

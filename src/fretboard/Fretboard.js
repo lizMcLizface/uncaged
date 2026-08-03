@@ -37,6 +37,7 @@ import {
     calculateFretPositions,
     calculateFretPosition as geometryCalculateFretPosition,
     calculateNote as geometryCalculateNote,
+    calculateMidi,
     extractNoteName as geometryExtractNoteName,
     extractOctave as geometryExtractOctave,
     getNoteAt as geometryGetNoteAt,
@@ -691,9 +692,14 @@ class Fretboard {
             borderWidth = 3,
             borderStyle = 'solid',
             size = 26,
-            disableAnimation = false
+            disableAnimation = false,
+            // Recede a marker without removing it - the fretboard's half of
+            // the visualization stack's `dimBelow` (VISUALIZATION_STACK_PLAN.md
+            // section 2.4). 1 is the pre-existing appearance, so every call
+            // site that does not pass it is unaffected.
+            opacity = 1
         } = options;
-        
+
         // Remove any existing marker
         const existingMarker = fretElement.querySelector('.note-marker');
         if (existingMarker) {
@@ -744,6 +750,7 @@ class Fretboard {
                 border: ${borderWidthPx}px ${borderStyle} ${borderColor};
                 box-shadow: 0 ${Math.floor(markerSize * 0.15)}px ${Math.floor(markerSize * 0.3)}px rgba(0,0,0,0.4);
                 z-index: 15;
+                ${opacity !== 1 ? `opacity: ${opacity};` : ''}
                 ${(isRoot && !disableAnimation) ? 'animation: rootPulse 2s infinite ease-in-out;' : ''}
             `;
         } else {
@@ -784,6 +791,7 @@ class Fretboard {
                 border: ${isRoot ? '3px solid rgba(255,255,255,0.6)' : '2px solid rgba(255,255,255,0.3)'};
                 box-shadow: 0 ${isRoot ? '3px 8px' : '2px 6px'} rgba(0,0,0,0.4);
                 z-index: 15;
+                ${opacity !== 1 ? `opacity: ${opacity};` : ''}
                 ${(isRoot && !disableAnimation) ? 'animation: rootPulse 2s infinite ease-in-out;' : ''}
             `;
         }
@@ -797,9 +805,10 @@ class Fretboard {
             useCustomStyle, 
             backgroundColor, 
             borderColor, 
-            borderWidth, 
+            borderWidth,
             size,
-            disableAnimation
+            disableAnimation,
+            opacity
         });
         // console.log(`Marked fret ${fret} on string ${stringIndex} with key ${key}`);
     }
@@ -890,6 +899,61 @@ class Fretboard {
         fretboardState.fretboardsShowingScale.add(this.containerId);
     }
     
+    /**
+     * Paint the visualization stack across the neck
+     * (VISUALIZATION_STACK_PLAN.md step 8c).
+     *
+     * The fretboard's half of the same contract `Piano.renderStack` answers,
+     * and deliberately produces byte-identical markers to `markScale` for a
+     * scale layer - that equivalence is this step's pass condition, and it is
+     * what lets step 8d move the producers over without changing what is
+     * drawn.
+     *
+     * Every position is resolved by **MIDI number**, not by note name: the
+     * layer decided already whether it meant a pitch class or one specific
+     * pitch, and `resolve` applies that. String comparison never happens, so
+     * a `Gb` layer lights the `F#` frets for free.
+     *
+     * Unlike `markScale` this writes no display-tracking state - no
+     * `fretboardsShowingScale`. Under the stack the stack *is* the tracking;
+     * drawing and bookkeeping stop being the same call (section 6, step 8d).
+     *
+     * Fingering layers (`layer.positions`) are **not** rendered here. A
+     * fingering is a set of (string, fret) pairs that no note list implies,
+     * and `renderFingeringShape` still owns drawing them; 8d moves the
+     * producer and the renderer together, against that function's real
+     * output, rather than guessing its shape a step early.
+     *
+     * @param {{resolve: (midi: number) => object|null}|null} resolved -
+     *        `flattenLayers(getLayers())`, or null to clear the neck.
+     */
+    renderStack(resolved) {
+        this.clearMarkers();
+        if (!resolved) return;
+
+        this.tuning.forEach((stringNote, stringIndex) => {
+            for (let fret = 0; fret <= this.fretCount; fret++) {
+                const entry = resolved.resolve(calculateMidi(stringNote, fret));
+                if (!entry) continue;
+
+                this.markFret(stringIndex, fret, {
+                    backgroundColor: '#ffffff',
+                    borderColor: entry.color || DEFAULT_COLORS.primary,
+                    borderWidth: entry.isRoot ? 4 : 3,
+                    textColor: '#333333',
+                    size: entry.isRoot ? 28 : 24,
+                    label: entry.label,
+                    isRoot: entry.isRoot,
+                    useCustomStyle: true,
+                    // Hue and size are kept; only presence recedes. Dimming
+                    // exists so the layer underneath stays *readable*, which a
+                    // shrunk or recoloured marker would defeat.
+                    opacity: entry.dimmed ? 0.4 : 1
+                });
+            }
+        });
+    }
+
     /**
      * Mark all instances of a specific note on the fretboard
      * @param {string} targetNote - The note to mark (e.g., 'C', 'F#', 'Bb' for all octaves, or 'C/4', 'F#/3' for specific octave)
