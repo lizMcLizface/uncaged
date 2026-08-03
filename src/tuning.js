@@ -38,6 +38,19 @@ function parseNoteOctave(note) {
     return { letter, offset, octave: parseInt(octavePart, 10) };
 }
 
+/**
+ * TODO (convention cleanup): this is 12 below standard MIDI - C4 comes out
+ * as 48, not 60. Harmless internally, because every value it produces is
+ * consumed by semitonesToNoteOctave() below in the same units, but it is the
+ * third place in the codebase using the non-standard octave numbering that
+ * src/theory/notes.js's header documents. Standard MIDI (60 = C4) is the
+ * convention src/theory/notation.js, src/midi.js's `keys` table and all of
+ * src/piano/ use, so anything crossing this module's boundary must convert -
+ * see src/piano/range.js, which goes through notation.js's noteToMidi rather
+ * than reusing this. Worth collapsing onto the standard convention once
+ * something needs a MIDI number out of here; that would also let
+ * getNoteAtStringFret return one directly instead of callers re-deriving it.
+ */
 function noteOctaveToSemitones({ letter, offset, octave }) {
     return octave * 12 + NOTE_TO_SEMITONE[letter] + offset;
 }
