@@ -1,6 +1,9 @@
 # The Visualization Stack — Implementation Plan
 
-Investigated 2026-08-03. Nothing built yet.
+Investigated and built 2026-08-03. **Complete — all six steps landed.**
+This document is now a *record* rather than a plan: §1 is why it existed,
+§2-§5 are the design as built, and §6.1-§6.6 are how each step actually
+went. Read §10 if you are picking the project up fresh.
 
 This is `PIANO_VIEW_PLAN.md` **step 8** ("chord superimposition") widened
 into the refactor it turned out to require. Read `PIANO_VIEW_PLAN.md` §5.1
@@ -868,6 +871,12 @@ mistaken later for something 8d missed.
 
 ## 9. Session kickoff prompt
 
+**This plan is finished.** The prompt below is kept for the shape of it; if
+you are starting a session now, use §10 instead.
+
+<details>
+<summary>The original kickoff prompt (steps 8a-8f)</summary>
+
 ```
 Continue the unCAGED visualization stack.
 
@@ -876,31 +885,18 @@ finding the plan rests on: there is no representation of what is on
 screen, only six flags and a re-derivation ladder. The Status table
 shows what's done; section 6 is the build order.
 
-Then read PIANO_VIEW_PLAN.md sections 5.1 and 8 (the piano is one of the
-two renderers, and its highlight model is this plan's layer payload),
-REFACTOR_PLAN.md section 2 for the working rules and the lessons list
-(2.3 - read it properly), and ARCHITECTURE.md for module contracts.
-
-Do NOT re-survey the codebase. This plan records the file:line of every
-piece it builds on. Trust it, but re-verify any specific line number or
-count you are about to act on - those drift. If you find something that
-contradicts the doc, fix the doc as part of your work and say so.
+Then read PIANO_VIEW_PLAN.md sections 5.1 and 8, REFACTOR_PLAN.md
+section 2 for the working rules and the lessons list (2.3 - read it
+properly), and ARCHITECTURE.md for module contracts.
 
 Three things that are easy to get wrong:
-- Step 8d is a RESTRUCTURING step inside a feature plan. Its fretboard
-  output must be pixel-identical. Any behaviour change it forces gets
-  written down, not absorbed.
 - The stack is the MAIN display only. Mini fretboards and mini pianos
-  push onto it and never subscribe to it (section 3.4). If you find
-  yourself adding multi-instance bookkeeping, stop and re-read it.
-- pressedKey is not a layer (section 2.5). A key held on the computer
-  keyboard must stay lit across every stack render.
-
-Then:
-1. Tell me which step from the Status table you are starting and your
-   first few moves. Wait for my go-ahead before editing anything.
-2. Do only that step. Do not begin the next one.
+  push onto it and never subscribe to it (section 3.4).
+- pressedKey is not a layer (section 2.5).
+- Do NOT re-survey the codebase; re-verify line numbers before acting.
 ```
+
+</details>
 
 **Verification.** `REFACTOR_PLAN.md` §2.2's tooling unchanged
 (`npm test -- --watchAll=false`, `bash scripts/check-build.sh`, the
@@ -916,4 +912,112 @@ Then:
   selectors applies. **Assert the pop, not just the push**: leaking a layer
   on `mouseleave` is the failure mode this whole design exists to prevent,
   and it is invisible in a static capture.
+
+---
+
+## 10. Where things stand, and what is next
+
+**Done, 2026-08-03, six commits** (`58a3ce1`, `a371be3`, `171a7af`,
+`1a8769a`, `3f9e81c`, `e17a330`). 124 tests, 34 build warnings unchanged
+throughout, zero page errors.
+
+### 10.1 What exists now
+
+| | |
+|---|---|
+| `src/visualization/` | `stack.js` (base + overlays, push/pop/subscribe), `flatten.js` (ordering, specificity, dim/hide), `layers.js` (`scaleLayer`/`chordLayer`/`noteLayer`), `index.js` |
+| Renderers | `Piano.renderStack(resolved)` and `Fretboard.renderStack(resolved, layers)`. Neither imports the stack; `src/fretboard/index.js` subscribes both |
+| Producers | all in `src/fretboard/index.js`: `refreshScaleLayer` (base), `pushChordLayer`, `pushScalePreview`, `pushChordPreview`, `popPreviewLayer`, `popChordLayers`, `showFingeringShape`, `reapplySelection` |
+| Sources | Roman numerals, chord grid, scale table, root-note table, progression cards' mini piano and mini fretboard |
+
+**The rules, in one line each.** Later layers win; specific beats periodic
+only *within* a layer; `dimBelow`/`hideBelow` measure from the topmost layer
+that sets them; an overlay is transient unless it says `transient: false`;
+`pressedKey` is not a layer and survives every render.
+
+### 10.2 Known gaps, all deliberate
+
+- **The Scale Position Grid's mini fretboards do not push.** They show a
+  *region* of the neck, not a note set — a layer kind the model does not
+  have. §6.6.
+- **Two live direct writers remain outside the stack**:
+  `progression/fretboardDisplay.js` (the Chord Progression tab) and the
+  `Show All Notes` button. Both paint over the stack and are painted over by
+  it. §8.2.
+- **The phantom nav-button handlers survive.** `src/scales/index.js:236-470`
+  wires click and hover handlers onto `#prevRootBtn`, `#nextRootBtn`,
+  `#prevScaleBtn`, `#nextScaleBtn`, none of which exist anywhere in the repo.
+  Unrelated to this plan (see the correction in §6.6) and still its own
+  dead-code cleanup.
+- **`window.currentDisplayedChord`** (`src/index.js:29`) is a *snapshot copy*
+  of `fretboardState.currentDisplayedChord` taken at module load;
+  `progression/index.js:236` writes to it expecting an effect. It has none.
+  Pre-existing, untouched, and squarely `REFACTOR_PLAN.md` Phase 5's business.
+
+### 10.3 Re-runnable verification
+
+The Playwright scripts live in `.tmp/` (gitignored, so they survive on disk
+but not in the repo). Start the dev server first
+(`bash scripts/dev-server.sh start`):
+
+| Script | Asserts |
+|---|---|
+| `node .tmp/verify-8b.js .tmp/out.json` | piano renders the scale; `pressedKey` survives a repaint; the `dimKey` CSS |
+| `node .tmp/verify-8d.js .tmp/out.json` | hover/pop on the neck, no leaked layers, selection restored after a preview |
+| `node .tmp/verify-8e.js .tmp/out.json` | the chord's real sounding pitches on the piano |
+| `node .tmp/verify-8f.js .tmp/out.json` | scale-table, root-note and mini-fretboard previews |
+
+All four passed together at `e17a330`. If a future change breaks one, that is
+signal, not flake — but check it against the previous commit before assuming
+(`REFACTOR_PLAN.md` §2.3 lesson 8).
+
+### 10.4 What to do next
+
+**`PIANO_VIEW_PLAN.md` step 9 — the instrument-range overlay** — is the only
+piece of the piano feature still outstanding, and §2.5 already settled its
+shape: it is a **renderer-level property of the keys, not a stack layer**, so
+it must show under everything, including an empty stack. `src/piano/range.js`
+and its tests already exist from step 1. Start there.
+
+Optional after that: `PIANO_VIEW_PLAN.md` step 10 (repoint `MiniPiano.js`
+onto `keyModel.js`), which that plan's §3 says to judge on merit rather than
+assume.
+
+### 10.5 Kickoff prompt for a new session
+
+```
+Continue unCAGED. The visualization stack (VISUALIZATION_STACK_PLAN.md)
+is COMPLETE - read its section 10 for what exists and what is next, and
+sections 2 and 3 for the layer model, but do not re-plan it.
+
+The next piece of work is PIANO_VIEW_PLAN.md step 9, the instrument
+range overlay. Read that plan's section 8.2 (the design) and
+VISUALIZATION_STACK_PLAN.md section 2.5 (why it is NOT a stack layer -
+that is already decided, do not relitigate it).
+
+Then read REFACTOR_PLAN.md section 2 for the working rules, the
+verification tooling and the lessons list (2.3 - read it properly), and
+ARCHITECTURE.md sections 6.29-6.31 for the piano and the stack.
+
+Do NOT re-survey the codebase. Those docs record the file:line of every
+piece involved. Trust them, but re-verify any specific line number or
+count you are about to act on, since those drift. If you find something
+that contradicts a doc, fix the doc as part of your work and say so.
+
+Three things that are easy to get wrong:
+- The range overlay is a property of the KEYS, not a layer. If you find
+  yourself calling pushLayer for it, stop and re-read section 2.5.
+- Two ranges must not be conflated: the piano's displayed octave range
+  (user-chosen) and the instrument's playable range. PIANO_VIEW_PLAN.md
+  section 8.2.
+- A green check is not proof. This project shipped a CSS assertion that
+  passed against the wrong value (a transition made getComputedStyle
+  return frame zero) and a Playwright check that passed because a
+  swallowed .catch() meant it never ran. Mutation-check anything
+  load-bearing.
+
+Then:
+1. Tell me what you are starting and your first few moves. Wait for my
+   go-ahead before editing anything.
+2. Do only that step.
 ```

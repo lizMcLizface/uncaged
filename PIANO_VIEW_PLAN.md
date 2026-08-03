@@ -1,7 +1,12 @@
 # Piano View — Implementation Plan
 
-Investigated 2026-08-03. Steps 1-7 landed 2026-08-03. Steps 8-9 remain, both
-additive.
+Investigated 2026-08-03. **Steps 1-8 landed 2026-08-03.** Step 9 (the
+instrument-range overlay) is the only one outstanding; step 10 is optional
+and to be judged on merit.
+
+Step 8 grew into `VISUALIZATION_STACK_PLAN.md` and landed as its step 8e -
+see §10.1. That plan is complete, and its §10 is the current
+where-things-stand for the whole display layer.
 
 Goal: let the user hide the main fretboard at the top of the page and show a
 multi-octave piano keyboard in its place, carrying the same scale
@@ -754,6 +759,10 @@ uses.
 ---
 
 ## 10. Session kickoff prompt
+
+**Steps 1-8 are done; only step 9 remains. For a fresh session use
+`VISUALIZATION_STACK_PLAN.md` §10.5, which is written for that step.** The
+prompt below is the original and is kept for the record.
 
 ```
 Build the unCAGED piano view.
