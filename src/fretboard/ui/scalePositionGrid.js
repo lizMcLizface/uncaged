@@ -37,7 +37,6 @@ import {
 
 const SCALE_POSITION_DEGREES = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII'];
 const MINI_SCALE_FRET_COUNT = 6;
-const GENERIC_VISIBLE_FRET_START = 1;
 const GENERIC_ROOT_DISPLAY_COLUMN = 1;
 const SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET = 0;
 
@@ -238,13 +237,13 @@ export function createScalePositionMiniFretboard(
             let intervalColor = getIntervalColor(colorSemitone);
             if(fretboardState.scalePositionDarkDuplicate){
                 // If the note is on an x-position of 4 or higher, darken the color to indicate it's a duplicate note in the scale position grid.
-                if(displayColumn >= 6 && stringIndex != 2){
+                if(displayColumn >= 6 && stringIndex !== 2){
                     intervalColor = shadeColor(intervalColor, -70);
                 }
-                else if(displayColumn >= 5 && stringIndex == 2){
+                else if(displayColumn >= 5 && stringIndex === 2){
                     intervalColor = shadeColor(intervalColor, -70);
                 }
-                if(displayColumn == 0){
+                if(displayColumn === 0){
                     intervalColor = shadeColor(intervalColor, -70);
                 }
             }

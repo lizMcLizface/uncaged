@@ -17,7 +17,7 @@
  */
 import { getScaleNotes } from '../scales';
 import { chords } from '../chords';
-import { areArraysEnharmonicEquivalent, normalizeNote, noteToMidi as notationNoteToMidi, midiToNote as notationMidiToNote } from './notation';
+import { areArraysEnharmonicEquivalent, noteToMidi as notationNoteToMidi, midiToNote as notationMidiToNote } from './notation';
 
 function intervalToSemitones(interval) {
     switch (interval) {

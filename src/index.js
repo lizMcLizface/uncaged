@@ -75,13 +75,13 @@ function onKeyPress(event, up) {
         return;
     }
     // Handle octave and navigation keys
-    if (event.type == 'keydown' && event.code == 'KeyZ'){
+    if (event.type === 'keydown' && event.code === 'KeyZ'){
         console.log('Reducing Base Octave: ', baseOctave);
         baseOctave -= 1;
         if(baseOctave < 0) baseOctave = 0;
         updateCurrentScaleDisplay(); // Refresh Scale Information pianos to the new octave
     }
-    if (event.type == 'keydown' && event.code == 'KeyX'){
+    if (event.type === 'keydown' && event.code === 'KeyX'){
         console.log('Increasing Base Octave: ', baseOctave);
         baseOctave += 1;
         if(baseOctave > 8) baseOctave = 8;
@@ -94,32 +94,32 @@ function onKeyPress(event, up) {
     // sequentially through every family x mode combination. Outside exclusive
     // mode, the keys fall back to cycling through whatever's in the
     // multi-select arrays (the original behavior).
-    if (event.type == 'keydown' && event.code == 'KeyN'){
+    if (event.type === 'keydown' && event.code === 'KeyN'){
         if (scaleState.exclusiveMode ? navigateModeDownExclusive() : navigateToPreviousScale()) {
             console.log('Navigated mode down');
         }
         return; // Don't process as a musical note
     }
-    if (event.type == 'keydown' && event.code == 'KeyM'){
+    if (event.type === 'keydown' && event.code === 'KeyM'){
         if (scaleState.exclusiveMode ? navigateModeUpExclusive() : navigateToNextScale()) {
             console.log('Navigated mode up');
         }
         return; // Don't process as a musical note
     }
-    if (event.type == 'keydown' && event.code == 'KeyV' && scaleState.exclusiveMode){
+    if (event.type === 'keydown' && event.code === 'KeyV' && scaleState.exclusiveMode){
         if (navigateScaleFamilyDownExclusive()) {
             console.log('Navigated scale family down');
         }
         return; // Don't process as a musical note
     }
-    if (event.type == 'keydown' && event.code == 'KeyB' && scaleState.exclusiveMode){
+    if (event.type === 'keydown' && event.code === 'KeyB' && scaleState.exclusiveMode){
         if (navigateScaleFamilyUpExclusive()) {
             console.log('Navigated scale family up');
         }
         return; // Don't process as a musical note
     }
 
-    if (event.type == 'keydown' && event.code == 'Comma'){
+    if (event.type === 'keydown' && event.code === 'Comma'){
         if (event.shiftKey && scaleState.exclusiveMode) {
             if (navigateSequentialDownExclusive()) {
                 console.log('Navigated sequentially down');
@@ -129,7 +129,7 @@ function onKeyPress(event, up) {
         }
         return; // Don't process as a musical note
     }
-    if (event.type == 'keydown' && event.code == 'Period'){
+    if (event.type === 'keydown' && event.code === 'Period'){
         if (event.shiftKey && scaleState.exclusiveMode) {
             if (navigateSequentialUpExclusive()) {
                 console.log('Navigated sequentially up');
@@ -155,7 +155,7 @@ function onKeyPress(event, up) {
     // Convert note format for PolySynth
     const noteWithOctave = note.replace('/', '');
 
-    if (event.type == 'keydown' && !currentPressed.includes(note)) {
+    if (event.type === 'keydown' && !currentPressed.includes(note)) {
         console.log('Key Down: ', note, '-> PolySynth format:', noteWithOctave);
         currentPressed.push(note);
 
@@ -181,12 +181,12 @@ function onKeyPress(event, up) {
         }
 
         // Add visual feedback to piano keys if available
-        var midi = noteToMidi(note) + 12;
+        const midi = noteToMidi(note) + 12;
         if (keys[midi] && keys[midi].element) {
             keys[midi].element.classList.add('pressedKey');
         }
     }
-    else if (event.type == 'keyup' && currentPressed.includes(note)) {
+    else if (event.type === 'keyup' && currentPressed.includes(note)) {
         console.log('Key Up: ', note, '-> PolySynth format:', noteWithOctave);
         currentPressed = currentPressed.filter(item => item !== note);
 
@@ -196,7 +196,7 @@ function onKeyPress(event, up) {
         }
 
         // Remove visual feedback from piano keys if available
-        var midi = noteToMidi(note) + 12;
+        const midi = noteToMidi(note) + 12;
         if (keys[midi] && keys[midi].element) {
             keys[midi].element.classList.remove('pressedKey');
         }

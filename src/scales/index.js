@@ -53,8 +53,6 @@ import {
     refreshChordsForRootNote
 } from './state';
 
-const getElementByNote = (note) =>
-  note && document.querySelector(`[note="${note}_scale"]`);
 const getElementByMIDI = (note) =>
   note && document.querySelector(`[midi="${note}_scale"]`);
 
@@ -108,14 +106,14 @@ function highlightKeysForScales(notes){
 
 var currentScaleHighlight = []
 function highlightScaleNotes(noteArray){
-    for( var key of currentScaleHighlight){
-        var midi = noteToMidi(key) + 12;
+    for( const key of currentScaleHighlight){
+        const midi = noteToMidi(key) + 12;
         keys[midi].element.classList.remove('scaleKey');
     }
     currentScaleHighlight = [];
     if(Array.isArray(noteArray)){
-        for(var key of noteArray){
-            var midi = noteToMidi(key) + 12;
+        for(const key of noteArray){
+            const midi = noteToMidi(key) + 12;
             // console.log('key: ', key, ' midi note:', midi);
             // console.log(keys[midi])
             if(midi >=  parseInt($('#lowestNoteSelection').val()) && midi <=  parseInt($('#highestNoteSelection').val())){
@@ -124,8 +122,8 @@ function highlightScaleNotes(noteArray){
             }
         }
     }else{
-        var midi = noteToMidi(noteArray) + 12;
-        keys[midi].element.classList.add('scaleKey');;   
+        const midi = noteToMidi(noteArray) + 12;
+        keys[midi].element.classList.add('scaleKey');;
         currentScaleHighlight.push(noteArray);     
     }
 }

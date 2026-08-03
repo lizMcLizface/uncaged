@@ -4,7 +4,6 @@ import {
     relaBlock,
     relaInline,
     absCenter,
-    vertCenter,
     absFill,
 } from '../../styles/util';
 

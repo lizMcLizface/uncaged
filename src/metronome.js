@@ -1,8 +1,6 @@
 import $ from 'jquery';
 import { audioContext } from './audio/context';
 
-const animations = document.querySelectorAll('[data-animation');
-
 function reset(){    
     var el = document.getElementsByClassName('metronome');
     Array.from(el).forEach((e) =>{
@@ -306,8 +304,7 @@ class Metronome
         if (alignToNextBeat) {
             // Align to the next quarter note beat first
             const nextBeatNumber = Math.floor(elapsedTime / this.timePerBeat) + 1;
-            const nextBeatTime = this.getTimeForBeat(nextBeatNumber);
-            
+
             // Find the next half note aligned beat from that point
             const beatsFromReference = nextBeatNumber;
             const nextHalfNoteBeat = Math.ceil(beatsFromReference / 2) * 2;
@@ -329,8 +326,7 @@ class Metronome
         if (alignToNextBeat) {
             // Align to the next quarter note beat first
             const nextBeatNumber = Math.floor(elapsedTime / this.timePerBeat) + 1;
-            const nextBeatTime = this.getTimeForBeat(nextBeatNumber);
-            
+
             // Find the next whole note aligned beat from that point
             const beatsFromReference = nextBeatNumber;
             const nextWholeNoteBeat = Math.ceil(beatsFromReference / 4) * 4;
@@ -491,9 +487,9 @@ class Metronome
         const envelope = this.audioContext.createGain();
         
         osc.frequency.value = 800;
-        if ((beatNumber % this.beatsPerBar == 0) && noteNumber == 0) 
+        if ((beatNumber % this.beatsPerBar === 0) && noteNumber === 0)
             osc.frequency.value = 800;
-        else if (noteNumber != 0)
+        else if (noteNumber !== 0)
             osc.frequency.value = 800;
         else
             osc.frequency.value=800;
@@ -524,12 +520,7 @@ class Metronome
         const currentTime = this.getCurrentTime();
         const lookAheadTime = currentTime + this.scheduleAheadTime;
         
-        // Get the next beat time using the existing getNextNoteTime method
-        const nextBeatTime = this.getNextNoteTime('quarter');
-        const nextBeatTimeAudio = this.performanceTimeToAudioTime(nextBeatTime);
-        
-        // console.log(`Current time: ${currentTime}, Next beat time: ${nextBeatTimeAudio}`);
-        
+
         // Calculate which beats need to be scheduled within the lookahead window
         const elapsedTime = currentTime - this.referenceTime;
         const lookAheadElapsedTime = lookAheadTime - this.referenceTime;

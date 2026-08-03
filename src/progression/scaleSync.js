@@ -74,7 +74,6 @@ function setupScaleChangeListener() {
     setInterval(checkForScaleChanges, 2000);
 
     // Also add a more frequent check specifically for scale notes display updates
-    let lastDisplayedNotes = '';
     setInterval(() => {
         const scaleNotesDisplay = document.getElementById('scaleNotesDisplay');
         if (scaleNotesDisplay) {

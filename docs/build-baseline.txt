@@ -1,11 +1,6 @@
 src\chordPatterns.js
-  Line 242:9:   Duplicate key 'dominant7_B_string'                              no-dupe-keys
-  Line 413:9:   Duplicate key 'diminished7_D_string'                            no-dupe-keys
-  Line 474:9:   Duplicate key 'augmented_B_string'                              no-dupe-keys
-  Line 489:9:   Duplicate key 'augmented_G_string'                              no-dupe-keys
-  Line 1140:9:  Duplicate key 'mM7_D_string'                                    no-dupe-keys
-  Line 1345:9:  Duplicate key 'm6_E_string2'                                    no-dupe-keys
-  Line 1457:1:  Assign object to a variable before exporting as module default  import/no-anonymous-default-export
+  Line 397:9:  Duplicate key 'diminished7_A_string'  no-dupe-keys
+  Line 507:9:  Duplicate key 'augmented_E_string'    no-dupe-keys
 
 src\chords.js
   Line 191:24:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote'                                                                             no-loop-func
@@ -17,15 +12,6 @@ src\chords.js
   Line 758:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
   Line 788:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
   Line 834:33:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
-
-src\components\Knob\Knob.styled.js
-  Line 7:5:  'vertCenter' is defined but never used  no-unused-vars
-
-src\components\MiniStave\MiniStave.js
-  Line 513:19:  'baseNote' is assigned a value but never used  no-unused-vars
-
-src\components\Module\Module.styled.js
-  Line 2:22:  'absCenter' is defined but never used  no-unused-vars
 
 src\components\MonoSynth\MonoSynth.js
   Line 864:9:   Unreachable code          no-unreachable
@@ -45,15 +31,14 @@ src\components\PolySynth\PolySynth.jsx
   Line 29:5:     'Lines' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            no-unused-vars
   Line 303:11:   'octaveUp' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                no-unused-vars
   Line 310:11:   'octaveDown' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                              no-unused-vars
-  Line 1907:13:  Unreachable code                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             no-unreachable
-  Line 2023:9:   React Hook useImperativeHandle has missing dependencies: 'activateSynth', 'handleArpeggiatorTranspose', 'handleChordCapture', 'playNotesProgrammatic', 'scheduleNextProgressionChordWithRate', 'startArpeggiator', 'startChordCapture', 'startProgressionSequencer', 'stopAllNotesProgrammatic', 'stopArpeggiator', 'stopNotesProgrammatic', 'stopProgressionSequencer', 'stopTransposedNotes', 'toggleArpeggiator', 'toggleProgressionSequencer', and 'transposeChord'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
-  Line 2050:11:  'noteOn' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  no-unused-vars
-  Line 2079:11:  'noteOff' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 no-unused-vars
-  Line 2122:53:  The ref value 'batchedParameterUpdate.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'batchedParameterUpdate.current' to a variable inside the effect, and use that variable in the cleanup function                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
-  Line 2138:8:   React Hook useLayoutEffect has missing dependencies: 'stopAllNotesProgrammatic' and 'stopArpeggiator'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                    react-hooks/exhaustive-deps
-  Line 2492:8:   React Hook useEffect has a missing dependency: 'stopArpeggiator'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
-  Line 2511:8:   React Hook useEffect has a missing dependency: 'scheduleNextArpeggiatorNoteOnBeat'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
-  Line 2525:8:   React Hook useEffect has a missing dependency: 'scheduleNextArpeggiatorNoteOnBeat'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
+  Line 2012:9:   React Hook useImperativeHandle has missing dependencies: 'activateSynth', 'handleArpeggiatorTranspose', 'handleChordCapture', 'playNotesProgrammatic', 'scheduleNextProgressionChordWithRate', 'startArpeggiator', 'startChordCapture', 'startProgressionSequencer', 'stopAllNotesProgrammatic', 'stopArpeggiator', 'stopNotesProgrammatic', 'stopProgressionSequencer', 'stopTransposedNotes', 'toggleArpeggiator', 'toggleProgressionSequencer', and 'transposeChord'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+  Line 2039:11:  'noteOn' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  no-unused-vars
+  Line 2068:11:  'noteOff' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 no-unused-vars
+  Line 2111:53:  The ref value 'batchedParameterUpdate.current' will likely have changed by the time this effect cleanup function runs. If this ref points to a node rendered by React, copy 'batchedParameterUpdate.current' to a variable inside the effect, and use that variable in the cleanup function                                                                                                                                                                                                                                  react-hooks/exhaustive-deps
+  Line 2127:8:   React Hook useLayoutEffect has missing dependencies: 'stopAllNotesProgrammatic' and 'stopArpeggiator'. Either include them or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                    react-hooks/exhaustive-deps
+  Line 2481:8:   React Hook useEffect has a missing dependency: 'stopArpeggiator'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                           react-hooks/exhaustive-deps
+  Line 2500:8:   React Hook useEffect has a missing dependency: 'scheduleNextArpeggiatorNoteOnBeat'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
+  Line 2514:8:   React Hook useEffect has a missing dependency: 'scheduleNextArpeggiatorNoteOnBeat'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                         react-hooks/exhaustive-deps
 
 src\components\Select\Select.jsx
   Line 32:8:  React Hook useEffect has a missing dependency: 'handleClick'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
@@ -61,104 +46,11 @@ src\components\Select\Select.jsx
 src\components\ThemeSelector\ThemeSelector.jsx
   Line 47:18:  Unreachable code  no-unreachable
 
-src\fretboard\Fretboard.js
-  Line 81:5:  Expected a default case  default-case
-
-src\fretboard\ui\scalePositionGrid.js
-  Line 40:7:    'GENERIC_VISIBLE_FRET_START' is assigned a value but never used  no-unused-vars
-  Line 241:54:  Expected '!==' and instead saw '!='                              eqeqeq
-  Line 244:59:  Expected '===' and instead saw '=='                              eqeqeq
-  Line 247:34:  Expected '===' and instead saw '=='                              eqeqeq
-
-src\index.js
-  Line 78:20:   Expected '===' and instead saw '=='  eqeqeq
-  Line 78:47:   Expected '===' and instead saw '=='  eqeqeq
-  Line 84:20:   Expected '===' and instead saw '=='  eqeqeq
-  Line 84:47:   Expected '===' and instead saw '=='  eqeqeq
-  Line 97:20:   Expected '===' and instead saw '=='  eqeqeq
-  Line 97:47:   Expected '===' and instead saw '=='  eqeqeq
-  Line 103:20:  Expected '===' and instead saw '=='  eqeqeq
-  Line 103:47:  Expected '===' and instead saw '=='  eqeqeq
-  Line 109:20:  Expected '===' and instead saw '=='  eqeqeq
-  Line 109:47:  Expected '===' and instead saw '=='  eqeqeq
-  Line 115:20:  Expected '===' and instead saw '=='  eqeqeq
-  Line 115:47:  Expected '===' and instead saw '=='  eqeqeq
-  Line 122:20:  Expected '===' and instead saw '=='  eqeqeq
-  Line 122:47:  Expected '===' and instead saw '=='  eqeqeq
-  Line 132:20:  Expected '===' and instead saw '=='  eqeqeq
-  Line 132:47:  Expected '===' and instead saw '=='  eqeqeq
-  Line 158:20:  Expected '===' and instead saw '=='  eqeqeq
-  Line 189:25:  Expected '===' and instead saw '=='  eqeqeq
-  Line 199:13:  'midi' is already defined            no-redeclare
-
-src\keyboard.js
-  Line 5:5:  Expected a default case  default-case
-
-src\metronome.js
-  Line 4:7:     'animations' is assigned a value but never used         no-unused-vars
-  Line 309:19:  'nextBeatTime' is assigned a value but never used       no-unused-vars
-  Line 332:19:  'nextBeatTime' is assigned a value but never used       no-unused-vars
-  Line 494:44:  Expected '===' and instead saw '=='                     eqeqeq
-  Line 494:64:  Expected '===' and instead saw '=='                     eqeqeq
-  Line 496:29:  Expected '!==' and instead saw '!='                     eqeqeq
-  Line 529:15:  'nextBeatTimeAudio' is assigned a value but never used  no-unused-vars
-
 src\midi.js
   Line 35:45:   Function declared in a loop contains unsafe references to variable(s) 'isMouseDown', 'currentMouseNote'                                                                                                                                                                  no-loop-func
   Line 63:46:   Function declared in a loop contains unsafe references to variable(s) 'isMouseDown', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote'  no-loop-func
   Line 107:43:  Function declared in a loop contains unsafe references to variable(s) 'isMouseDown', 'currentMouseNote'                                                                                                                                                                  no-loop-func
   Line 128:46:  Function declared in a loop contains unsafe references to variable(s) 'isMouseDown'                                                                                                                                                                                      no-loop-func
-
-src\nodes\flanger.js
-  Line 2:8:  'Filter' is defined but never used                  no-unused-vars
-  Line 3:8:  'Oscillator' is defined but never used              no-unused-vars
-  Line 7:7:  'MAX_LFO_RATE' is assigned a value but never used   no-unused-vars
-  Line 8:7:  'MAX_LFO_DEPTH' is assigned a value but never used  no-unused-vars
-
-src\nodes\reverbBase64Strings\reverb1.js
-  Line 1:1:  Assign literal to a variable before exporting as module default  import/no-anonymous-default-export
-
-src\nodes\reverbBase64Strings\reverb2.js
-  Line 1:1:  Assign literal to a variable before exporting as module default  import/no-anonymous-default-export
-
-src\nodes\reverbBase64Strings\reverb3.js
-  Line 2:1:  Assign literal to a variable before exporting as module default  import/no-anonymous-default-export
-
-src\nodes\reverbBase64Strings\reverb4.js
-  Line 2:1:  Assign literal to a variable before exporting as module default  import/no-anonymous-default-export
-
-src\nodes\reverbBase64Strings\reverb5.js
-  Line 1:1:  Assign literal to a variable before exporting as module default  import/no-anonymous-default-export
-
-src\nodes\reverbBase64Strings\reverb6.js
-  Line 1:1:  Assign literal to a variable before exporting as module default  import/no-anonymous-default-export
-
-src\progression\parse.js
-  Line 398:41:  Expected '===' and instead saw '=='  eqeqeq
-
-src\progression\scaleSync.js
-  Line 77:9:  'lastDisplayedNotes' is assigned a value but never used  no-unused-vars
-
-src\progression\share.js
-  Line 138:10:  'encodeStateToURL' is defined but never used  no-unused-vars
-
-src\scales\index.js
-  Line 56:7:    'getElementByNote' is assigned a value but never used  no-unused-vars
-  Line 117:17:  'key' is already defined                               no-redeclare
-  Line 118:17:  'midi' is already defined                              no-redeclare
-  Line 127:13:  'midi' is already defined                              no-redeclare
-
-src\scales\state.js
-  Line 75:5:    'scalePositionDarkDuplicate' is assigned a value but never used  no-unused-vars
-  Line 341:10:  'getSelectedScales' is defined but never used                    no-unused-vars
-  Line 345:10:  'clearSelectedScales' is defined but never used                  no-unused-vars
-  Line 353:10:  'addSelectedScale' is defined but never used                     no-unused-vars
-  Line 373:10:  'removeSelectedScale' is defined but never used                  no-unused-vars
-  Line 414:10:  'getPrimaryScaleChords' is defined but never used                no-unused-vars
-  Line 429:10:  'getAllSelectedScaleChords' is defined but never used            no-unused-vars
-
-src\scales\ui\scaleTable.js
-  Line 271:18:  Expected '===' and instead saw '=='  eqeqeq
 
 src\styles\constants.js
   Line 2:7:   'size0' is assigned a value but never used   no-unused-vars
@@ -168,16 +60,4 @@ src\styles\constants.js
   Line 15:7:  'size40' is assigned a value but never used  no-unused-vars
   Line 18:7:  'size72' is assigned a value but never used  no-unused-vars
   Line 19:7:  'size80' is assigned a value but never used  no-unused-vars
-
-src\theory\chords.js
-  Line 20:41:  'normalizeNote' is defined but never used  no-unused-vars
-
-src\theory\notation.js
-  Line 140:10:  'getNoteDistance' is defined but never used  no-unused-vars
-
-src\theory\notes.js
-  Line 44:5:  Expected a default case  default-case
-
-src\util\presetData.js
-  Line 1:1:  Assign object to a variable before exporting as module default  import/no-anonymous-default-export
 

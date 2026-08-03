@@ -1,11 +1,7 @@
 import Gain from './gain';
-import Filter from './filter';
-import Oscillator from './oscillator';
 import LFO from './lfo';
 
 const MAX_DELAY_TIME = 1;
-const MAX_LFO_RATE = 5;
-const MAX_LFO_DEPTH = 5;
 
 class Flanger {
     constructor(AC) {

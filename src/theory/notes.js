@@ -49,6 +49,7 @@ function noteToMidi(note) {
         case 'g': key = 7; break;
         case 'a': key = 9; break;
         case 'b': key = 11; break;
+        default: break; // unrecognized pitch letter keeps key = 0, as before
     }
     return (octave * 12) + key + offset;
 }

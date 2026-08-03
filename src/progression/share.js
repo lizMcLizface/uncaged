@@ -131,17 +131,11 @@ function decodeStateFromURLParams(params) {
 }
 
 /**
- * Legacy function - Encode state object to URL-safe string (Base64)
- * @param {Object} state - State object to encode
- * @returns {string} Base64 encoded state string
- */
-function encodeStateToURL(state) {
-    const stateString = JSON.stringify(state);
-    return btoa(encodeURIComponent(stateString));
-}
-
-/**
  * Legacy function - Decode URL-safe string back to state object
+ *
+ * Decode-only by design: the matching encodeStateToURL was removed once it had
+ * no callers. Nothing produces this Base64 format any more - only already-shared
+ * legacy URLs still carry it, and those still need to open.
  * @param {string} encodedState - Base64 encoded state string
  * @returns {Object|null} Decoded state object or null if invalid
  */

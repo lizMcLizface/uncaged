@@ -22,6 +22,7 @@ function keyToNote(event, octave){
         case 'Semicolon': return 'B/' + octave;
         case 'Quote': return 'C/' + (octave + 1);
         case 'BracketRight': return 'C#/' + (octave + 1);
+        default: break; // unmapped key - fall through to the undefined return
     }
     return undefined;
 }

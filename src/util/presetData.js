@@ -1,4 +1,4 @@
-export default {
+const presetData = {
     '- INIT -': {
         masterVolume: 0.75,
         polyphony: 8,
@@ -712,3 +712,5 @@ export default {
     },
     
 };
+
+export default presetData;

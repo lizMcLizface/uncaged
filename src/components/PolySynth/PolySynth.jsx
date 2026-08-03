@@ -1898,17 +1898,6 @@ const PolySynth = React.forwardRef(({ className, setTheme, currentTheme }, ref) 
                 octaveRatio: pitchEnv.Octave,
                 allThemPitches: pitchEnv.AllThemPitches
             };
-
-            // console.log('Getting pitch values:', {
-            //     pitchC, pitchCSharp, pitchD, pitchDSharp, pitchE, pitchF,
-            //     pitchFSharp, pitchG, pitchGSharp, pitchA, pitchASharp, pitchB,
-            //     octaveRatio, allThemPitches
-            // });
-            return {
-                pitchC, pitchCSharp, pitchD, pitchDSharp, pitchE, pitchF,
-                pitchFSharp, pitchG, pitchGSharp, pitchA, pitchASharp, pitchB,
-                octaveRatio, allThemPitches
-            };
         },
         setPitchValues: (values) => {
             // console.log('Setting pitch values:', values, pitchEnv);

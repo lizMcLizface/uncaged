@@ -95,6 +95,7 @@ export function addInteractiveEvent(element, eventType, handler) {
                 handler(e);
             });
             break;
+        default: break; // unknown eventType wires nothing, as before
     }
 }
 

@@ -7,19 +7,14 @@
 // bare identifier now reads/writes `scaleState.<name>` instead; nothing
 // about when or why each field changes was touched.
 //
-// `getSelectedScales`/`clearSelectedScales`/`addSelectedScale`/
-// `removeSelectedScale`/`getPrimaryScaleChords`/`getAllSelectedScaleChords`
-// moved here verbatim but are dead code - not exported, and grepping all of
-// src/ found zero callers of any of the six, internal or external, before
-// this move. Left in place rather than deleted, consistent with how Phase 1
-// left other inert dead code alone in a restructuring-only phase.
-// `scalePositionDarkDuplicate` is a second, unrelated orphan: a same-named
-// leftover from before Phase 3 moved the *real* one to
-// `fretboardState.scalePositionDarkDuplicate` - zero readers anywhere.
-//
-// Lifted from scaleGenerator.js as part of REFACTOR_PLAN.md Phase 4.
+// Lifted from scaleGenerator.js as part of REFACTOR_PLAN.md Phase 4. That
+// move carried six dead functions (`getSelectedScales`/`clearSelectedScales`/
+// `addSelectedScale`/`removeSelectedScale`/`getPrimaryScaleChords`/
+// `getAllSelectedScaleChords`) and an orphaned `scalePositionDarkDuplicate`
+// verbatim, since Phase 4 was restructuring-only; the lint pass after Phase
+// 1b deleted all seven.
 
-import { HeptatonicScales, precomputeScaleChords, getChordsForScale } from './scaleData';
+import { HeptatonicScales, precomputeScaleChords } from './scaleData';
 import { updateCurrentScaleDisplay } from '.';
 import { createHeptatonicScaleTable } from './ui/scaleTable';
 
@@ -71,8 +66,6 @@ const scaleState = {
         10: 'A♯'  // Default to sharp for A♯/B♭
     }
 };
-
-let scalePositionDarkDuplicate = true; // Toggle for dark duplicate functionality
 
 // Helper function to get chromatic position of a note
 function getChromaticPosition(note) {
@@ -337,55 +330,6 @@ function navigateSequentialDownExclusive() {
     return true;
 }
 
-// Utility functions to manage selected scales
-function getSelectedScales() {
-    return scaleState.selectedScales.slice(); // Return a copy of the array
-}
-
-function clearSelectedScales() {
-    scaleState.selectedScales = [];
-    scaleState.primaryScaleIndex = 0;
-    // Refresh the table to update visual state
-    createHeptatonicScaleTable();
-    updateCurrentScaleDisplay();
-}
-
-function addSelectedScale(scaleId) {
-    if (!scaleState.selectedScales.includes(scaleId)) {
-        scaleState.selectedScales.push(scaleId);
-
-        // Precompute chords for this scale with current root note(s)
-        const rootNotes = Array.isArray(scaleState.selectedRootNote) ? scaleState.selectedRootNote : [scaleState.selectedRootNote];
-        for (const rootNote of rootNotes) {
-            precomputeScaleChords(scaleId, rootNote);
-        }
-
-        // If this is the first scale being added, make it primary
-        if (scaleState.selectedScales.length === 1) {
-            scaleState.primaryScaleIndex = 0;
-        }
-        // Refresh the table to update visual state
-        createHeptatonicScaleTable();
-        updateCurrentScaleDisplay();
-    }
-}
-
-function removeSelectedScale(scaleId) {
-    const index = scaleState.selectedScales.indexOf(scaleId);
-    if (index > -1) {
-        scaleState.selectedScales.splice(index, 1);
-        // Adjust primary scale index if needed
-        if (scaleState.primaryScaleIndex >= scaleState.selectedScales.length) {
-            scaleState.primaryScaleIndex = Math.max(0, scaleState.selectedScales.length - 1);
-        } else if (scaleState.primaryScaleIndex > index) {
-            scaleState.primaryScaleIndex--;
-        }
-        // Refresh the table to update visual state
-        createHeptatonicScaleTable();
-        updateCurrentScaleDisplay();
-    }
-}
-
 function toggleSelectionMode() {
     scaleState.exclusiveMode = !scaleState.exclusiveMode;
 
@@ -405,36 +349,6 @@ function toggleSelectionMode() {
     // console.log(`Selection mode: ${exclusiveMode ? 'Exclusive' : 'Multiple'}`);
     // Don't call createHeptatonicScaleTable here - let the event listener handle it
     persistScaleSelection();
-}
-
-/**
- * Get precomputed chords for the primary selected scale with the primary root note
- * @returns {object|null} Chord data or null if no primary scale/root
- */
-function getPrimaryScaleChords() {
-    const primaryScale = getPrimaryScale();
-    const primaryRootNote = getPrimaryRootNote();
-
-    if (!primaryScale || !primaryRootNote) {
-        return null;
-    }
-
-    return getChordsForScale(primaryScale, primaryRootNote);
-}
-
-/**
- * Get precomputed chords for all selected scales with current root note
- * @returns {Array<object>} Array of chord data for all selected scales
- */
-function getAllSelectedScaleChords() {
-    const primaryRootNote = getPrimaryRootNote();
-    if (!primaryRootNote) {
-        return [];
-    }
-
-    return scaleState.selectedScales.map(scaleId => {
-        return getChordsForScale(scaleId, primaryRootNote);
-    }).filter(chordData => chordData !== null);
 }
 
 /**
