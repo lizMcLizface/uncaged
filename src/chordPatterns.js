@@ -394,21 +394,21 @@ export function getChordPatterns() {
             maxFret: 18
         },
         // Diminished7 patterns (for vii° chord)
-        'diminished7_A_string': {
-            name: 'Diminished (A String Root)',
-            chordType: 'dim7',
-            description: 'Diminished chord with root on A string',
-            rootString: 4,
-            notes: [
-                { string: 4, fretOffset: -1, interval: 1, label: 'R' }, // Root
-                { string: 3, fretOffset: 0, interval: 'b3', label: 'b3' }, // Minor 3rd
-                { string: 2, fretOffset: -2, interval: 'b5', label: 'b5' }, // Diminished 5th
-                { string: 1, fretOffset: 0, interval: 1, label: 'R' }  // Root
-            ],
-            openVoicingOnly: false,
-            minFret: 2,
-            maxFret: 18
-        },
+        // 'diminished7_A_string': {
+        //     name: 'Diminished (A String Root)',
+        //     chordType: 'dim7',
+        //     description: 'Diminished chord with root on A string',
+        //     rootString: 4,
+        //     notes: [
+        //         { string: 4, fretOffset: -1, interval: 1, label: 'R' }, // Root
+        //         { string: 3, fretOffset: 0, interval: 'b3', label: 'b3' }, // Minor 3rd
+        //         { string: 2, fretOffset: -2, interval: 'b5', label: 'b5' }, // Diminished 5th
+        //         { string: 1, fretOffset: 0, interval: 1, label: 'R' }  // Root
+        //     ],
+        //     openVoicingOnly: false,
+        //     minFret: 2,
+        //     maxFret: 18
+        // },
         // Diminished7 patterns (for vii° chord)
         'diminished7_E_string': {
             name: 'Diminished (E String Root)',
@@ -441,21 +441,21 @@ export function getChordPatterns() {
             maxFret: 18
         },
         // augmented
-        'augmented_E_string': {
-            name: 'Augmented (E String Root)',
-            chordType: 'aug',
-            description: 'Augmented chord with root on E string',
-            rootString: 0,
-            notes: [
-                { string: 3, fretOffset: 1, interval: 'b3', label: 'b3' }, // Minor 3rd
-                { string: 2, fretOffset: 0, interval: 'b5', label: 'b5' }, // Diminished 5th
-                { string: 1, fretOffset: 0, interval: 1, label: 'R' },  // Root
-                { string: 0, fretOffset: -1, interval: 1, label: 'R' }  // Root
-            ],
-            openVoicingOnly: false,
-            minFret: 1,
-            maxFret: 18
-        },
+        // 'augmented_E_string': {
+        //     name: 'Augmented (E String Root)',
+        //     chordType: 'aug',
+        //     description: 'Augmented chord with root on E string',
+        //     rootString: 0,
+        //     notes: [
+        //         { string: 3, fretOffset: 1, interval: 'b3', label: 'b3' }, // Minor 3rd
+        //         { string: 2, fretOffset: 0, interval: 'b5', label: 'b5' }, // Diminished 5th
+        //         { string: 1, fretOffset: 0, interval: 1, label: 'R' },  // Root
+        //         { string: 0, fretOffset: -1, interval: 1, label: 'R' }  // Root
+        //     ],
+        //     openVoicingOnly: false,
+        //     minFret: 1,
+        //     maxFret: 18
+        // },
         'augmented_G_string': {
             name: 'Augmented (G String Root)',
             chordType: 'aug',

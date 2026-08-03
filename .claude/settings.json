@@ -7,7 +7,9 @@
       "Bash(npm run build)",
       "Bash(git status)",
       "Bash(git diff *)",
-      "Bash(git log *)"
+      "Bash(git log *)",
+      "Bash(grep -c \"^//\" \"c:/dev/pianote/uncaged/src/progressions.js\")",
+      "Bash(bash scripts/check-build.sh)"
     ]
   }
 }
