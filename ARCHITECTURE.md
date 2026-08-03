@@ -3,8 +3,8 @@
 Living document. Updated as `REFACTOR_PLAN.md` phases land — see that file for
 what's left to do (its §1) and the documentation discipline this follows
 (its §2.4). Seeded 2026-08-01 as the Phase 0 baseline (the pre-refactor
-shape, warts included); current through Phase 4c and `PIANO_VIEW_PLAN.md`
-steps 1-7, 2026-08-03. Sections describe the *current* shape, not an
+shape, warts included); current through Phase 4c, `PIANO_VIEW_PLAN.md`
+steps 1-8 and all of `VISUALIZATION_STACK_PLAN.md`, 2026-08-03. Sections describe the *current* shape, not an
 aspirational one — planned features live in `SESSION_MODE_FEASIBILITY.md`
 and `PIANO_VIEW_PLAN.md`. Features land here the same way phases do (§6.29
 is the first): this file maps what exists, whichever plan produced it.
@@ -22,9 +22,13 @@ different colors. Measured before the change: E Aeolian's ♭3 and E Ionian's
 `rgb(210, 242, 95)`. `SCALE_COLORS` is deleted. The claim now holds for every
 instrument in the app. See §6.30.
 
-**Where the detail lives:** §6 is indexed by *module* (§6.1-§6.28, one per
+**Where the detail lives:** §6 is indexed by *module* (§6.1-§6.31, one per
 extracted module, in the order they landed) rather than by phase, so it stays
-useful once the phases are history. §5 is the shrinking list of surviving
+useful once the phases are history. **§6.31 is the one to read first for
+anything that draws on the fretboard or the piano**: since
+`VISUALIZATION_STACK_PLAN.md` step 8d, a single layer stack decides what the
+main display shows, and the `fretboardState` flags that used to imply it are
+gone. §5 is the shrinking list of surviving
 `window.*` globals and is what Phase 5 should be read against.
 
 ---
@@ -2526,7 +2530,7 @@ script against the stashed pre-change tree fails four of the six and passes
 the piano check — which is the clearest statement of what this step fixed:
 the piano was already right, the fretboard was the exception.
 
-### 6.31 `src/visualization/` (`VISUALIZATION_STACK_PLAN.md` step 8a, 2026-08-03)
+### 6.31 `src/visualization/` (`VISUALIZATION_STACK_PLAN.md` steps 8a-8f, 2026-08-03)
 
 **What it owns:** the answer to "what is currently shown on the main
 display?" — a persistent base layer plus overlays pushed on top of it, and
