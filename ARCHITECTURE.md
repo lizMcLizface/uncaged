@@ -2435,6 +2435,11 @@ Two behaviours worth knowing:
   (`clamp(7px, calc(100vw / var(--num-keys) / 5), 13px)`, with a smaller ramp
   for half-width black keys), so labels shrink with the key count and are
   right on the first paint without measuring anything.
+- **`Full 88 keys` is a separate `pianoState.rangeMode`, not an eighth octave
+  count.** A full keyboard is A0-C8, which is not a whole number of C-to-B
+  octaves; as a count it would clip the bottom or overshoot the top. At 52
+  white keys the labels bottom out, accepted deliberately - the keys stay
+  pressable and the board still reads as an input display.
 
 **The re-render path is now exercised, and everything hanging off a key
 element survives it**: the scale layer repaints from `piano.scale`, and

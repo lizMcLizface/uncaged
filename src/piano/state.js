@@ -16,10 +16,23 @@ const PIANO_SETTINGS_KEY = 'PolySynth-PianoSettings';
 export const VIEW_FRETBOARD = 'fretboard';
 export const VIEW_PIANO = 'piano';
 
+/**
+ * How the displayed range is chosen.
+ *
+ * `RANGE_FULL` is its own mode rather than a large `octaveCount` because a
+ * full keyboard is **A0-C8**, which is not a whole number of C-to-B octaves.
+ * Expressing it as octaves would either clip the bottom three keys or
+ * overshoot the top.
+ */
+export const RANGE_OCTAVES = 'octaves';
+export const RANGE_FULL = 'full';
+
 export const pianoState = {
     /** Which instrument occupies the slot at the top of the page. */
     viewMode: VIEW_FRETBOARD,
-    /** Displayed range. Step 7 puts a control on these. */
+    /** Whether the range comes from lowOctave/octaveCount or is the full 88. */
+    rangeMode: RANGE_OCTAVES,
+    /** Displayed range when rangeMode is RANGE_OCTAVES. */
     lowOctave: 2,
     octaveCount: 3
 };
@@ -39,6 +52,7 @@ if (savedPianoSettings) {
     // Anything other than the two known modes falls back to the fretboard, so
     // a stale or hand-edited value can't leave the page showing nothing.
     pianoState.viewMode = savedPianoSettings.viewMode === VIEW_PIANO ? VIEW_PIANO : VIEW_FRETBOARD;
+    pianoState.rangeMode = savedPianoSettings.rangeMode === RANGE_FULL ? RANGE_FULL : RANGE_OCTAVES;
     pianoState.lowOctave = savedPianoSettings.lowOctave ?? pianoState.lowOctave;
     pianoState.octaveCount = savedPianoSettings.octaveCount ?? pianoState.octaveCount;
 }
@@ -47,6 +61,7 @@ export function persistPianoSettings() {
     try {
         localStorage.setItem(PIANO_SETTINGS_KEY, JSON.stringify({
             viewMode: pianoState.viewMode,
+            rangeMode: pianoState.rangeMode,
             lowOctave: pianoState.lowOctave,
             octaveCount: pianoState.octaveCount
         }));

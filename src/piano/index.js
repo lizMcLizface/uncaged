@@ -13,6 +13,8 @@ export {
     createPiano,
     getPiano,
     setPianoOctaveSpan,
+    setPianoFullRange,
+    applyPianoRange,
     MIN_OCTAVE_COUNT,
     MAX_OCTAVE_COUNT,
     MIN_LOW_OCTAVE,
@@ -23,7 +25,9 @@ export {
     pianoState,
     persistPianoSettings,
     VIEW_FRETBOARD,
-    VIEW_PIANO
+    VIEW_PIANO,
+    RANGE_OCTAVES,
+    RANGE_FULL
 } from './state';
 
 export {

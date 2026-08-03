@@ -505,6 +505,15 @@ fits are not always the same: the 88-key window ends at A0 and C8.
   `--num-keys` in CSS (`clamp(7px, calc(100vw / var(--num-keys) / 5), 13px)`,
   with a smaller ramp for the half-width black keys), so they shrink with the
   key count and are correct on the first paint with no measuring.
+- **`Full 88 keys` is a separate range mode**, added after the user asked for
+  the whole keyboard at once. It is *not* an eighth octave count: a full
+  keyboard is **A0-C8**, which is not a whole number of C-to-B octaves, so
+  expressing it as a count would either clip A0-B0 off the bottom or overshoot
+  the top. `pianoState.rangeMode` (`'octaves'` | `'full'`) carries it, and the
+  start-octave select disables while it is active because it means nothing
+  there. The labels do bottom out at their floor at 52 white keys; that is
+  accepted deliberately - the keys stay pressable and the board still works as
+  an input display, which is the point of the mode.
 - **The read-back is computed, not observed.** This panel is built *before*
   `createPiano` runs, so asking the live piano for its range leaves the
   summary blank until the first change. `setPianoOctaveSpan` returns the
