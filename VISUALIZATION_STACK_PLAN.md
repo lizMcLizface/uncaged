@@ -38,7 +38,7 @@ Decisions taken 2026-08-03, before any code:
 | Step | State | Notes |
 |---|---|---|
 | 8a — `stack.js` + tests, no renderers | **done** 2026-08-03 | Pure. 59 tests in `src/visualization.test.js` (124 total). Two deviations, both §6's step 8a records: base/overlays as separate fields, and `hideBelow` |
-| 8b — Piano renderer, scale as a base layer | not started | Piano first: it has one writer today. §6 |
+| 8b — Piano renderer, scale as a base layer | **done** 2026-08-03 | 17-check Playwright run, output proved identical against the stashed tree. `src/piano/labels.js` retired. §6.2 |
 | 8c — Fretboard renderer behind the same API | not started | §6 |
 | 8d — Move the Roman-numeral + chord-grid producers onto push/pop | not started | Deletes `restoreFretboardState`. §6 |
 | 8e — Chord superimposition on the piano (the original step 8) | not started | §5 |
@@ -459,6 +459,57 @@ content writer today (§1.2), so this step is a swap rather than an untangle,
 and it puts a working stack on screen before any fretboard risk. Verify with
 a pushed dummy layer from the console and assert a held computer key stays
 lit across a push (§2.5).
+
+### 6.2 How 8b landed (2026-08-03)
+
+Done as written. The piano's rendered output is **byte-identical** to before
+the swap — dumped every lit key's classes, `--scale-key-color` and label,
+ran the same script against the stashed pre-change tree, and diffed: 0
+differing keys across note mode, interval mode and back. On that tree 16 of
+the 17 checks pass and the only failure is the `dimKey` rule, which is
+precisely what this step adds. §2.3 lesson 8 used to confirm a *non*-change.
+
+**`renderStack` is the piano's whole content API now.** `showScale`,
+`clearScale` and `piano.scale` are gone; `piano.resolved` holds the last
+flattened stack so a range re-render repaints itself. `Piano.js` still
+imports nothing from `src/visualization/` — `src/fretboard/index.js`
+subscribes it, the same division that already keeps `midi.js` and
+`keyboard.js` out of that folder.
+
+**`src/piano/labels.js` is deleted**, as 8a promised. Its coverage moved to
+`visualization.test.js` rather than being dropped; `piano.test.js` says so
+where the two `labels:` blocks used to be. `refreshPianoScale` became
+`refreshScaleLayer` — it sets the base layer now, and the old name described
+a third of what it does.
+
+**`setMainViewMode` stopped repainting on the way in.** The piano renders
+every stack change whether it is the visible view or not, so "it may have
+gone stale while hidden" is no longer a case that exists.
+
+**The near-miss worth generalizing: a CSS transition makes `getComputedStyle`
+lie.** The keys carry a blanket `transition: 0.25s`, so `filter` *animates*.
+Reading the computed style synchronously after adding `dimKey` returns frame
+zero, and a transition out of `filter: none` starts at the identity
+`saturate(1) brightness(1)` — a value that is neither `none` nor the target.
+The first assertion ("did the filter change?") passed against a rule that
+could have said anything. Settle first, then assert the exact declared value.
+This is §2.3 lesson 10's shape applied to CSS rather than to handlers: the
+static read is not the thing you care about.
+
+**Two pieces of dead wiring found in passing**, both relevant to 8f and
+neither touched here:
+
+- **`#prevRootBtn` / `#nextRootBtn` / `#prevScaleBtn` / `#nextScaleBtn` do
+  not exist anywhere in the repo.** `src/scales/index.js:236-470` attaches
+  click and hover handlers to all four, twice over. Verified by grep across
+  `src/`, `public/` and every `.html`/`.js`/`.css` outside `node_modules`.
+  Those hover handlers are among `highlightKeysForScales`'s ten call sites —
+  so part of 8f's cleanup is deleting handlers for buttons that were never
+  built, not rewiring them.
+- **The Roman-numeral buttons and the `Labels` select live in the Other
+  Controls tab panel**, which is `display: none` until that tab is opened.
+  Worth knowing before 8f wires hover sources: they are not reachable by a
+  click until the tab is open, and any Playwright check has to open it first.
 
 **8c — Fretboard renders the stack, alongside its existing path.** `renderStack`
 + the `opacity` option on `markFret`. Nothing calls it yet; `markScale` and
