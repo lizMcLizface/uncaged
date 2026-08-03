@@ -40,6 +40,7 @@ import {
     GUITAR_TUNING,
     SCALE_COLORS
 } from './Fretboard';
+import { createPiano } from '../piano';
 import { createFretboardControls } from './ui/controls';
 import {
     buildIntervalLabelMap,
@@ -97,6 +98,16 @@ function initializeFretboard() {
 
     // Create control panel
     createFretboardControls(mainFretboard);
+
+    // The piano view shares the fretboard's slot in #fretNotPlaceholder: built
+    // here, immediately after the fretboard element, and hidden. It is built
+    // once and only ever shown/hidden from now on - rebuilding this container's
+    // contents races with the Synthesizer tab's React portal (src/index.js's
+    // note). Nothing reveals it yet; that is PIANO_VIEW_PLAN.md step 6.
+    createPiano(mainFretboard.container, {
+        afterNode: mainFretboard.fretboardElement,
+        visible: false
+    });
 
     // Set the scale button as active by default and show the scale
     fretboardState.currentDisplayedChord = 0; // Scale button is index 0

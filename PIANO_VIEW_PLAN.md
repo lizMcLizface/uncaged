@@ -1,6 +1,6 @@
 # Piano View — Implementation Plan
 
-Investigated 2026-08-03. Step 1 landed 2026-08-03.
+Investigated 2026-08-03. Steps 1-2 landed 2026-08-03.
 
 Goal: let the user hide the main fretboard at the top of the page and show a
 multi-octave piano keyboard in its place, carrying the same scale
@@ -31,7 +31,7 @@ Decisions taken 2026-08-03, before any code:
 | Step | State | Notes |
 |---|---|---|
 | 1 — `keyModel.js` + `range.js` + tests | **done** 2026-08-03 | Pure. 25 tests in `src/piano.test.js` (53 total). Surfaced §4.1, the MIDI-convention seam |
-| 2 — `Piano.js` renders static `<ul id="keyboard">` | not started | Includes the §5.2 CSS variable work. First proof the dormant CSS works |
+| 2 — `Piano.js` renders static `<ul id="keyboard">` | **done** 2026-08-03 | §5.2 CSS variable work included. The dormant CSS works — see §5.3 |
 | 3 — Rebuild the element tables, wire mouse + held keys | not started | **The ordering trap — §7.** Makes §1.1's machinery live |
 | 4 — Scale highlighting + labels | not started | §2 palette, `mainFretboardLabelMode`, `'scaleChanged'` |
 | 5 — Convert the fretboard to the semitone palette | not started | **The only step that changes existing behavior.** §2 |
@@ -286,6 +286,48 @@ Editing that CSS block is **zero-risk today precisely because it is dead** —
 nothing renders it (§1.1). That will stop being true the moment step 2
 lands, so do the CSS restructuring in step 2 or earlier, not after.
 
+### 5.3 How it actually landed (step 2, 2026-08-03)
+
+Confirmed dead before touching it: no `class="white"`, `class="black"`,
+`.offset` or `#keyboard` reference exists anywhere in `src/` or `public/`.
+
+**Two variables, not one.** The proposal above says "e.g. `--key-color`",
+one hue per `<li>`. That does not survive contact with the striped
+combination rules: `.scaleKey.highlightedKey` renders scale *and* chord as
+alternating stripes, so it needs **two** hues simultaneously, and a single
+variable collapses it to a solid block. So:
+
+| Custom property | Drives | Variable? |
+|---|---|---|
+| `--scale-key-color` | `.scaleKey` | Yes — set per `<li>` from `getIntervalColor(semitone)` |
+| `--highlight-key-color` | `.highlightedKey` | Yes |
+| `--pressed-key-color` | `.pressedKey` | **No, deliberately** — transient input feedback must never read as harmonic information |
+
+Defaults are declared once on `#keyboard li` (the pre-existing purple/blue/
+amber), so an unset key looks exactly as the dead CSS did and a per-`<li>`
+inline `style="--scale-key-color: …"` overrides it. Verified in the browser:
+both solid states, all three striped combinations, and a per-key hue
+override all render correctly (the step-4 palette path, proved before step 4
+needs it).
+
+**Two fixes the restructuring forced, both in dead CSS:**
+
+- **Black-key positioning was fixed-width, not proportional.** `.black` had
+  `margin: 0 0 0 -0.75rem` against a percentage-derived width, so it lined up
+  at exactly one container width and drifted everywhere else — the reason the
+  unused `.offset` class (a hand nudge of `-100%/--num-keys/3`) existed at
+  all. Now `margin: 0 calc(-100% / var(--num-keys) / 4)` on both sides:
+  a black key consumes zero layout advance and centres on the white/white
+  boundary at any width and any key count. Measured in Chromium at 1600px:
+  all 15 black keys land **0.00px** off their boundary and the 21 white keys
+  span 1599.94 of 1600px. `.offset` is deleted.
+- **`float: left` inside a `display: flex` parent is inert.** Replaced with
+  `flex: none` so the percentage widths are actually authoritative.
+
+`.white.pressedKey`'s `#d38703` was folded into the single
+`--pressed-key-color` (`hsl(48, 97%, 42%)`) that `.black.pressedKey` and
+every gradient already used; it was the only outlier.
+
 ---
 
 ## 6. Build order
@@ -467,11 +509,12 @@ look like a bug.
   `.pressedKey` (the amber highlight). Only `.pressedKey` is referenced by
   any JS. Whether mouse/keyboard input should also apply `.pressed` for the
   tactile look is a step-3 call.
-- **`--num-keys` has two different defaults** in the dead CSS — `55` for
-  white keys (`:125`) and `50` for black keys (`:139`, `:278`). Since
-  `Piano.js` will always set it explicitly this is probably harmless, but the
-  inconsistency suggests the original author was mid-iteration, so don't
-  treat either number as meaningful.
+- ~~**`--num-keys` has two different defaults** in the dead CSS — `55` for
+  white keys and `50` for black keys.~~ **Resolved in step 2:** neither
+  number meant anything (the author was mid-iteration). Unified to `52`, the
+  white-key count of an 88-key piano, and `Piano.js` sets it explicitly from
+  `countWhiteKeys()` anyway. **`--num-keys` is the white-key count, not the
+  total** — that is the layout contract the whole block depends on.
 - ~~**Does the piano belong in the tab shell or above it?**~~ **Decided
   2026-08-03: the piano replaces the fretboard in place.** It occupies the
   same slot in `#fretNotPlaceholder`, and the top bar and all six tabs stay

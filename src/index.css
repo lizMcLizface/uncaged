@@ -99,10 +99,37 @@ body {
   --white-80: hsla(0, 0%, 100%, 0.8);
 }
 
+/* ---------------------------------------------------------------------------
+   Piano keyboard (<ul id="keyboard"> built by src/piano/Piano.js).
+
+   Layout contract: --num-keys is the WHITE key count, set on #keyboard by
+   Piano.js. White keys are 100%/--num-keys wide and tile the full width;
+   black keys are half that, and carry equal negative left/right margins of a
+   quarter width each so they consume zero layout advance and sit centred on
+   the boundary between the white keys either side. Everything is a
+   proportion of --num-keys, so any key count lines up at any container
+   width.
+
+   Colour contract: the classes below encode STATE, the custom properties
+   encode HUE. Piano.js sets --scale-key-color / --highlight-key-color per
+   <li> from theory/intervals.js's semitone palette; the defaults here are
+   what the keyboard looked like before it had a palette. Two separate
+   variables rather than one, because the striped combination rules need two
+   hues at once to stay meaningful. --pressed-key-color is deliberately NOT
+   variable: pressed is transient input feedback and must never be mistaken
+   for harmonic information.
+   --------------------------------------------------------------------------- */
+
+#keyboard li {
+  --scale-key-color: hsl(276, 97%, 42%);
+  --highlight-key-color: hsl(209, 97%, 42%);
+  --pressed-key-color: hsl(48, 97%, 42%);
+}
+
 .white,
 .black {
   position: relative;
-  float: left;
+  flex: none;
   display: flex;
   justify-content: right;
   align-items: center;
@@ -122,7 +149,7 @@ body {
 }
 
 .white {
-  width: calc(100% / var(--num-keys, 55));
+  width: calc(100% / var(--num-keys, 52));
   height: 12.5rem;
   z-index: 1;
   border-left: 1px solid hsl(0, 0%, 73%);
@@ -136,8 +163,8 @@ body {
 
 .black {
   height: 8rem;
-  width: calc(100% / var(--num-keys, 50)/2);;
-  margin: 0 0 0 -0.75rem;
+  width: calc(100% / var(--num-keys, 52) / 2);
+  margin: 0 calc(-100% / var(--num-keys, 52) / 4);
   z-index: 2;
   border: 1px solid black;
   border-radius: 0 0 3px 3px;
@@ -158,18 +185,16 @@ body {
   outline: none;
 }
 .white.highlightedKey{
-  background-color: hsl(209, 97%, 42%);
+  background-color: var(--highlight-key-color);
 }
 .black.highlightedKey{
-  background: hsl(209, 97%, 42%);
-  /* border: 1px solid hsl(209, 97%, 42%); */
+  background: var(--highlight-key-color);
 }
 .white.pressedKey{
-  background-color: #d38703;
+  background-color: var(--pressed-key-color);
 }
 .black.pressedKey{
-  background: hsl(48, 97%, 42%);
-  /* border: 1px solid hsl(48, 97%, 42%); */
+  background: var(--pressed-key-color);
 }
 /* .black:hover{  
   background: hsl(48, 97%, 42%);
@@ -180,87 +205,53 @@ body {
   background-color: hsl(48, 97%, 42%);
 } */
 
-.white.pressedKey.highlightedKey{
-  background: repeating-linear-gradient(
-    45deg,
-    hsl(209, 97%, 42%),
-    hsl(209, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 20px
-  );
-}
+.white.pressedKey.highlightedKey,
 .black.pressedKey.highlightedKey{
   background: repeating-linear-gradient(
     45deg,
-    hsl(209, 97%, 42%),
-    hsl(209, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 20px
+    var(--highlight-key-color),
+    var(--highlight-key-color) 10px,
+    var(--pressed-key-color) 10px,
+    var(--pressed-key-color) 20px
   );
 }
 .white.scaleKey{
-  background-color: hsl(276, 97%, 42%);
+  background-color: var(--scale-key-color);
 }
 .black.scaleKey{
-  background: hsl(276, 97%, 42%);
+  background: var(--scale-key-color);
 }
 
-.white.scaleKey.highlightedKey{
-  background: repeating-linear-gradient(
-    45deg,
-    hsl(276, 97%, 42%),
-    hsl(276, 97%, 42%) 10px,
-    hsl(209, 97%, 42%) 10px,
-    hsl(209, 97%, 42%) 20px
-  );
-}
+.white.scaleKey.highlightedKey,
 .black.scaleKey.highlightedKey{
   background: repeating-linear-gradient(
     45deg,
-    hsl(276, 97%, 42%),
-    hsl(276, 97%, 42%) 10px,
-    hsl(209, 97%, 42%) 10px,
-    hsl(209, 97%, 42%) 20px
+    var(--scale-key-color),
+    var(--scale-key-color) 10px,
+    var(--highlight-key-color) 10px,
+    var(--highlight-key-color) 20px
   );
 }
-.white.pressedKey.scaleKey{
-  background: repeating-linear-gradient(
-    45deg,
-    hsl(276, 97%, 42%),
-    hsl(276, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 20px
-  );
-}
+.white.pressedKey.scaleKey,
 .black.pressedKey.scaleKey{
   background: repeating-linear-gradient(
     45deg,
-    hsl(276, 97%, 42%),
-    hsl(276, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 20px
+    var(--scale-key-color),
+    var(--scale-key-color) 10px,
+    var(--pressed-key-color) 10px,
+    var(--pressed-key-color) 20px
   );
 }
-.white.pressedKey.scaleKey.highlightedKey{
-  background: repeating-linear-gradient(
-    45deg,
-    hsl(276, 97%, 42%),
-    hsl(276, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 20px,
-    hsl(209, 97%, 42%) 20px,
-    hsl(209, 97%, 42%) 30px
-  );
-}
+.white.pressedKey.scaleKey.highlightedKey,
 .black.pressedKey.scaleKey.highlightedKey{
   background: repeating-linear-gradient(
     45deg,
-    hsl(276, 97%, 42%),
-    hsl(276, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 10px,
-    hsl(48, 97%, 42%) 20px,
-    hsl(209, 97%, 42%) 20px,
-    hsl(209, 97%, 42%) 30px
+    var(--scale-key-color),
+    var(--scale-key-color) 10px,
+    var(--pressed-key-color) 10px,
+    var(--pressed-key-color) 20px,
+    var(--highlight-key-color) 20px,
+    var(--highlight-key-color) 30px
   );
 }
 
@@ -274,12 +265,13 @@ body {
   );
   outline: none;
 }
-.offset {
-  margin: 0 0 0 calc(-100% / var(--num-keys, 50) /3);;
-  /* width: 3.5rem; */
-}
+/* .offset removed with the black-key margin fix above: it was a manual nudge
+   for black keys whose fixed -0.75rem margin only lined up at one container
+   width. Nothing in src/ ever applied it. */
 
 #keyboard {
+  list-style: none;
+  margin: 0;
   /* border: 1px solid hsl(48, 97%, 42%); */
   height: 12.5rem;
   display:flex;
