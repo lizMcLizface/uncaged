@@ -54,6 +54,8 @@ import {
     VIEW_PIANO,
     pianoState,
     setPianoOctaveSpan,
+    setPianoFullRange,
+    RANGE_FULL,
     MIN_OCTAVE_COUNT,
     MAX_OCTAVE_COUNT,
     MIN_LOW_OCTAVE,
@@ -1594,6 +1596,12 @@ function buildPianoRangeControls() {
         option.textContent = count === 1 ? '1 octave' : `${count} octaves`;
         countSelect.appendChild(option);
     }
+    // A full keyboard is A0-C8, which is not a whole number of C-to-B
+    // octaves, so it is a mode of its own rather than another count.
+    const fullOption = document.createElement('option');
+    fullOption.value = RANGE_FULL;
+    fullOption.textContent = 'Full 88 keys';
+    countSelect.appendChild(fullOption);
 
     const summary = document.createElement('span');
     summary.id = 'pianoRangeSummary';
@@ -1605,9 +1613,16 @@ function buildPianoRangeControls() {
     // live piano: this panel is built before createPiano runs, and reading
     // getPiano() here would leave the summary blank until the first change.
     const apply = () => {
-        const applied = setPianoOctaveSpan(Number(startSelect.value), Number(countSelect.value));
-        startSelect.value = String(applied.lowOctave);
-        countSelect.value = String(applied.octaveCount);
+        const isFull = countSelect.value === RANGE_FULL;
+        const applied = isFull
+            ? setPianoFullRange()
+            : setPianoOctaveSpan(Number(startSelect.value), Number(countSelect.value));
+
+        // The start octave means nothing when the whole keyboard is shown.
+        startSelect.disabled = isFull;
+        startSelect.style.opacity = isFull ? '0.5' : '1';
+        if (!isFull) startSelect.value = String(applied.lowOctave);
+
         summary.textContent =
             `${noteToName(applied.lowMidi)}–${noteToName(applied.highMidi)}`.replace(/\//g, '');
     };
@@ -1616,7 +1631,9 @@ function buildPianoRangeControls() {
     countSelect.addEventListener('change', apply);
 
     startSelect.value = String(pianoState.lowOctave);
-    countSelect.value = String(pianoState.octaveCount);
+    countSelect.value = pianoState.rangeMode === RANGE_FULL
+        ? RANGE_FULL
+        : String(pianoState.octaveCount);
     apply();
 
     container.appendChild(startSelect);

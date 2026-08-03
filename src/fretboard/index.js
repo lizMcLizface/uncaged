@@ -210,8 +210,6 @@ function initializeFretboard() {
     createPiano(mainFretboard.container, {
         afterNode: mainFretboard.fretboardElement,
         visible: false,
-        lowOctave: pianoState.lowOctave,
-        octaveCount: pianoState.octaveCount,
         onRender: syncPianoKeyState
     });
 

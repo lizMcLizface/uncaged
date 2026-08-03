@@ -20,17 +20,16 @@
  * Synthesizer tab's React portal target (see src/index.js's note).
  */
 
-import { buildKeyRange, countWhiteKeys, octaveSpanToMidiRange, pitchClassOf } from './keyModel';
+import {
+    buildKeyRange,
+    countWhiteKeys,
+    octaveSpanToMidiRange,
+    pitchClassOf,
+    LOWEST_KEY_MIDI,
+    HIGHEST_KEY_MIDI
+} from './keyModel';
 import { buildScaleKeyStyles } from './labels';
-import { pianoState, persistPianoSettings } from './state';
-
-/**
- * Fallbacks for a caller that passes no range. The live values are
- * `pianoState.lowOctave`/`octaveCount`. Three octaves from C2 covers a
- * standard guitar's open strings through the 12th fret.
- */
-const DEFAULT_LOW_OCTAVE = 2;
-const DEFAULT_OCTAVE_COUNT = 3;
+import { pianoState, persistPianoSettings, RANGE_OCTAVES, RANGE_FULL } from './state';
 
 /**
  * Selectable span, in octaves. The ceiling is a legibility limit, not a
@@ -55,9 +54,12 @@ let activePiano = null;
 /**
  * Build the keyboard and insert it into `container`.
  *
+ * The initial range comes from `pianoState`, not from arguments: the mode
+ * (octave span vs the full 88) is persisted, and applying it here is what
+ * makes a reload come back to the same keyboard.
+ *
  * @param {HTMLElement} container - #fretNotPlaceholder
- * @param {{afterNode?: Node, visible?: boolean, lowOctave?: number,
- *          octaveCount?: number, onRender?: (piano) => void}} [options]
+ * @param {{afterNode?: Node, visible?: boolean, onRender?: (piano) => void}} [options]
  *        afterNode: insert directly after this child, so the piano takes the
  *        fretboard's slot rather than landing at the end of the container.
  *        onRender: called after every render, including the first. This is
@@ -71,8 +73,6 @@ export function createPiano(container, options = {}) {
     const {
         afterNode = null,
         visible = false,
-        lowOctave = DEFAULT_LOW_OCTAVE,
-        octaveCount = DEFAULT_OCTAVE_COUNT,
         onRender = null
     } = options;
 
@@ -176,10 +176,9 @@ export function createPiano(container, options = {}) {
         }
     };
 
-    piano.setOctaveSpan(lowOctave, octaveCount);
-    piano.setVisible(visible);
-
     activePiano = piano;
+    applyPianoRange();
+    piano.setVisible(visible);
     return piano;
 }
 
@@ -202,6 +201,7 @@ export function getPiano() {
  * this is the call that makes it matter.
  */
 export function setPianoOctaveSpan(lowOctave, octaveCount) {
+    pianoState.rangeMode = RANGE_OCTAVES;
     const count = clamp(Math.round(octaveCount), MIN_OCTAVE_COUNT, MAX_OCTAVE_COUNT);
     let low = clamp(Math.round(lowOctave), MIN_LOW_OCTAVE, MAX_LOW_OCTAVE);
 
@@ -223,4 +223,40 @@ export function setPianoOctaveSpan(lowOctave, octaveCount) {
 
     const { lowMidi, highMidi } = octaveSpanToMidiRange(low, count);
     return { lowOctave: low, octaveCount: count, lowMidi, highMidi };
+}
+
+/**
+ * Show the whole 88-key keyboard, A0-C8.
+ *
+ * Not expressible as an octave count: a full keyboard starts on A and ends on
+ * C, so any whole number of C-to-B octaves either clips A0-B0 off the bottom
+ * or overshoots the top. Hence its own mode.
+ *
+ * At 52 white keys the labels shrink to their floor and stop being
+ * comfortably readable. That is accepted deliberately - the keys stay
+ * pressable, and the keyboard still works as an input display, which is the
+ * point of the mode.
+ */
+export function setPianoFullRange() {
+    pianoState.rangeMode = RANGE_FULL;
+    persistPianoSettings();
+
+    const piano = getPiano();
+    if (piano) piano.setRange(LOWEST_KEY_MIDI, HIGHEST_KEY_MIDI);
+    return {
+        lowOctave: pianoState.lowOctave,
+        octaveCount: pianoState.octaveCount,
+        lowMidi: LOWEST_KEY_MIDI,
+        highMidi: HIGHEST_KEY_MIDI
+    };
+}
+
+/**
+ * Apply whatever `pianoState` currently says. Used at creation time so the
+ * persisted range mode is honoured on the first paint.
+ */
+export function applyPianoRange() {
+    return pianoState.rangeMode === RANGE_FULL
+        ? setPianoFullRange()
+        : setPianoOctaveSpan(pianoState.lowOctave, pianoState.octaveCount);
 }
