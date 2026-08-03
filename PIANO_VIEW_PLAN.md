@@ -1,6 +1,6 @@
 # Piano View — Implementation Plan
 
-Investigated 2026-08-03. Steps 1-3 landed 2026-08-03.
+Investigated 2026-08-03. Steps 1-3 and 6 landed 2026-08-03.
 
 Goal: let the user hide the main fretboard at the top of the page and show a
 multi-octave piano keyboard in its place, carrying the same scale
@@ -35,7 +35,7 @@ Decisions taken 2026-08-03, before any code:
 | 3 — Rebuild the element tables, wire mouse + held keys | **done** 2026-08-03 | Mouse + held keys live. `keys_chords` deliberately not touched — §1.3 |
 | 4 — Scale highlighting + labels | not started | §2 palette, `mainFretboardLabelMode`, `'scaleChanged'` |
 | 5 — Convert the fretboard to the semitone palette | not started | **The only step that changes existing behavior.** §2 |
-| 6 — The view toggle | not started | Hide/show only, never re-init. §7, §9 |
+| 6 — The view toggle | **done** 2026-08-03 | **Pulled ahead of 4-5** at the user's request, so the piano is reachable to play with. Hide/show only. §6.1 |
 | 7 — Octave-count control | not started | Top bar, persisted |
 | 8 — Chord superimposition | not started | §5.1 |
 | 9 — Instrument range overlay | not started | §8.2 |
@@ -416,6 +416,42 @@ One commit per step; tests green, no new build warnings
 Steps 1-4 are independently useful and reviewable before any toggle exists.
 Step 5 is the only one that changes existing behavior.
 
+### 6.1 Step 6 was taken early (2026-08-03)
+
+Done after step 3 rather than after step 5, at the user's request: steps 4-5
+are about how the piano *looks*, and judging that is much easier when you can
+actually put the piano on screen and play it. Nothing in 4, 5 or 7 depended on
+6 being later — the order in §6 is "independently useful", not a dependency
+chain — and the toggle needs only what steps 2-3 built.
+
+**What it is.** A segmented `View: [Fretboard | Piano]` switch in the top bar,
+beside the instrument picker. `setMainViewMode(mode)`
+(`src/fretboard/index.js`) sets `display` on `.fretboard` and on `#keyboard`
+and persists to `pianoState`; the toggle repaints from a
+`'mainViewModeChanged'` CustomEvent rather than from inside its own click
+handler, so it stays correct whoever changes the mode. `src/piano/state.js`
+landed here rather than in step 7, since view mode is one of the settings §4
+already assigned to it.
+
+**Visibility only, and it stays that way.** Neither element is ever destroyed
+or rebuilt — the reason §7 gives (the Synthesizer tab's React portal target
+lives in this same container) is the whole design, and the verification
+clicks into that tab after a swap to prove it.
+
+**§9's mobile worry does not apply, and the plan was wrong about why.** It
+expected `reorganizeForMobile` (`public/index.html:903`) and the mobile CSS to
+"need to learn the element can be absent". They don't: the fretboard is
+*hidden*, never removed, so `querySelector('.fretboard')` keeps resolving and
+that polling loop still terminates exactly as before. The real mobile work was
+the opposite one — `#keyboard` needed the *same* `order: 3` slot rules
+`.fretboard` already had in both `@media` blocks (`:392`, `:577`), plus
+shorter key heights, or the piano would have landed at the bottom of the
+mobile stack. Done.
+
+**Verified** with a 9-check Playwright script: default view, both switch
+directions, active-button state, the piano still playable while shown, the
+Synthesizer tab intact after a swap, and the choice surviving a reload.
+
 ---
 
 ## 7. Wiring — the three things to get right
@@ -594,10 +630,13 @@ look like a bug.
   2026-08-03: the piano replaces the fretboard in place.** It occupies the
   same slot in `#fretNotPlaceholder`, and the top bar and all six tabs stay
   exactly where they are. It is *not* a seventh tab. §7's "toggle by hiding,
-  never by re-initializing" is therefore the whole of step 6, and the two
+  never by re-initializing" is therefore the whole of step 6. ~~The two
   `.fretboard` consumers in `public/index.html` (`:903`'s
   `reorganizeForMobile` and the mobile CSS at `:392`/`:577`) are the only
-  things that need to learn the element can be absent.
+  things that need to learn the element can be absent.~~ **Wrong, found in
+  step 6: the fretboard is only ever hidden, never removed, so both consumers
+  keep working untouched. The real work was the reverse — `#keyboard` had to
+  be added to the same mobile slot rules. §6.1.**
 - **`currentScaleContext` is a module-level singleton**
   (`theory/notation.js:400`) set as a *side effect* of `getScaleNotes`. The
   piano must not assume it is populated — either call `setScaleContext`

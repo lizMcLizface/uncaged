@@ -42,7 +42,14 @@ import {
     GUITAR_TUNING,
     SCALE_COLORS
 } from './Fretboard';
-import { createPiano } from '../piano';
+import {
+    createPiano,
+    getPiano,
+    pianoState,
+    persistPianoSettings,
+    VIEW_FRETBOARD,
+    VIEW_PIANO
+} from '../piano';
 import { createFretboardControls } from './ui/controls';
 import {
     buildIntervalLabelMap,
@@ -107,6 +114,38 @@ function syncPianoKeyState(piano) {
 }
 
 /**
+ * Swap what occupies the slot at the top of the page: the fretboard, or the
+ * piano. Persisted, so a reload comes back to the same instrument.
+ *
+ * **Visibility only.** Both elements are built once at init and stay in the
+ * DOM; nothing is torn down or re-created. `#fretNotPlaceholder` also hosts
+ * the Synthesizer tab's React portal target, and rebuilding this container
+ * out from under a mounted React tree is a race this codebase has already
+ * hit once (src/index.js:230-236). It also means every module-level
+ * `getElementById` lookup into the hidden half keeps resolving - the same
+ * reason the six tabs toggle by `display` rather than unmounting.
+ */
+function setMainViewMode(mode) {
+    const viewMode = mode === VIEW_PIANO ? VIEW_PIANO : VIEW_FRETBOARD;
+    pianoState.viewMode = viewMode;
+    persistPianoSettings();
+
+    const fretboard = fretboardState.mainFretboard;
+    if (fretboard && fretboard.fretboardElement) {
+        fretboard.fretboardElement.style.display = viewMode === VIEW_PIANO ? 'none' : '';
+    }
+    const piano = getPiano();
+    if (piano) piano.setVisible(viewMode === VIEW_PIANO);
+
+    document.dispatchEvent(new CustomEvent('mainViewModeChanged', { detail: { viewMode } }));
+    return viewMode;
+}
+
+function getMainViewMode() {
+    return pianoState.viewMode;
+}
+
+/**
  * Initialize the main fretboard in the fretNotPlaceholder
  */
 function initializeFretboard() {
@@ -127,8 +166,16 @@ function initializeFretboard() {
     createPiano(mainFretboard.container, {
         afterNode: mainFretboard.fretboardElement,
         visible: false,
+        lowOctave: pianoState.lowOctave,
+        octaveCount: pianoState.octaveCount,
         onRender: syncPianoKeyState
     });
+
+    // setMainViewMode reads the main-fretboard pointer, which
+    // initializeFretboardWithScale otherwise only assigns once this function
+    // has returned - too late to apply the persisted view on first paint.
+    fretboardState.mainFretboard = mainFretboard;
+    setMainViewMode(pianoState.viewMode);
 
     // Set the scale button as active by default and show the scale
     fretboardState.currentDisplayedChord = 0; // Scale button is index 0
@@ -944,6 +991,8 @@ export {
     createFretboard,
     getFretboard,
     initializeFretboard,
+    setMainViewMode,
+    getMainViewMode,
     createSubscaleBoxPattern,
     searchFretboardNote,
     searchFretboardNotes,

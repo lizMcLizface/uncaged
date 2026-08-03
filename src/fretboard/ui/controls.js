@@ -44,8 +44,11 @@ import {
     showChordPatternOnFretboard,
     restoreFretboardState,
     updateChordButtonStyles,
-    updateChordInfoDisplay
+    updateChordInfoDisplay,
+    setMainViewMode,
+    getMainViewMode
 } from '..';
+import { VIEW_FRETBOARD, VIEW_PIANO } from '../../piano';
 import {
     clearFingeringTabs,
     createChordButtonGrid,
@@ -406,6 +409,76 @@ function createInstrumentTuningPicker() {
     return wrapper;
 }
 
+/**
+ * Segmented Fretboard/Piano switch for the slot at the top of the page.
+ *
+ * Deliberately not a seventh tab: the two are alternative views of the same
+ * thing, in the same place, and the tab strip below is for the panels under
+ * it. setMainViewMode does the work (and the persisting) - this only reflects
+ * which one is active.
+ */
+function createViewModeToggle() {
+    const wrapper = document.createElement('div');
+    wrapper.id = 'mainViewModeToggle';
+    wrapper.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex: 0 0 auto;
+    `;
+
+    const label = document.createElement('span');
+    label.textContent = 'View:';
+    label.style.cssText = `color: #ccc; font-size: 13px; font-weight: 500;`;
+    wrapper.appendChild(label);
+
+    const group = document.createElement('div');
+    group.style.cssText = `
+        display: flex;
+        border: 1px solid #555;
+        border-radius: 6px;
+        overflow: hidden;
+    `;
+
+    const options = [
+        { mode: VIEW_FRETBOARD, text: 'Fretboard' },
+        { mode: VIEW_PIANO, text: 'Piano' }
+    ];
+
+    const buttons = options.map(({ mode, text }) => {
+        const button = document.createElement('button');
+        button.textContent = text;
+        button.dataset.viewMode = mode;
+        addInteractiveEvent(button, 'click', () => setMainViewMode(mode));
+        group.appendChild(button);
+        return button;
+    });
+
+    const paint = () => {
+        const active = getMainViewMode();
+        buttons.forEach(button => {
+            const isActive = button.dataset.viewMode === active;
+            button.style.cssText = `
+                padding: 6px 14px;
+                border: none;
+                background: ${isActive ? '#4a90d9' : '#333'};
+                color: ${isActive ? '#fff' : '#bbb'};
+                font-size: 13px;
+                font-weight: ${isActive ? '600' : '400'};
+                cursor: pointer;
+            `;
+        });
+    };
+
+    // Repaint from the event rather than inside the click handler, so the
+    // buttons stay correct no matter who changed the mode.
+    document.addEventListener('mainViewModeChanged', paint);
+    paint();
+
+    wrapper.appendChild(group);
+    return wrapper;
+}
+
 function createTopBar() {
     const topBar = document.createElement('div');
     topBar.style.cssText = `
@@ -431,6 +504,7 @@ function createTopBar() {
         flex: 0 0 auto;
     `;
     topBar.appendChild(title);
+    topBar.appendChild(createViewModeToggle());
     topBar.appendChild(createInstrumentTuningPicker());
 
     const quickScaleControls = document.createElement('div');
