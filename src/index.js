@@ -204,12 +204,26 @@ function onKeyPress(event, up) {
 document.addEventListener('keydown', onKeyPress);
 document.addEventListener('keyup', onKeyPress);
 
-// Initialize mouse input for piano keys when PolySynth is available
+// Initialize mouse input for piano keys when PolySynth is available.
+//
+// These callbacks own the "should this sound?" decision, the same way
+// onKeyPress does for the computer keyboard. midi.js used to make it itself,
+// by checking that #polySynthMidiBox existed and was checked - an element
+// that is created nowhere in src/ or public/, so the check could only ever
+// fail and a clicked key was silent. That was invisible until the piano
+// rendered (nothing was bound to click), and is fixed here rather than there
+// so both entry points gate on the same thing.
 function initializePolySynthMouse() {
     // Define callbacks for playing and stopping notes
     const playNote2Callback = (notes, volume = 70) => {
+        if (!isChannelEnabled('synth')) return;
         const synthChannel = getChannel('synth');
         if (synthChannel && synthChannel.playNotes) {
+            // The AudioContext starts suspended and only a user gesture may
+            // resume it; onKeyPress does the same before its first note.
+            if (!synthChannel.isActive() && synthChannel.activate) {
+                synthChannel.activate();
+            }
             synthChannel.playNotes(notes, volume);
         }
     };
