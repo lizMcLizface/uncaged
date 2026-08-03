@@ -2,10 +2,18 @@
 
 Original baseline measured 2026-07-31 at `09a1b37`. Last updated 2026-08-03.
 
-**Where things stand:** `src/` is **108 files / 29,507 lines**, down from
-115 files / 44,751. Build warnings **45**, down from a 219 peak. `npm test`
-28/28. All five originally-oversized files are split or deleted except
-`PolySynth.jsx`, which Phase 6 covers and which nothing else is waiting on.
+**Where things stand:** `src/` is **129 files / 35,144 lines**, down from
+154 / 44,865 at `09a1b37`. Build warnings **34**, down from a 219 peak.
+`npm test` 28/28. All five originally-oversized files are split or deleted
+except `PolySynth.jsx`, which Phase 6 covers and which nothing else is
+waiting on.
+
+> Those counts are measured as
+> `git ls-files src | while read f; do cat "$f"; done | wc -l`, stated here
+> because the previous figure ("108 files / 29,507 lines") does not
+> reproduce under any method and was carried forward unverified across
+> several updates. Use the command, not the last number written down.
+> js/jsx only, if that is what you want, is 124 files / 33,025 lines.
 
 **What's left is Section 1.** Everything before it is orientation; everything
 after it is history. A new session should read Section 1 and Section 2, and
@@ -18,14 +26,14 @@ touch Section 4 only to answer "why is it like this?"
 | 0 — Safety net | done | 28 tests, baseline screenshots, `ARCHITECTURE.md` seeded |
 | 1 — Delete | done | `index.js` 5,777 → 281; 7 orphan modules + `src/util.js` gone |
 | 1b — Second dead-code sweep | done | 3,943 more lines; warnings 198 → 115. Added after Phase 4 — see §4.2 for why it couldn't have run earlier |
-| 1c — Lint pass | done | warnings 115 → 45. See §1.3 for the categories deliberately left |
+| 1c — Lint pass | done | warnings 115 → 45. See §1.2 for the categories deliberately left |
 | 2 — `src/theory/` | done | 5 modules; `scales.js` deliberately not moved (`ARCHITECTURE.md` §6.1/§6.2) |
 | 2b — `src/audio/` foundation | done | one `AudioContext`, `masterBus`, channel registry (`ARCHITECTURE.md` §2.4/§3) |
 | 3 — Split `frets.js` | done | 6,974 lines → `src/fretboard/`, 9 files (`ARCHITECTURE.md` §6.3-§6.11) |
 | 4 — Split progression + scales | done | → `src/progression/` 11 files, `src/scales/` 6 files (`ARCHITECTURE.md` §6.12-§6.27) |
+| 4c — `src/chords.js` | done | Planned as a split, landed as a deletion: ~750 of its 874 lines were unreachable. File deleted, data → `src/theory/chordSuffixes.js`, §6.1 circular import broken (`ARCHITECTURE.md` §6.28) |
 | **5 — Kill the `window` bus** | **not started** | **§1.1. The critical path for session mode.** |
-| 4c — Split `src/chords.js` | not started | §1.2. The last file that still looks like the old codebase |
-| 6 — PolySynth | not started | §1.4. Optional, off the critical path |
+| 6 — PolySynth | not started | §1.3. Optional, off the critical path |
 
 ---
 
@@ -95,28 +103,11 @@ each.
 - The Synthesizer tab is the highest-value thing to check after any change
   here — it is where that race lived.
 
-### 1.2 Phase 4c — split `src/chords.js`
+### 1.2 Smaller leftovers
 
-874 lines, and the last file in the tree with the shape the refactor exists
-to remove: chord data + DOM table builders + fretboard glue fused together,
-sitting at `src/` root. Five importers.
-
-It is also half of the `theory/chords.js` ↔ `chords.js` **circular import**
-that Phase 2 found, documented, and deliberately left alone (`ARCHITECTURE.md`
-§6.1) because fixing it was out of scope for a phase whose file wasn't
-`chords.js`. Splitting it here breaks that cycle as a side effect.
-
-Apply the Phase 3/4 pattern exactly: investigate call sites first and report
-a verified breakdown before editing, then one commit per module, barrel last.
-
-### 1.3 Smaller leftovers
-
-- **Two duplicate keys in `chordPatterns.js`** (`:397` `diminished7_A_string`,
-  `:507` `augmented_E_string`), where a rename landed on a key already used
-  elsewhere in the object. Musical call — which of two colliding voicings to
-  keep. Not a lint nit: a duplicate key means the later entry silently wins,
-  so the earlier voicing is one the chord grid can never display.
-- **`no-loop-func` (13)** — needs real closure restructuring.
+- **`no-loop-func` (4)** — needs real closure restructuring. Was 13; the
+  other nine were inside `src/chords.js`'s dead tooltip builders and went
+  with them in Phase 4c.
 - **`react-hooks/exhaustive-deps` (8)** — adding deps changes behavior.
 - **`no-unused-vars` (18) and `no-unreachable` (3) that were left on
   purpose**, because the warning is wrong about intent rather than the code
@@ -128,7 +119,7 @@ a verified breakdown before editing, then one commit per module, barrel last.
   bare `return;` / `return null;` at the top of a function. Either direction
   is a behavior change, not a cleanup.
 
-### 1.4 Phase 6 — PolySynth (optional)
+### 1.3 Phase 6 — PolySynth (optional)
 
 `PolySynth.jsx` is 3,891 lines, 117 `useState` calls, 6 `useEffect` — now the
 largest file in the repo by more than 2×. Group the state into `useReducer`
@@ -287,7 +278,7 @@ To resume mid-item, append what landed and what remains.
 
 ## 4. History
 
-Compressed. Per-module detail lives in `ARCHITECTURE.md` §6.1-§6.27, which is
+Compressed. Per-module detail lives in `ARCHITECTURE.md` §6.1-§6.28, which is
 indexed by module rather than by phase; the per-step reasoning is in the git
 commit messages. This section exists to answer "why is it like this?", not to
 be re-read before working.
@@ -348,8 +339,22 @@ function was 1,137 lines.
   deferred. 3,943 lines, warnings 198 → 115. Detail in `ARCHITECTURE.md` §7.
 - **Phase 1c (2026-08-03)** — the mechanical lint pass, warnings 115 → 45.
   Every `eqeqeq` operand pair was checked before conversion rather than
-  bulk-replaced. What was deliberately left, and why, is §1.3 — read it
+  bulk-replaced. What was deliberately left, and why, is §1.2 — read it
   before "finishing the job".
+- **Phase 4c (2026-08-03)** — planned as a split of `src/chords.js`,
+  landed as a deletion. The mandatory call-site investigation found ~750
+  of its 874 lines unreachable and only 2 of its 12 exports live, so there
+  was nothing to extract: the file's chord-grid half was a stale twin of
+  `fretboard/ui/chordGrid.js` (which Phase 3 had lifted out of `frets.js`),
+  its two DOM table builders only ever called each other and appended to an
+  element id that exists nowhere, and its `highlightKeysForChords` was a
+  provable no-op against a `[midi="N_chord"]` DOM contract nothing
+  fulfills. The surviving chord-suffix dictionary moved to
+  `src/theory/chordSuffixes.js`, breaking the `theory/chords.js` ↔
+  `chords.js` circular import Phase 2 had documented and left
+  (`ARCHITECTURE.md` §6.1). Warnings 43 → 34. Detail in `ARCHITECTURE.md`
+  §6.28 — including the two-thirds of that dead piano-key DOM contract
+  still live in `src/scales/` and `src/midi.js`, which were out of scope.
 
 ### 4.3 Where the timing/scheduler work went
 
