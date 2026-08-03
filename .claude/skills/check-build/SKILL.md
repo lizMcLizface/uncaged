@@ -68,5 +68,6 @@ is the question that actually matters.
 Pair with the `run-app` skill's screenshot check for full verification: the
 build diff catches import/lint regressions, the screenshot catches visual
 and runtime (console-error) regressions - neither one alone covers both.
-`REFACTOR_PLAN.md` §3 (Phase 3's steps) is the canonical example of both
-being run together before every commit.
+`REFACTOR_PLAN.md` §2.2 covers the tooling, and its §2.3 lesson 7 covers the
+one non-obvious part of diffing the warning list. Phases 3, 4 and 1b ran both
+checks together before every commit.
