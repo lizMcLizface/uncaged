@@ -19,12 +19,14 @@
 
 import {processChord, generateSyntheticChords} from '../theory/chords';
 import {HeptatonicScales, getScaleNotes, createHeptatonicScaleTable, createQuickScalePicker, getPrimaryScale, getPrimaryRootNote} from '../scales';
-import {noteToMidi, noteToName} from '../midi';
+import {noteToMidi, noteToName, refreshKeyElements} from '../midi';
+import {keyboardState} from '../keyboard';
 import {
     translateNotes,
     stripOctave,
     translateNotes as notationTranslateNotes,
-    stripOctave as notationStripOctave
+    stripOctave as notationStripOctave,
+    noteToMidi as notationNoteToMidi
 } from '../theory/notation';
 import { CHROMATIC } from '../theory/notes';
 import { getChannel } from '../audio/dispatch';
@@ -87,6 +89,24 @@ function getFretboard(containerId) {
 }
 
 /**
+ * Reconnect everything that is keyed to piano key elements, after the piano
+ * has (re)built them.
+ *
+ * `refreshKeyElements` re-resolves src/midi.js's `keys` table and binds mouse
+ * input to any newly-rendered key. Held computer-keyboard notes are then
+ * reapplied by hand: `keydown` already fired for those, so a key element
+ * created afterwards would otherwise render unpressed until the user let go.
+ */
+function syncPianoKeyState(piano) {
+    refreshKeyElements();
+
+    keyboardState.currentPressed.forEach(note => {
+        const element = piano.keyElements.get(notationNoteToMidi(note));
+        if (element) element.classList.add('pressedKey');
+    });
+}
+
+/**
  * Initialize the main fretboard in the fretNotPlaceholder
  */
 function initializeFretboard() {
@@ -106,7 +126,8 @@ function initializeFretboard() {
     // note). Nothing reveals it yet; that is PIANO_VIEW_PLAN.md step 6.
     createPiano(mainFretboard.container, {
         afterNode: mainFretboard.fretboardElement,
-        visible: false
+        visible: false,
+        onRender: syncPianoKeyState
     });
 
     // Set the scale button as active by default and show the scale

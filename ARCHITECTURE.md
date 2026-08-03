@@ -4,7 +4,7 @@ Living document. Updated as `REFACTOR_PLAN.md` phases land — see that file for
 what's left to do (its §1) and the documentation discipline this follows
 (its §2.4). Seeded 2026-08-01 as the Phase 0 baseline (the pre-refactor
 shape, warts included); current through Phase 4c and `PIANO_VIEW_PLAN.md`
-steps 1-2, 2026-08-03. Sections describe the *current* shape, not an
+steps 1-3, 2026-08-03. Sections describe the *current* shape, not an
 aspirational one — planned features live in `SESSION_MODE_FEASIBILITY.md`
 and `PIANO_VIEW_PLAN.md`. Features land here the same way phases do (§6.29
 is the first): this file maps what exists, whichever plan produced it.
@@ -2169,7 +2169,7 @@ triad and seventh through `matchChord` (`Em`/`F#o`/`GM7`/`F#ø`/`D7`), and
 produced zero page or console errors - that grid's hover handler being
 where the deleted `highlightKeysForChords` call sat.
 
-### 6.29 `src/piano/` (`PIANO_VIEW_PLAN.md` steps 1-2, 2026-08-03)
+### 6.29 `src/piano/` (`PIANO_VIEW_PLAN.md` steps 1-3, 2026-08-03)
 
 The first module here that is **not** a refactor product: new code for the
 piano view, not a relocation. Two files so far, both pure, neither reachable
@@ -2260,6 +2260,70 @@ zero console errors, and with the keyboard revealed all 15 black keys measure
 0.00px off their white-key boundary at 1600px while the 21 white keys span
 1599.94 of 1600px. Every highlight state and striped combination renders, and
 a per-`<li>` hue override works.
+
+**Step 3 (2026-08-03) made the dormant input machinery live.** No new input
+code was written; what changed is that the tables it reads now resolve.
+
+`src/midi.js`'s `keys` was a module-scope object literal whose 88 entries each
+called `getElementByMIDI(...)` **at import time**, long before anything
+rendered a keyboard — so every `element` was permanently `null` and every
+reader silently no-opped. Those initializers are now `null` and
+`refreshKeyElements()` re-resolves them against the live DOM.
+
+**The ordering problem is solved from both ends rather than by sequencing.**
+Two independent things must happen before a key can be clicked: the piano
+must render, and the synth channel must exist (`src/index.js` polls for it).
+Neither can wait on the other. So `initializeMouseInput(play, stop)` now
+*stores* its callbacks and binds what exists, and `refreshKeyElements()` binds
+whatever it just found — whichever runs second completes the wiring. Binding
+is idempotent (a `WeakSet` of bound elements, and the document-level `mouseup`
+registered once), which is also what makes step 7's re-render safe. Its
+`pressedNotes`/`isMouseDown`/`currentMouseNote` moved from per-call closure to
+module scope for the same reason: a glide from a key bound in one pass to a
+key bound in another would otherwise leak a held note. Measured in the
+browser: the log went from `0 piano keys` to `36 piano keys`.
+
+`src/keyboard.js` gained `keyboardState.currentPressed`, the held-note set
+that was a private `var` in `src/index.js`. It moved because a render that
+happens mid-press builds `<li>`s that never saw the `keydown`;
+`syncPianoKeyState` (`src/fretboard/index.js`) reapplies `pressedKey` from it
+after every render. That function is `createPiano`'s `onRender` hook, and it
+is the reason `src/piano/` imports neither `midi.js` nor `keyboard.js` — the
+mount site owns the wiring to DOM-keyed tables elsewhere.
+
+**`src/scales/index.js`'s `keys_chords` was deliberately NOT repopulated**,
+against what `PIANO_VIEW_PLAN.md` §6 originally said. That file has its own
+`getElementByMIDI` querying **`[midi="N_scale"]`**, an attribute namespace no
+markup in `src/` or `public/` has ever carried. It is the surviving sibling of
+the `midi="N_chord"` namespace §6.28 deleted: three keyboards were designed
+(plain, `_scale`, `_chord` — `theory/intervals.js`'s "the scale piano, every
+chord piano, and the fretboard"), and only the plain one is built. So
+`highlightKeysForScales` is dead for a reason no table refresh can fix, while
+its similarly-named neighbour `highlightScaleNotes` uses the *real* namespace
+and is dead for an unrelated second reason: its range gate reads
+`#lowestNoteSelection`/`#highestNoteSelection`, neither of which exists, so
+every comparison is against `NaN`. `PIANO_VIEW_PLAN.md` §1.3 has the full
+correction; step 4 decides between reviving the latter and retiring both.
+Null guards were added to `highlightScaleNotes` because step 3 is what makes
+its `keys[midi].element` dereferences reachable at all.
+
+**Two pre-existing stuck-highlight bugs surfaced and were fixed** in
+`initializeMouseInput`: `pressedKey` was added unconditionally but removed
+only inside a branch gated on the note having actually sounded, so gliding off
+a key with the synth disabled, or releasing the mouse away from the key it
+started on, left it lit forever. Neither had ever been reachable. Both sites
+now call a shared `clearPressedHighlight(note)` that clears exactly one key —
+never all of them, since `src/index.js` uses the same class for
+computer-keyboard notes.
+
+**Verified** with 53/53 tests, `check-build.sh` at 34 warnings (baseline
+refreshed: the same four `no-loop-func` messages, shifted uniformly by +18
+lines — §2.3 lesson 7), and an 8-check Playwright interaction script (lesson
+10: none of this is visible in a static screenshot) covering mousedown, glide
+between keys, mouseup, release-outside, and computer-key down/up, asserting on
+`[midi="N"]` rather than text (lesson 9). Zero console errors on load and on
+the Synthesizer tab, which is the first thing to check after touching
+`#fretNotPlaceholder`.
 
 ---
 

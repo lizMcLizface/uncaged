@@ -1,3 +1,21 @@
+// The computer keyboard as a musical input device: which physical key is
+// which note, and which notes are being held right now.
+//
+// `keyboardState.currentPressed` was a module-level `var` inside
+// src/index.js's key handler, unreadable from anywhere else. It lives here as
+// a mutable object (REFACTOR_PLAN.md 2.3 rule 2 - not an exported `let`,
+// which importers cannot reassign) because the piano needs it: a render that
+// happens mid-press builds fresh <li> elements that have never seen the
+// keydown, so it has to reapply `pressedKey` from the held set itself.
+
+/**
+ * Notes currently held on the computer keyboard, in `Name/Octave` form
+ * ('E/4') - the same shape src/piano/ and Fretboard.markNote use.
+ */
+const keyboardState = {
+    currentPressed: []
+};
+
 // Maps a physical key to a note name, in the two-row piano layout the
 // on-screen keyboard uses: the home row plays the naturals, the row above
 // plays the sharps that sit between them.
@@ -27,4 +45,4 @@ function keyToNote(event, octave){
     return undefined;
 }
 
-export {keyToNote}
+export {keyToNote, keyboardState}

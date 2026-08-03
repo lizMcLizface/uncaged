@@ -38,9 +38,14 @@ let activePiano = null;
  * Build the keyboard and insert it into `container`.
  *
  * @param {HTMLElement} container - #fretNotPlaceholder
- * @param {{afterNode?: Node, visible?: boolean, lowOctave?: number, octaveCount?: number}} [options]
+ * @param {{afterNode?: Node, visible?: boolean, lowOctave?: number,
+ *          octaveCount?: number, onRender?: (piano) => void}} [options]
  *        afterNode: insert directly after this child, so the piano takes the
  *        fretboard's slot rather than landing at the end of the container.
+ *        onRender: called after every render, including the first. This is
+ *        how the DOM-keyed tables outside this folder (src/midi.js's `keys`,
+ *        the held-key set) are refreshed without src/piano/ importing them -
+ *        the mount site owns that wiring.
  */
 export function createPiano(container, options = {}) {
     if (!container) return null;
@@ -49,7 +54,8 @@ export function createPiano(container, options = {}) {
         afterNode = null,
         visible = false,
         lowOctave = DEFAULT_LOW_OCTAVE,
-        octaveCount = DEFAULT_OCTAVE_COUNT
+        octaveCount = DEFAULT_OCTAVE_COUNT,
+        onRender = null
     } = options;
 
     const element = document.createElement('ul');
@@ -84,6 +90,7 @@ export function createPiano(container, options = {}) {
                 piano.keyElements.set(key.midi, keyElement);
             });
 
+            if (onRender) onRender(piano);
             return piano;
         },
 

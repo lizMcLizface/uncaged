@@ -32,10 +32,10 @@ src\components\ThemeSelector\ThemeSelector.jsx
   Line 47:18:  Unreachable code  no-unreachable
 
 src\midi.js
-  Line 35:45:   Function declared in a loop contains unsafe references to variable(s) 'isMouseDown', 'currentMouseNote'                                                                                                                                                                  no-loop-func
-  Line 63:46:   Function declared in a loop contains unsafe references to variable(s) 'isMouseDown', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote'  no-loop-func
-  Line 107:43:  Function declared in a loop contains unsafe references to variable(s) 'isMouseDown', 'currentMouseNote'                                                                                                                                                                  no-loop-func
-  Line 128:46:  Function declared in a loop contains unsafe references to variable(s) 'isMouseDown'                                                                                                                                                                                      no-loop-func
+  Line 71:45:   Function declared in a loop contains unsafe references to variable(s) 'isMouseDown', 'currentMouseNote'                                                                                                                                              no-loop-func
+  Line 99:46:   Function declared in a loop contains unsafe references to variable(s) 'isMouseDown', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote', 'currentMouseNote'  no-loop-func
+  Line 137:43:  Function declared in a loop contains unsafe references to variable(s) 'isMouseDown', 'currentMouseNote'                                                                                                                                              no-loop-func
+  Line 158:46:  Function declared in a loop contains unsafe references to variable(s) 'isMouseDown'                                                                                                                                                                  no-loop-func
 
 src\styles\constants.js
   Line 2:7:   'size0' is assigned a value but never used   no-unused-vars
