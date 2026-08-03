@@ -6,7 +6,7 @@ what's left to do (its §1) and the documentation discipline this follows
 shape, warts included); current through Phase 1c, 2026-08-03. Sections
 describe the *current* shape, not an aspirational one.
 
-**Where the detail lives:** §6 is indexed by *module* (§6.1-§6.27, one per
+**Where the detail lives:** §6 is indexed by *module* (§6.1-§6.28, one per
 extracted module, in the order they landed) rather than by phase, so it stays
 useful once the phases are history. §5 is the shrinking list of surviving
 `window.*` globals and is what Phase 5 should be read against.
@@ -323,7 +323,8 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 
 | Folder / file | Owns | May import | Must not import it |
 |---|---|---|---|
-| `src/theory/` *(Phase 2)* | Note names, intervals, scale/chord data, roman numeral parsing. No DOM, with two documented exceptions below. | nothing app-specific, except `roman.js`'s one deliberate exception | everything else may import it |
+| `src/theory/` *(Phase 2)* | Note names, intervals, scale/chord data, roman numeral parsing. No DOM, with the documented exceptions below. | nothing app-specific, except `roman.js`'s deliberate exception and `chords.js`'s `../scales` import (§6.1) | everything else may import it |
+| `src/theory/chordSuffixes.js` *(Phase 4c, second step, landed 2026-08-03 - `src/chords.js` deleted)* | The chord-suffix vocabulary (`chords`): which chord qualities the app can name, grouped by the category headings the UI shows them under, plus the standing TODO list of suffixes not yet in it. Pure data, **no imports at all** - which is what breaks the §6.1 cycle. Consumed by `theory/chords.js`'s `identifySyntheticChords` and `scales/ui/infoPanel.js`, both passing it to `matchChord` as the candidate set. See §6.28. | nothing | must stay import-free; anything it imported would re-enter the cycle |
 | `src/audio/` *(Phase 2b landed 2026-08-01: `context.js`/`bus.js`/`dispatch.js`; `clock.js`/`scheduler.js` belong to `SESSION_MODE_FEASIBILITY.md` Stage 2's Timing Grid, not a `REFACTOR_PLAN.md` phase)* | The shared `AudioContext`, master bus, note-event/channel registry dispatch. | nothing app-specific today | UI modules should depend on it, not the reverse |
 | `src/nodes/` | Framework-free Web Audio node wrappers (`Gain`, `Filter`, `Distortion`, …), a shared `.getNode()`/`.connect()` interface. | nothing app-specific | — |
 | `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` — `REFACTOR_PLAN.md` Phase 3 called this out explicitly, and Phase 3's completed `src/fretboard/` split kept them where they were |
@@ -349,7 +350,7 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/progression/index.js` *(Phase 4, eleventh and final step, landed 2026-08-02 - `progressionBuilder.js` deleted)* | The public barrel for `src/progression/`: `createChordProgressionUI`, `updateProgression`, `clearProgression`, `getFretboardForProgression`, `precomputeAllPatternData`, plus the re-exports (`loadSharedStateFromURL`/`applySharedState`) that make this folder's surface a single import. Everything else that used to live in `progressionBuilder.js` moved to `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js` across this phase's earlier steps (§6.12-§6.21); this file is what remained plus the barrel role. See §6.22. | theory, `src/scales/` (`initializeNavigationButtonsDirect`), `tuning.js`, all of `src/progression/*` above, and (cross-imported back by seven sibling modules, see §6.22) itself | two-way with `src/progression/{parse,share,scaleSync,fretboardDisplay,input,controls}.js` (§6.13-§6.21); external importer is `src/fretboard/ui/controls.js` (`createChordProgressionUI`/`loadSharedStateFromURL`, repointed from `../../progressionBuilder` to `../../progression` in this step) |
 | `src/scales/state.js` *(Phase 4 second half, first step, landed 2026-08-02)* | Scale/root-note selection state (`scaleState`, one mutable object - same reasoning as `fretboardState`/`progressionState`), persistence, and the pure chromatic/enharmonic/navigation helpers. See §6.23. | `src/scales/scaleData`, and (cross-import, see §6.23/§6.26) `updateCurrentScaleDisplay` from `.` (the barrel), `createHeptatonicScaleTable` from `./ui/scaleTable` | two-way with `src/scales/index.js` and `src/scales/ui/scaleTable.js` |
 | `src/scales/scaleData.js` *(Phase 4 second half, second step, landed 2026-08-02)* | Scale interval data (`HeptatonicScales`/`HexatonicScales`/`PentatonicScales`/`scales`), the precomputed-chord cache, `getScaleNotes`. Framework-free except for reading `theory/notation`'s scale-spelling context. See §6.24. | `../midi`, `theory/notation`, `theory/chords` | — |
-| `src/scales/ui/infoPanel.js` *(Phase 4 second half, third step, landed 2026-08-02)* | The "Scale Information" panel: interval pattern, spelled notes, alternative names, scale piano, interval-color legend, per-degree triad/seventh chord cards. See §6.25. | `theory/chords`, `../chords.js`, MiniPiano, `src/scales/state`, `src/scales/scaleData`, and (cross-import, see §6.26) `intToRoman` from `./scaleTable` | — |
+| `src/scales/ui/infoPanel.js` *(Phase 4 second half, third step, landed 2026-08-02)* | The "Scale Information" panel: interval pattern, spelled notes, alternative names, scale piano, interval-color legend, per-degree triad/seventh chord cards. See §6.25. | `theory/chords`, `theory/chordSuffixes` (was `../chords.js` until Phase 4c), MiniPiano, `src/scales/state`, `src/scales/scaleData`, and (cross-import, see §6.26) `intToRoman` from `./scaleTable` | — |
 | `src/scales/ui/rootNoteTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The detailed "Root Note Selection" table (`createRootNoteTable`) plus `positionTooltipSmart`. See §6.26. | `src/scales/scaleData`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createHeptatonicScaleTable` from `./scaleTable` | two-way with `src/scales/ui/scaleTable.js` - see §6.26 for why |
 | `src/scales/ui/scaleTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The compact top-bar quick-picker (`createQuickScalePicker`), the detailed "Heptatonic Scales" browsing table (`createHeptatonicScaleTable`), and `intToRoman`. See §6.26. | `src/scales/scaleData`, `theory/chords`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createRootNoteTable`/`positionTooltipSmart` from `./rootNoteTable` | two-way with `src/scales/ui/rootNoteTable.js` - see §6.26 for why |
 | `src/scales/index.js` *(Phase 4 second half, fifth and final step, landed 2026-08-03 - `scaleGenerator.js`/`scales.js` deleted)* | The public barrel for `src/scales/`: `highlightKeysForScales`/`highlightScaleNotes` (two unrelated DOM key-highlighting functions, not merged - see §6.27), `updateCurrentScaleDisplay` (the hub every UI cluster calls after a selection change), navigation-button wiring, plus the re-exports that make this folder's surface a single import. Everything else that used to live in `scaleGenerator.js`/`scales.js` moved to `state.js`/`scaleData.js`/`ui/infoPanel.js`/`ui/rootNoteTable.js`/`ui/scaleTable.js` across this phase's earlier steps (§6.23-6.26); this file is what remained from both plus the barrel role. See §6.27. **Not moved into `src/theory/` in Phase 2** — see §6.1/§6.2 correction; still not moved here either, pending a real `Scale` data model (see the project memory this session recorded). | `../midi`, `src/scales/scaleData`, `src/scales/ui/infoPanel`, `src/scales/ui/scaleTable`, `src/scales/state` | two-way with `src/scales/state.js`, `src/scales/ui/rootNoteTable.js`, `src/scales/ui/scaleTable.js` (§6.23/§6.26); every former `scaleGenerator.js`/`scales.js` external importer now pulls from here (`from './scales'` / `from '../scales'` etc., repointed in this step) |
@@ -379,18 +380,25 @@ src/theory/roman.js       roman-numeral parsing/resolution, lifted from
 
 **Two deliberate exceptions to "no app-specific imports":**
 
-- `src/theory/chords.js` imports `{ chords }` (the chord-suffix-list data)
-  from `../chords.js` — a DOM-heavy file, not a theory module.
-  `identifySyntheticChords` genuinely calls `matchChord(chord, chords, ...)`
-  against that data; it looked like dead code at first (shadowed everywhere
-  else by `matchChord`'s own `chords` parameter) but isn't. This import means
-  merely importing the chord engine also runs `chords.js`'s module-scope
-  `document.getElementById('chordPlaceholderContent')` — pre-existing
-  behavior (`src/intervals.js` already imported `chords.js` the same way,
-  a circular `chords.js` &lt;-&gt; `intervals.js` dependency that predates this
-  phase), not something Phase 2 introduced. A future phase that gives
-  `chords.js` a real module boundary (splitting its suffix-list data from
-  its DOM builders) removes this.
+- ~~`src/theory/chords.js` imports `{ chords }` (the chord-suffix-list data)
+  from `../chords.js`~~ — **resolved by Phase 4c (2026-08-03), see §6.28.**
+  As written in Phase 2: the import was to a DOM-heavy file, not a theory
+  module, and `identifySyntheticChords` genuinely calls
+  `matchChord(chord, chords, ...)` against that data (it looked like dead
+  code at first, shadowed everywhere else by `matchChord`'s own `chords`
+  parameter, but isn't). It meant merely importing the chord engine also ran
+  `chords.js`'s module-scope
+  `document.getElementById('chordPlaceholderContent')`, and it was half of a
+  circular `chords.js` &lt;-&gt; `intervals.js` dependency that predated Phase 2.
+  Phase 4c deleted `src/chords.js` and moved the data to
+  `src/theory/chordSuffixes.js`, which has no imports at all — so both the
+  cycle and the module-scope DOM lookup are gone, exactly as the "future
+  phase that gives `chords.js` a real module boundary" note predicted.
+  One app-specific import remains in this file and is *not* resolved:
+  `getScaleNotes` from `../scales`, which resolves to the scales barrel and
+  so still drags jQuery and that barrel's module-scope DOM lookups in behind
+  it. Narrowing that specifier to `../scales/scaleData` is a scales-barrel
+  decision, deliberately not made inside Phase 4c.
 - `src/theory/roman.js`'s `resolveRomanChord`/`resolveFallbackRomanChord`
   import `getPrimaryScale`/`getPrimaryRootNote` from `../scaleGenerator.js`
   (live scale-selection state) — required, not incidental: "which chord
@@ -2057,6 +2065,94 @@ lines) -> 6 files under `src/scales/`, both original files deleted. This
 also closes out Phase 4 as a whole - both halves
 (`progressionBuilder.js` -> `src/progression/` and
 `scaleGenerator.js`/`scales.js` -> `src/scales/`) are now complete.
+
+---
+
+### 6.28 `src/chords.js` -> `src/theory/chordSuffixes.js` (Phase 4c, 2026-08-03 - `src/chords.js` deleted)
+
+**Planned as a split, landed as a deletion.** `REFACTOR_PLAN.md` §1.2, as
+it read before this phase, described 874 lines of "chord data + DOM table builders + fretboard glue
+fused together" and prescribed the Phase 3/4 treatment: investigate call
+sites, then one commit per extracted module. The investigation is what
+changed the shape of the phase - ~750 of those lines had no reachable
+caller, so there was nothing to extract. Two of the file's twelve exports
+were live. This is §7's pattern, not §6's, and it is the second time the
+"investigate first" rule (`REFACTOR_PLAN.md` §2.3 rule 1) turned a planned
+split into something else.
+
+What was live, and now lives in `src/theory/chordSuffixes.js`:
+
+| Export | Consumers |
+|---|---|
+| `chords` (six suffix arrays + the category dict) | `theory/chords.js`'s `identifySyntheticChords`; `scales/ui/infoPanel.js` - both pass it to `matchChord` as the candidate set |
+
+What was deleted, verified against bare identifiers, `window.*` property
+access and dynamic imports across `src/` **and** `public/`:
+
+- `getProcessedChords`/`initializeProcessedChords`/`processedChords` - no
+  callers at all.
+- `createChordRootNoteTable` + `createChordSuffixTable`, and the
+  `selectedChordRootNote`/`selectedChordSuffixes` state they toggled - only
+  ever called *each other*. Both appended to a module-scope
+  `document.getElementById('chordPlaceholderContent')`, an id present in
+  neither `src/` nor `public/`, so either would have thrown on its first
+  `appendChild` had anything reached it.
+- `createChordButtonGrid`, `commonChordTypes`, `chordPatternMatchers` and
+  local `showChordPatternOnFretboard`/`restoreFretboardState` - **superseded
+  by `src/fretboard/ui/chordGrid.js`** (§6.9), which Phase 3 lifted out of
+  `frets.js` and which `ui/controls.js` is what actually builds the grid.
+  The `chords.js` copy was the stale twin: its `commonChordTypes` still
+  ended in `'7mb5'` where the live one has `'m7b5'`, and its matchers
+  returned placeholder strings (`` `${rootNote} Major Pattern 1` ``). A
+  second Phase 1b lesson restated: a file having a live importer says
+  nothing about whether any *given* export in it is reachable.
+- `highlightKeysForChords` + `keys_chords` + `getElementByNote`/
+  `getElementByMIDI`, and its one call site in the `catch` block of
+  `src/fretboard/index.js`'s `showChordPatternOnFretboard`. Not merely
+  unused - **provably a no-op**: `keys_chords` is built at import time from
+  `document.querySelector('[midi="60_chord"]')` and 24 siblings, and
+  nothing in `src/` or `public/index.html` ever produces a `midi="N_chord"`
+  or `note="X_chord"` attribute (no static markup, no `setAttribute`, no
+  template literal), so all 25 `element` fields are `null` and both of its
+  loops fall through. Deleted per `REFACTOR_PLAN.md` §1.1's rule for dead
+  globals - delete, don't migrate.
+
+**Pre-existing, out of scope, still true:** `highlightKeysForScales` in
+`src/scales/index.js` (§6.27) has exactly the same defect against
+`[midi="N_scale"]`, and `src/midi.js`'s `keys` table against bare
+`[midi="N"]`. There are **no `midi=` attributes anywhere in
+`public/index.html`** - the whole `[midi=...]` piano-key DOM contract is
+unfulfilled app-wide. Phase 4c deleted only the `_chord` third of it,
+because that was the third inside the file it was chartered to touch.
+Anyone wiring up a real piano keyboard should start here.
+
+**Why this breaks the §6.1 cycle.** The `theory/chords.js` &lt;-&gt;
+`chords.js` circular import existed only because `chords.js` imported
+`processChord` back out of the engine for its DOM tooltips - all of it in
+the deleted set. `chordSuffixes.js` has no imports at all, so nothing
+points back, and importing the chord engine no longer runs a module-scope
+`document.getElementById`. §6.1's "a future phase that gives `chords.js` a
+real module boundary removes this" is now discharged.
+
+**One header claim was corrected rather than carried over.** A first draft
+of `chordSuffixes.js` said the group order was load-bearing. It is not:
+`matchChord` dispatches on group *name* against the input's note count
+(`theory/chords.js:604-605`), so a 3-note input is only ever matched
+against `'triads'` and a 4-note one only against `'sevenths'`, leaving
+`'common'`/`'nines'`/`'elevens'`/`'thirteens'` reachable only for
+collections of some other size. Renaming a group, or moving a suffix
+between groups, changes which names a chord can report; reordering them
+does not.
+
+**Verified** with 28/28 tests, warnings 43 -> 34 (nine of them
+`no-loop-func`, which `REFACTOR_PLAN.md`'s lint-leftovers list had
+counted as needing real
+closure restructuring - they were all inside the dead tooltip builders),
+then in the browser: the Scale Information panel still names every degree's
+triad and seventh through `matchChord` (`Em`/`F#o`/`GM7`/`F#ø`/`D7`), and
+12 hover+click interactions across the live Chord Pattern Grid's 156 cells
+produced zero page or console errors - that grid's hover handler being
+where the deleted `highlightKeysForChords` call sat.
 
 ---
 
