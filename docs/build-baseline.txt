@@ -11,12 +11,12 @@ src\chords.js
   Line 191:24:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote'                                                                             no-loop-func
   Line 211:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
   Line 244:29:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
-  Line 629:58:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
-  Line 630:58:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
-  Line 641:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
-  Line 763:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
-  Line 793:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
-  Line 839:33:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
+  Line 624:58:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
+  Line 625:58:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
+  Line 636:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
+  Line 758:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
+  Line 788:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
+  Line 834:33:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
 
 src\components\Knob\Knob.styled.js
   Line 7:5:  'vertCenter' is defined but never used  no-unused-vars
@@ -61,22 +61,6 @@ src\components\Select\Select.jsx
 src\components\ThemeSelector\ThemeSelector.jsx
   Line 47:18:  Unreachable code  no-unreachable
 
-src\cross.js
-  Line 3:27:    'scales' is defined but never used                      no-unused-vars
-  Line 3:50:    'highlightKeysForScales' is defined but never used      no-unused-vars
-  Line 3:74:    'createHeptatonicScaleTable' is defined but never used  no-unused-vars
-  Line 4:9:     'chords' is defined but never used                      no-unused-vars
-  Line 4:17:    'highlightKeysForChords' is defined but never used      no-unused-vars
-  Line 4:41:    'createChordRootNoteTable' is defined but never used    no-unused-vars
-  Line 4:67:    'createChordSuffixTable' is defined but never used      no-unused-vars
-  Line 4:91:    'selectedChordRootNote' is defined but never used       no-unused-vars
-  Line 5:9:     'noteToMidi' is defined but never used                  no-unused-vars
-  Line 5:21:    'noteToName' is defined but never used                  no-unused-vars
-  Line 5:33:    'keys' is defined but never used                        no-unused-vars
-  Line 5:39:    'getElementByNote' is defined but never used            no-unused-vars
-  Line 5:57:    'getElementByMIDI' is defined but never used            no-unused-vars
-  Line 226:25:  Expected '===' and instead saw '=='                     eqeqeq
-
 src\fretboard\Fretboard.js
   Line 81:5:  Expected a default case  default-case
 
@@ -108,7 +92,6 @@ src\index.js
   Line 8:21:    'noteToName' is defined but never used                       no-unused-vars
   Line 8:39:    'getElementByNote' is defined but never used                 no-unused-vars
   Line 8:57:    'getElementByMIDI' is defined but never used                 no-unused-vars
-  Line 9:9:     'modifiers' is defined but never used                        no-unused-vars
   Line 10:9:    'initializeFretboard' is defined but never used              no-unused-vars
   Line 30:5:    'scaleNotes' is assigned a value but never used              no-unused-vars
   Line 43:9:    'Factory' is assigned a value but never used                 no-unused-vars
@@ -141,45 +124,7 @@ src\index.js
   Line 221:13:  'midi' is already defined                                    no-redeclare
 
 src\keyboard.js
-  Line 1:10:    'context' is defined but never used                         no-unused-vars
-  Line 2:5:     'masterVolume' is defined but never used                    no-unused-vars
-  Line 3:5:     'customWaveform' is defined but never used                  no-unused-vars
-  Line 4:5:     'waveform' is defined but never used                        no-unused-vars
-  Line 5:5:     'pianoNotes' is defined but never used                      no-unused-vars
-  Line 6:5:     'attackTime' is defined but never used                      no-unused-vars
-  Line 7:5:     'sustainLevel' is defined but never used                    no-unused-vars
-  Line 8:5:     'releaseTime' is defined but never used                     no-unused-vars
-  Line 9:5:     'noteLength' is defined but never used                      no-unused-vars
-  Line 10:5:    'vibratoSpeed' is defined but never used                    no-unused-vars
-  Line 11:5:    'vibratoAmount' is defined but never used                   no-unused-vars
-  Line 12:5:    'delay' is defined but never used                           no-unused-vars
-  Line 13:5:    'feedback' is defined but never used                        no-unused-vars
-  Line 14:5:    'delayAmountGain' is defined but never used                 no-unused-vars
-  Line 15:5:    'startButton' is defined but never used                     no-unused-vars
-  Line 16:5:    'stopButton' is defined but never used                      no-unused-vars
-  Line 17:5:    'tempoControl' is defined but never used                    no-unused-vars
-  Line 18:5:    'tempo' is defined but never used                           no-unused-vars
-  Line 19:5:    'isPlaying' is defined but never used                       no-unused-vars
-  Line 20:9:    'processChord' is defined but never used                    no-unused-vars
-  Line 21:9:    'HeptatonicScales' is defined but never used                no-unused-vars
-  Line 21:27:   'scales' is defined but never used                          no-unused-vars
-  Line 21:35:   'getScaleNotes' is defined but never used                   no-unused-vars
-  Line 21:50:   'highlightKeysForScales' is defined but never used          no-unused-vars
-  Line 21:74:   'createHeptatonicScaleTable' is defined but never used      no-unused-vars
-  Line 22:9:    'chords' is defined but never used                          no-unused-vars
-  Line 22:17:   'highlightKeysForChords' is defined but never used          no-unused-vars
-  Line 22:41:   'createChordRootNoteTable' is defined but never used        no-unused-vars
-  Line 22:67:   'createChordSuffixTable' is defined but never used          no-unused-vars
-  Line 22:91:   'selectedChordRootNote' is defined but never used           no-unused-vars
-  Line 22:114:  'selectedChordSuffixes' is defined but never used           no-unused-vars
-  Line 23:9:    'noteToMidi' is defined but never used                      no-unused-vars
-  Line 23:21:   'noteToName' is defined but never used                      no-unused-vars
-  Line 23:33:   'keys' is defined but never used                            no-unused-vars
-  Line 23:39:   'getElementByNote' is defined but never used                no-unused-vars
-  Line 23:57:   'getElementByMIDI' is defined but never used                no-unused-vars
-  Line 24:9:    'createScaleChordCrossReference' is defined but never used  no-unused-vars
-  Line 24:41:   'updateCrossReferenceDisplay' is defined but never used     no-unused-vars
-  Line 29:5:    Expected a default case                                     default-case
+  Line 5:5:  Expected a default case  default-case
 
 src\metronome.js
   Line 4:7:     'animations' is assigned a value but never used         no-unused-vars

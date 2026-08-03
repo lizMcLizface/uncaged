@@ -272,11 +272,6 @@ function createChordRootNoteTable() {
     } else {
         chordPlaceholder.appendChild(rootTableContainer);
     }
-    
-    // Update cross-reference display when chord root note changes
-    if (typeof window.updateCrossReferenceDisplay === 'function') {
-        window.updateCrossReferenceDisplay();
-    }
 }
 
 
@@ -868,11 +863,6 @@ function createChordSuffixTable() {
         chordPlaceholder.replaceChild(chordTableContainer, existingContainer);
     } else {
         chordPlaceholder.appendChild(chordTableContainer);
-    }
-    
-    // Update cross-reference display when chords change
-    if (typeof window.updateCrossReferenceDisplay === 'function') {
-        window.updateCrossReferenceDisplay();
     }
 }
 
