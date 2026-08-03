@@ -64,20 +64,6 @@ src\components\ThemeSelector\ThemeSelector.jsx
 src\fretboard\Fretboard.js
   Line 81:5:  Expected a default case  default-case
 
-src\fretboard\index.js
-  Line 22:27:   'scales' is defined but never used                    no-unused-vars
-  Line 22:50:   'highlightKeysForScales' is defined but never used    no-unused-vars
-  Line 23:9:    'chords' is defined but never used                    no-unused-vars
-  Line 23:41:   'createChordRootNoteTable' is defined but never used  no-unused-vars
-  Line 23:67:   'createChordSuffixTable' is defined but never used    no-unused-vars
-  Line 23:91:   'selectedChordRootNote' is defined but never used     no-unused-vars
-  Line 23:114:  'selectedChordSuffixes' is defined but never used     no-unused-vars
-  Line 24:33:   'keys' is defined but never used                      no-unused-vars
-  Line 24:39:   'getElementByNote' is defined but never used          no-unused-vars
-  Line 24:57:   'getElementByMIDI' is defined but never used          no-unused-vars
-  Line 30:5:    'filterEnharmonicMatches' is defined but never used   no-unused-vars
-  Line 38:22:   'tuningToSlashFormat' is defined but never used       no-unused-vars
-
 src\fretboard\ui\scalePositionGrid.js
   Line 40:7:    'GENERIC_VISIBLE_FRET_START' is assigned a value but never used  no-unused-vars
   Line 241:54:  Expected '!==' and instead saw '!='                              eqeqeq
@@ -85,43 +71,25 @@ src\fretboard\ui\scalePositionGrid.js
   Line 247:34:  Expected '===' and instead saw '=='                              eqeqeq
 
 src\index.js
-  Line 6:8:     '$' is defined but never used                                no-unused-vars
-  Line 7:27:    'scales' is defined but never used                           no-unused-vars
-  Line 7:50:    'highlightKeysForScales' is defined but never used           no-unused-vars
-  Line 7:74:    'createHeptatonicScaleTable' is defined but never used       no-unused-vars
-  Line 8:21:    'noteToName' is defined but never used                       no-unused-vars
-  Line 8:39:    'getElementByNote' is defined but never used                 no-unused-vars
-  Line 8:57:    'getElementByMIDI' is defined but never used                 no-unused-vars
-  Line 10:9:    'initializeFretboard' is defined but never used              no-unused-vars
-  Line 30:5:    'scaleNotes' is assigned a value but never used              no-unused-vars
-  Line 43:9:    'Factory' is assigned a value but never used                 no-unused-vars
-  Line 49:10:   'drawNotes' is defined but never used                        no-unused-vars
-  Line 50:5:    'outputNoteArray' is assigned a value but never used         no-unused-vars
-  Line 51:10:   'advanceSelectedPosition' is defined but never used          no-unused-vars
-  Line 52:10:   'highlightBothPositions' is defined but never used           no-unused-vars
-  Line 53:10:   'clearNoteHighlighting' is defined but never used            no-unused-vars
-  Line 54:10:   'highlightSelectedNotesSecondary' is defined but never used  no-unused-vars
-  Line 55:10:   'updateOutputText' is defined but never used                 no-unused-vars
-  Line 59:5:    'currentSynthNotes' is assigned a value but never used       no-unused-vars
-  Line 100:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 100:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 106:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 106:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 119:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 119:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 125:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 125:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 131:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 131:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 137:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 137:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 144:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 144:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 154:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 154:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 180:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 211:25:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 221:13:  'midi' is already defined                                    no-redeclare
+  Line 78:20:   Expected '===' and instead saw '=='  eqeqeq
+  Line 78:47:   Expected '===' and instead saw '=='  eqeqeq
+  Line 84:20:   Expected '===' and instead saw '=='  eqeqeq
+  Line 84:47:   Expected '===' and instead saw '=='  eqeqeq
+  Line 97:20:   Expected '===' and instead saw '=='  eqeqeq
+  Line 97:47:   Expected '===' and instead saw '=='  eqeqeq
+  Line 103:20:  Expected '===' and instead saw '=='  eqeqeq
+  Line 103:47:  Expected '===' and instead saw '=='  eqeqeq
+  Line 109:20:  Expected '===' and instead saw '=='  eqeqeq
+  Line 109:47:  Expected '===' and instead saw '=='  eqeqeq
+  Line 115:20:  Expected '===' and instead saw '=='  eqeqeq
+  Line 115:47:  Expected '===' and instead saw '=='  eqeqeq
+  Line 122:20:  Expected '===' and instead saw '=='  eqeqeq
+  Line 122:47:  Expected '===' and instead saw '=='  eqeqeq
+  Line 132:20:  Expected '===' and instead saw '=='  eqeqeq
+  Line 132:47:  Expected '===' and instead saw '=='  eqeqeq
+  Line 158:20:  Expected '===' and instead saw '=='  eqeqeq
+  Line 189:25:  Expected '===' and instead saw '=='  eqeqeq
+  Line 199:13:  'midi' is already defined            no-redeclare
 
 src\keyboard.js
   Line 5:5:  Expected a default case  default-case
