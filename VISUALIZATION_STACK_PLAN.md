@@ -40,7 +40,7 @@ Decisions taken 2026-08-03, before any code:
 | 8a — `stack.js` + tests, no renderers | **done** 2026-08-03 | Pure. 59 tests in `src/visualization.test.js` (124 total). Two deviations, both §6's step 8a records: base/overlays as separate fields, and `hideBelow` |
 | 8b — Piano renderer, scale as a base layer | **done** 2026-08-03 | 17-check Playwright run, output proved identical against the stashed tree. `src/piano/labels.js` retired. §6.2 |
 | 8c — Fretboard renderer behind the same API | **done** 2026-08-03 | Marker-level parity with `markScale` asserted across 3 scales × 2 label modes, and mutation-checked. Still uncalled. §6.3 |
-| 8d — Move the Roman-numeral + chord-grid producers onto push/pop | not started | Deletes `restoreFretboardState`. §6 |
+| 8d — Move the Roman-numeral + chord-grid producers onto push/pop | **done** 2026-08-03 | `restoreFretboardState`, `isInHoverState`, both Sets and 3 of the 4 ladders deleted. 16-check interaction run. §6.4 |
 | 8e — Chord superimposition on the piano (the original step 8) | not started | §5 |
 | 8f — Wire the hover sources that never worked | not started | The payoff. §1.3, §6 |
 
@@ -582,6 +582,81 @@ Grep every deleted field across all of `src/` before deleting it
 (`REFACTOR_PLAN.md` §2.3 rule 6). `fretboardsShowingScale` in particular is
 read in `Fretboard.js`, `index.js` and `progression/`.
 
+### 6.4 How 8d landed (2026-08-03)
+
+**One commit, not two, and the plan was wrong to ask for two.** §6 said to
+restructure with identical output first and flip the behaviour after. That
+sequence cannot be built: reproducing "a chord replaces the scale" on a
+*shared* stack means `hideBelow: true`, and since the piano has no chord
+layer until 8e, the intermediate commit would have shown a **blank keyboard**
+whenever a chord was selected — a regression invented purely to preserve the
+two-step, and undone immediately. The destination was already decided (§8.1),
+so 8d went straight there.
+
+The safety net moved rather than disappeared: `buildFingeringPositions`
+(extracted from `renderFingeringShape`) is now the only place that decides
+what a chord's markers look like, and both the stack and the old direct path
+went through it — so the chord markers are identical *by construction*, which
+the before/after screenshots confirm (same frets, same colours, same labels;
+only the scale underneath changed). 8c's parity tests already covered the
+scale markers.
+
+**What actually got deleted.**
+
+| Gone | Was |
+|---|---|
+| `restoreFretboardState` | a 25-line re-derivation, called from two hover sites |
+| `isInHoverState` | a boolean that could not represent two hovers |
+| `fretboardsShowingScale` / `fretboardsShowingChords` | Sets that drawing code registered *itself* in |
+| 3 of the 4 ladder copies | `refreshFretboardDisplay`, the label-mode handler, and `updateFretboardsForScaleChange`'s two-Set walk |
+| `renderFingeringShape` | nothing left in it once its middle was extracted |
+
+One ladder survives, as `reapplySelection`, and it is genuinely needed: a
+Roman-numeral chord's *notes* depend on the scale, so a scale change has to
+rebuild it.
+
+**`Fretboard.js` no longer imports `fretboardState` at all.** Not a goal, but
+the clearest measure of the change: the only reason the renderer knew about
+application state was to register itself in those two Sets from inside the
+render. With the Sets gone, drawing and bookkeeping stopped being the same
+call, and the class now draws what it is told and nothing else.
+
+**Two ids, not one.** A selected chord (`'chord'`, pinned) and a hovered one
+(`'chord-hover'`, transient) must be separate, or hovering while something is
+selected would replace the selection and leaving would pop it. That
+distinction is exactly what `restoreFretboardState` hand-rolled by
+re-deriving the selection from flags.
+
+**Hovering the Scale button pushes the scale *again*, with `hideBelow`.**
+It reads oddly until you see why: the scale is always the base layer, so
+"preview the scale alone" is not about adding it, it is about hiding the
+chord on top - and `hideBelow` on a pushed copy does that for exactly as long
+as the pointer is there, with nothing to remember on the way out.
+
+**The position-picker tabs went through the stack too**, which the plan did
+not mention. They called `renderFingeringShape` directly, so after 8d they
+would have drawn markers the next stack change wiped. `showFingeringShape`
+re-pushes the *live* chord layer with new positions, copying it rather than
+rebuilding it so id, label, root and transience cannot drift.
+
+**Verified** with a 16-check Playwright run driving the real handlers: hover
+leaves the scale dimmed underneath and the chord undimmed; leaving restores
+the neck *exactly* (byte-compared marker dumps); five hovers in a row leak
+nothing; hovering while a chord is selected and then leaving restores the
+**selection**, not the bare scale; the selection survives a label-mode
+change; clicking the active button off leaves the bare scale; the chord grid
+behaves the same; and the piano dims off the same stack. 123 tests, 34
+warnings unchanged, zero page errors.
+
+One check initially "passed" because a `.catch(() => {})` swallowed a hover
+that could not happen (wrong tab open) - fixed rather than accepted. Third
+step running, third time a green check needed checking.
+
+**Known gap, and it is 8e's:** on the piano a hovered chord currently dims
+the whole scale and puts nothing on top, because chord layers carry
+`positions` (fretboard-only) and no `notes` yet. Correct-but-incomplete, and
+one field away from finished.
+
 **8e — Chord superimposition on the piano (§5.2).** The original step 8, and
 by now a layer builder plus a call site. This is where `PIANO_VIEW_PLAN.md`
 step 8 can be marked done.
@@ -667,6 +742,13 @@ as the one legacy writer and leaves it working; it does not move onto the
 stack and it does not get deleted.** It writes to the same fretboard, so it
 will visibly fight a pushed layer — that is a known, accepted limitation
 until it is dealt with, not something to discover in 8f.
+
+**A second live direct writer, found in 8d:** the `Show All Notes` button
+(`ui/controls.js`) calls `fretboard.markAllNotes()`, which draws every note
+on the neck outside the stack. Left as-is deliberately — "every note" is a
+debugging view, not a layer anything stacks onto — and the next stack change
+simply paints over it, which is a reasonable escape. Recorded so it is not
+mistaken later for something 8d missed.
 
 ### 8.3 Still open
 

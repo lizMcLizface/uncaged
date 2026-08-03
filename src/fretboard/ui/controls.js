@@ -15,8 +15,8 @@
 //
 // This creates a two-way import between this file and ../index.js: it
 // imports createFretboardControls from here, and the button handlers below
-// import glue functions (showChordOnFretboard, showChordPatternOnFretboard,
-// restoreFretboardState, updateChordButtonStyles, updateChordInfoDisplay)
+// import glue functions (showChordOnFretboard, popChordHoverLayer,
+// reapplySelection, updateChordButtonStyles, updateChordInfoDisplay)
 // back from there. This is safe the same way the pre-existing chords.js
 // <-> theory/chords.js cycle is (see ARCHITECTURE.md §6.1): every
 // cross-import here is only touched inside a function body invoked later (a
@@ -41,14 +41,16 @@ import { createChordProgressionUI, loadSharedStateFromURL } from '../../progress
 import {
     showChordOnFretboard,
     showScaleOnFretboard,
-    showChordPatternOnFretboard,
-    restoreFretboardState,
+    popChordHoverLayer,
+    popChordLayers,
+    reapplySelection,
     updateChordButtonStyles,
     updateChordInfoDisplay,
     setMainViewMode,
     getMainViewMode,
     refreshScaleLayer
 } from '..';
+import { clearLayers } from '../../visualization';
 import {
     VIEW_FRETBOARD,
     VIEW_PIANO,
@@ -559,14 +561,11 @@ function buildDisplayControls(fretboard, buttonStyle, buttonHoverStyle) {
         clearButton.style.cssText = buttonStyle;
     });
     addInteractiveEvent(clearButton, 'click', () => {
-        // Clear hover state flag
-        fretboardState.isInHoverState = false;
-
-        fretboard.clearMarkers();
+        // Empty the stack entirely - base scale included - which is what
+        // "Clear All" has always meant. It stays empty until something sets a
+        // layer again (clicking Scale, or the next scale change).
+        clearLayers();
         fretboard.clearChordLines();
-        // Clear all tracking state
-        fretboardState.fretboardsShowingScale.delete(fretboard.containerId);
-        fretboardState.fretboardsShowingChords.delete(fretboard.containerId);
         fretboardState.currentDisplayedChord = null;
         fretboardState.currentChordGridSelection = null; // Clear chord grid selection
         clearFingeringTabs();
@@ -587,10 +586,11 @@ function buildDisplayControls(fretboard, buttonStyle, buttonHoverStyle) {
         showAllButton.style.cssText = buttonStyle;
     });
     addInteractiveEvent(showAllButton, 'click', () => {
+        // Draws directly rather than through the stack: "every note on the
+        // neck" is not a layer anyone stacks onto, it is a debugging view.
+        // The next stack change paints over it, which is the intended escape.
         fretboard.markAllNotes();
         clearFingeringTabs();
-        // Remove this fretboard from the scale tracking set since it's now showing all notes
-        fretboardState.fretboardsShowingScale.delete(fretboard.containerId);
     });
 
     // Show current scale button
@@ -631,9 +631,6 @@ function buildDisplayControls(fretboard, buttonStyle, buttonHoverStyle) {
             fretboard.markScale(scaleNotes, rootNote, {
                 showIntervals: fretboardState.mainFretboardLabelMode === 'interval'
             });
-
-            // Track that this fretboard is showing the current scale
-            fretboardState.fretboardsShowingScale.add(fretboard.containerId);
 
             // Set the Scale button as the current selection
             fretboardState.currentDisplayedChord = 0;
@@ -1203,16 +1200,9 @@ function buildChordVisualizationControls(fretboard) {
 
         // The piano honours this same switch rather than adding a second one
         // (PIANO_VIEW_PLAN.md §8.3), so the base layer needs rebuilding with
-        // the new label mode.
+        // the new label mode - and then whatever is selected on top of it.
         refreshScaleLayer();
-
-        if (fretboardState.currentChordGridSelection) {
-            showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);
-        } else if (fretboardState.currentDisplayedChord === 0) {
-            showScaleOnFretboard();
-        } else if (fretboardState.currentDisplayedChord !== null && fretboardState.currentDisplayedChord > 0) {
-            showChordOnFretboard(fretboardState.currentDisplayedChord - 1);
-        }
+        reapplySelection();
     });
 
     intervalsToggleContainer.appendChild(intervalsToggleLabel);
@@ -1250,8 +1240,6 @@ function buildChordVisualizationControls(fretboard) {
             if (fretboardState.currentDisplayedChord !== index) {
                 chordButton.style.background = 'linear-gradient(to bottom, #e2e6ea, #dae0e5)';
                 chordButton.style.transform = 'translateY(-1px)';
-                // Set hover state flag
-                fretboardState.isInHoverState = true;
                 // Show chord or scale temporarily on hover
                 if (index === 0) {
                     // Scale button
@@ -1267,28 +1255,24 @@ function buildChordVisualizationControls(fretboard) {
             if (fretboardState.currentDisplayedChord !== index) {
                 chordButton.style.background = 'linear-gradient(to bottom, #f8f9fa, #e9ecef)';
                 chordButton.style.transform = 'translateY(0)';
-                // Clear hover state flag
-                fretboardState.isInHoverState = false;
-                // Use centralized restoration function that handles both Roman numerals and chord grid
-                restoreFretboardState();
+                // Pop the preview; whatever it covered is revealed again. No
+                // flag says what that was, because nothing needs to know.
+                popChordHoverLayer();
             }
         });
 
         // Click to toggle chord/scale display
         chordButton.addEventListener('click', () => {
-            // Clear hover state flag since we're making a permanent selection
-            fretboardState.isInHoverState = false;
-
             // Clear any chord grid selection since we're now using Roman numerals
             fretboardState.currentChordGridSelection = null;
 
             if (fretboardState.currentDisplayedChord === index) {
-                // If this option is already displayed, clear it
+                // Clicking the active option turns it off: drop the chord and
+                // fall back to the scale, which is always the base layer.
                 fretboardState.currentDisplayedChord = null;
-                fretboard.clearMarkers();
+                popChordLayers();
                 fretboard.clearChordLines();
-                fretboardState.fretboardsShowingChords.delete(fretboard.containerId);
-                fretboardState.fretboardsShowingScale.delete(fretboard.containerId);
+                clearFingeringTabs();
                 // Clear chord info display
                 updateChordInfoDisplay();
                 updateChordButtonStyles();
