@@ -510,7 +510,6 @@ function createStave(container, notes, clef, y, staveKey = 'C') {
         notes.forEach((note, index) => {
             // console.log(`Processing note ${index}: ${note}`);
             const noteName = note.split('/')[0];
-            const baseNote = noteName.charAt(0).toUpperCase();
             const accidental = noteName.slice(1);
             
             // console.log(`Note: ${note}, noteName: ${noteName}, baseNote: ${baseNote}, accidental: "${accidental}"`);

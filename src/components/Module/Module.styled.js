@@ -1,5 +1,5 @@
 import styled from 'styled-components';
-import { relaInline, absCenter } from '../../styles/util';
+import { relaInline } from '../../styles/util';
 import { SPACING, borderWidthS, borderRadiusM } from '../../styles/constants';
 
 export const ComponentContainer = styled.div`

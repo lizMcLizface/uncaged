@@ -395,7 +395,7 @@ function getChordPatternMatches(chord) {
                     // console.log(`Position data for ${strippedNote}:`, position);
                     if (chordNoteIndex !== -1 && chord.chordInfo.intervals[chordNoteIndex]) {
                         var intervalName = chord.chordInfo.intervals[chordNoteIndex];
-                        if(intervalName == "P1")
+                        if(intervalName === "P1")
                             position.interval = "R";
                         else
                             position.interval = intervalName;

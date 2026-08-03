@@ -268,7 +268,7 @@ function createHeptatonicScaleTable() {
             cell.style.border = '1px solid #ccc';
             cell.style.padding = '4px 8px';
             cell.style.fontSize = '16px';
-            if (j==0){
+            if (j===0){
                 cell.style.fontWeight = 'bold';
                 cell.style.backgroundColor = '#474747ff';
                 cell.textContent = i === 0 ? 'Scale' : `${scaleNames[i-1]}`;

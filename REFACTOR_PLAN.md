@@ -15,7 +15,7 @@ session finds its place without re-reading the codebase.
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
 | 4 — Split progression + scales | done | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). `scaleGenerator.js` (2,515 lines) + `scales.js` (638 lines) are now `src/scales/`: `state.js`/`scaleData.js`/`ui/infoPanel.js`/`ui/rootNoteTable.js`/`ui/scaleTable.js`/`index.js` (`ARCHITECTURE.md` §6.23-§6.27, the barrel - both original files deleted, every external importer repointed to `./scales`). |
-| 1b — Second dead-code sweep | done | this commit | Added after Phase 4, not in the original plan. `progressions.js`/`synth.js`/`cross.js` + three unmounted component folders deleted, `keyboard.js`/`index.js`/`fretboard/index.js` stripped of dead bindings. 3,943 lines gone (net 3,926), build warnings **198 → 115**. See the Phase 1b section below and `ARCHITECTURE.md` §7. |
+| 1b — Second dead-code sweep | done | this commit | Added after Phase 4, not in the original plan. `progressions.js`/`synth.js`/`cross.js` + three unmounted component folders deleted, `keyboard.js`/`index.js`/`fretboard/index.js` stripped of dead bindings. 3,943 lines gone (net 3,926), build warnings **198 → 115**, then **→ 45** in a follow-on lint pass. See the Phase 1b section below and `ARCHITECTURE.md` §7. |
 | 5 — Kill the `window` bus | not started | — | Phase 1b removed one of its special cases: the microtonal `polySynthRef` surface has zero consumers now (`ARCHITECTURE.md` §3.1/§5.1). |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -336,10 +336,38 @@ errors. One selector fought back exactly as §6.1 insight 8 predicted —
 `getByText('A', {exact:true})` resolves to a hidden `<select>` `<option>`;
 `getByRole('cell', ...)` is the fix.
 
-Deliberately **not** touched: `src/index.js`'s 18 `eqeqeq` and one
-`no-redeclare` warning. Those are lint style, not dead code, and belong to
-a separate pass. `PolySynth.jsx`'s now-uncalled microtonal methods were
-left in place too — opening a 3,900-line component is Phase 6's job.
+**Follow-on lint pass (2026-08-03), warnings 115 → 45.** Phase 1b left the
+non-dead-code warnings for a separate pass; this is it. Fixed mechanically,
+all behavior-neutral and verified as such before changing: all 26 `eqeqeq`
+(each operand pair checked first — DOM string properties, loop counters and
+numeric params, no coercion anywhere), 8 `no-anonymous-default-export`, 4
+`no-redeclare` (`var` in mutually exclusive branches → block-scoped
+`const`), 3 `default-case`, 23 `no-unused-vars`, and 1 `no-unreachable` (a
+duplicated `return` in `PolySynth.jsx`). Deleting `scales/state.js`'s six
+dead functions cascaded one import dead — caught by the build diff, same as
+every Phase 1b step.
+
+Three categories were deliberately left, because the warning is wrong about
+intent rather than the code being wrong:
+
+- **`styles/constants.js`'s 7 unused `sizeN` consts.** They're a complete
+  0-80px design-token scale; deleting the rungs nothing happens to use today
+  would leave a gappy scale, which is worse code.
+- **`PolySynth.jsx`'s `octaveUp`/`octaveDown`/`noteOn`/`noteOff`, and the
+  `no-unreachable` warnings in `MonoSynth.js`/`ThemeSelector.jsx`.** All are
+  working implementations behind a deliberate off-switch (a commented-out
+  keyboard-listener block; a bare `return;`/`return null;` at the top of a
+  function). "Fixing" either direction is a behavior change, not a cleanup.
+- **`no-loop-func` (13) and `react-hooks/exhaustive-deps` (8).** Real
+  restructuring and real behavior risk respectively.
+
+`chordPatterns.js`'s 6 `no-dupe-keys` were resolved separately by Rene,
+since which of two colliding voicings to keep is a musical call, not a lint
+one. That work found a genuine data bug: a duplicate key means the later
+entry silently wins, so `diminished7_A_string` and `augmented_E_string` were
+patterns the chord grid could never display. **Two collisions remain**
+(`chordPatterns.js:397`, `:507`) where a rename landed on a key that already
+existed elsewhere in the object — still Rene's call.
 
 ### Phase 2 — Extract `src/theory/`
 

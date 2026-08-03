@@ -135,13 +135,6 @@ function getAccidentalOffset(accidentals) {
 }
 
 /**
- * Get the chromatic distance between two note names
- */
-function getNoteDistance(from, to) {
-    return (NOTE_TO_SEMITONE[to] - NOTE_TO_SEMITONE[from] + 12) % 12;
-}
-
-/**
  * Create an accidental string from a semitone offset
  */
 function createAccidental(offset) {
