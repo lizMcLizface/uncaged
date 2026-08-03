@@ -15,7 +15,7 @@
 //
 // Lifted from progressionBuilder.js as part of REFACTOR_PLAN.md Phase 4.
 
-import { getPrimaryScale, getPrimaryRootNote, setPrimaryRootNote, setPrimaryScale } from '../scaleGenerator';
+import { getPrimaryScale, getPrimaryRootNote, setPrimaryRootNote, setPrimaryScale } from '../scales';
 import { progressionState } from './state';
 import { updateProgression } from '.';
 

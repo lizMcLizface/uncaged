@@ -8,15 +8,15 @@ src\chordPatterns.js
   Line 1457:1:  Assign object to a variable before exporting as module default  import/no-anonymous-default-export
 
 src\chords.js
-  Line 192:24:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote'                                                                             no-loop-func
-  Line 212:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
-  Line 245:29:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
+  Line 191:24:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote'                                                                             no-loop-func
+  Line 211:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
+  Line 244:29:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
+  Line 629:58:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
   Line 630:58:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
-  Line 631:58:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
-  Line 642:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
-  Line 764:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
-  Line 794:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
-  Line 840:33:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
+  Line 641:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
+  Line 763:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
+  Line 793:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
+  Line 839:33:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
 
 src\components\Knob\Knob.styled.js
   Line 7:5:  'vertCenter' is defined but never used  no-unused-vars
@@ -64,35 +64,35 @@ src\components\ThemeSelector\ThemeSelector.jsx
 src\cross.js
   Line 3:27:    'scales' is defined but never used                      no-unused-vars
   Line 3:50:    'highlightKeysForScales' is defined but never used      no-unused-vars
-  Line 4:9:     'createHeptatonicScaleTable' is defined but never used  no-unused-vars
-  Line 5:9:     'chords' is defined but never used                      no-unused-vars
-  Line 5:17:    'highlightKeysForChords' is defined but never used      no-unused-vars
-  Line 5:41:    'createChordRootNoteTable' is defined but never used    no-unused-vars
-  Line 5:67:    'createChordSuffixTable' is defined but never used      no-unused-vars
-  Line 5:91:    'selectedChordRootNote' is defined but never used       no-unused-vars
-  Line 6:9:     'noteToMidi' is defined but never used                  no-unused-vars
-  Line 6:21:    'noteToName' is defined but never used                  no-unused-vars
-  Line 6:33:    'keys' is defined but never used                        no-unused-vars
-  Line 6:39:    'getElementByNote' is defined but never used            no-unused-vars
-  Line 6:57:    'getElementByMIDI' is defined but never used            no-unused-vars
-  Line 227:25:  Expected '===' and instead saw '=='                     eqeqeq
+  Line 3:74:    'createHeptatonicScaleTable' is defined but never used  no-unused-vars
+  Line 4:9:     'chords' is defined but never used                      no-unused-vars
+  Line 4:17:    'highlightKeysForChords' is defined but never used      no-unused-vars
+  Line 4:41:    'createChordRootNoteTable' is defined but never used    no-unused-vars
+  Line 4:67:    'createChordSuffixTable' is defined but never used      no-unused-vars
+  Line 4:91:    'selectedChordRootNote' is defined but never used       no-unused-vars
+  Line 5:9:     'noteToMidi' is defined but never used                  no-unused-vars
+  Line 5:21:    'noteToName' is defined but never used                  no-unused-vars
+  Line 5:33:    'keys' is defined but never used                        no-unused-vars
+  Line 5:39:    'getElementByNote' is defined but never used            no-unused-vars
+  Line 5:57:    'getElementByMIDI' is defined but never used            no-unused-vars
+  Line 226:25:  Expected '===' and instead saw '=='                     eqeqeq
 
 src\fretboard\Fretboard.js
-  Line 82:5:  Expected a default case  default-case
+  Line 81:5:  Expected a default case  default-case
 
 src\fretboard\index.js
   Line 22:27:   'scales' is defined but never used                    no-unused-vars
   Line 22:50:   'highlightKeysForScales' is defined but never used    no-unused-vars
-  Line 24:9:    'chords' is defined but never used                    no-unused-vars
-  Line 24:41:   'createChordRootNoteTable' is defined but never used  no-unused-vars
-  Line 24:67:   'createChordSuffixTable' is defined but never used    no-unused-vars
-  Line 24:91:   'selectedChordRootNote' is defined but never used     no-unused-vars
-  Line 24:114:  'selectedChordSuffixes' is defined but never used     no-unused-vars
-  Line 25:33:   'keys' is defined but never used                      no-unused-vars
-  Line 25:39:   'getElementByNote' is defined but never used          no-unused-vars
-  Line 25:57:   'getElementByMIDI' is defined but never used          no-unused-vars
-  Line 31:5:    'filterEnharmonicMatches' is defined but never used   no-unused-vars
-  Line 39:22:   'tuningToSlashFormat' is defined but never used       no-unused-vars
+  Line 23:9:    'chords' is defined but never used                    no-unused-vars
+  Line 23:41:   'createChordRootNoteTable' is defined but never used  no-unused-vars
+  Line 23:67:   'createChordSuffixTable' is defined but never used    no-unused-vars
+  Line 23:91:   'selectedChordRootNote' is defined but never used     no-unused-vars
+  Line 23:114:  'selectedChordSuffixes' is defined but never used     no-unused-vars
+  Line 24:33:   'keys' is defined but never used                      no-unused-vars
+  Line 24:39:   'getElementByNote' is defined but never used          no-unused-vars
+  Line 24:57:   'getElementByMIDI' is defined but never used          no-unused-vars
+  Line 30:5:    'filterEnharmonicMatches' is defined but never used   no-unused-vars
+  Line 38:22:   'tuningToSlashFormat' is defined but never used       no-unused-vars
 
 src\fretboard\ui\scalePositionGrid.js
   Line 40:7:    'GENERIC_VISIBLE_FRET_START' is assigned a value but never used  no-unused-vars
@@ -104,41 +104,41 @@ src\index.js
   Line 6:8:     '$' is defined but never used                                no-unused-vars
   Line 7:27:    'scales' is defined but never used                           no-unused-vars
   Line 7:50:    'highlightKeysForScales' is defined but never used           no-unused-vars
-  Line 8:9:     'createHeptatonicScaleTable' is defined but never used       no-unused-vars
-  Line 9:21:    'noteToName' is defined but never used                       no-unused-vars
-  Line 9:39:    'getElementByNote' is defined but never used                 no-unused-vars
-  Line 9:57:    'getElementByMIDI' is defined but never used                 no-unused-vars
-  Line 10:9:    'modifiers' is defined but never used                        no-unused-vars
-  Line 11:9:    'initializeFretboard' is defined but never used              no-unused-vars
-  Line 31:5:    'scaleNotes' is assigned a value but never used              no-unused-vars
-  Line 44:9:    'Factory' is assigned a value but never used                 no-unused-vars
-  Line 50:10:   'drawNotes' is defined but never used                        no-unused-vars
-  Line 51:5:    'outputNoteArray' is assigned a value but never used         no-unused-vars
-  Line 52:10:   'advanceSelectedPosition' is defined but never used          no-unused-vars
-  Line 53:10:   'highlightBothPositions' is defined but never used           no-unused-vars
-  Line 54:10:   'clearNoteHighlighting' is defined but never used            no-unused-vars
-  Line 55:10:   'highlightSelectedNotesSecondary' is defined but never used  no-unused-vars
-  Line 56:10:   'updateOutputText' is defined but never used                 no-unused-vars
-  Line 60:5:    'currentSynthNotes' is assigned a value but never used       no-unused-vars
-  Line 101:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 101:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 107:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 107:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 120:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 120:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 126:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 126:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 132:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 132:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 138:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 138:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 145:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 145:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 155:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 155:47:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 181:20:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 212:25:  Expected '===' and instead saw '=='                          eqeqeq
-  Line 222:13:  'midi' is already defined                                    no-redeclare
+  Line 7:74:    'createHeptatonicScaleTable' is defined but never used       no-unused-vars
+  Line 8:21:    'noteToName' is defined but never used                       no-unused-vars
+  Line 8:39:    'getElementByNote' is defined but never used                 no-unused-vars
+  Line 8:57:    'getElementByMIDI' is defined but never used                 no-unused-vars
+  Line 9:9:     'modifiers' is defined but never used                        no-unused-vars
+  Line 10:9:    'initializeFretboard' is defined but never used              no-unused-vars
+  Line 30:5:    'scaleNotes' is assigned a value but never used              no-unused-vars
+  Line 43:9:    'Factory' is assigned a value but never used                 no-unused-vars
+  Line 49:10:   'drawNotes' is defined but never used                        no-unused-vars
+  Line 50:5:    'outputNoteArray' is assigned a value but never used         no-unused-vars
+  Line 51:10:   'advanceSelectedPosition' is defined but never used          no-unused-vars
+  Line 52:10:   'highlightBothPositions' is defined but never used           no-unused-vars
+  Line 53:10:   'clearNoteHighlighting' is defined but never used            no-unused-vars
+  Line 54:10:   'highlightSelectedNotesSecondary' is defined but never used  no-unused-vars
+  Line 55:10:   'updateOutputText' is defined but never used                 no-unused-vars
+  Line 59:5:    'currentSynthNotes' is assigned a value but never used       no-unused-vars
+  Line 100:20:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 100:47:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 106:20:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 106:47:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 119:20:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 119:47:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 125:20:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 125:47:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 131:20:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 131:47:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 137:20:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 137:47:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 144:20:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 144:47:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 154:20:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 154:47:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 180:20:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 211:25:  Expected '===' and instead saw '=='                          eqeqeq
+  Line 221:13:  'midi' is already defined                                    no-redeclare
 
 src\keyboard.js
   Line 1:10:    'context' is defined but never used                         no-unused-vars
@@ -165,21 +165,21 @@ src\keyboard.js
   Line 21:27:   'scales' is defined but never used                          no-unused-vars
   Line 21:35:   'getScaleNotes' is defined but never used                   no-unused-vars
   Line 21:50:   'highlightKeysForScales' is defined but never used          no-unused-vars
-  Line 22:9:    'createHeptatonicScaleTable' is defined but never used      no-unused-vars
-  Line 23:9:    'chords' is defined but never used                          no-unused-vars
-  Line 23:17:   'highlightKeysForChords' is defined but never used          no-unused-vars
-  Line 23:41:   'createChordRootNoteTable' is defined but never used        no-unused-vars
-  Line 23:67:   'createChordSuffixTable' is defined but never used          no-unused-vars
-  Line 23:91:   'selectedChordRootNote' is defined but never used           no-unused-vars
-  Line 23:114:  'selectedChordSuffixes' is defined but never used           no-unused-vars
-  Line 24:9:    'noteToMidi' is defined but never used                      no-unused-vars
-  Line 24:21:   'noteToName' is defined but never used                      no-unused-vars
-  Line 24:33:   'keys' is defined but never used                            no-unused-vars
-  Line 24:39:   'getElementByNote' is defined but never used                no-unused-vars
-  Line 24:57:   'getElementByMIDI' is defined but never used                no-unused-vars
-  Line 25:9:    'createScaleChordCrossReference' is defined but never used  no-unused-vars
-  Line 25:41:   'updateCrossReferenceDisplay' is defined but never used     no-unused-vars
-  Line 30:5:    Expected a default case                                     default-case
+  Line 21:74:   'createHeptatonicScaleTable' is defined but never used      no-unused-vars
+  Line 22:9:    'chords' is defined but never used                          no-unused-vars
+  Line 22:17:   'highlightKeysForChords' is defined but never used          no-unused-vars
+  Line 22:41:   'createChordRootNoteTable' is defined but never used        no-unused-vars
+  Line 22:67:   'createChordSuffixTable' is defined but never used          no-unused-vars
+  Line 22:91:   'selectedChordRootNote' is defined but never used           no-unused-vars
+  Line 22:114:  'selectedChordSuffixes' is defined but never used           no-unused-vars
+  Line 23:9:    'noteToMidi' is defined but never used                      no-unused-vars
+  Line 23:21:   'noteToName' is defined but never used                      no-unused-vars
+  Line 23:33:   'keys' is defined but never used                            no-unused-vars
+  Line 23:39:   'getElementByNote' is defined but never used                no-unused-vars
+  Line 23:57:   'getElementByMIDI' is defined but never used                no-unused-vars
+  Line 24:9:    'createScaleChordCrossReference' is defined but never used  no-unused-vars
+  Line 24:41:   'updateCrossReferenceDisplay' is defined but never used     no-unused-vars
+  Line 29:5:    Expected a default case                                     default-case
 
 src\metronome.js
   Line 4:7:     'animations' is assigned a value but never used         no-unused-vars
@@ -229,17 +229,11 @@ src\progression\scaleSync.js
 src\progression\share.js
   Line 138:10:  'encodeStateToURL' is defined but never used  no-unused-vars
 
-src\scaleGenerator.js
-  Line 3:21:   'noteToName' is defined but never used            no-unused-vars
-  Line 3:39:   'getElementByNote' is defined but never used      no-unused-vars
-  Line 3:57:   'getElementByMIDI' is defined but never used      no-unused-vars
-  Line 3:75:   'initializeMouseInput' is defined but never used  no-unused-vars
-  Line 47:17:  'key' is already defined                          no-redeclare
-  Line 48:17:  'midi' is already defined                         no-redeclare
-  Line 57:13:  'midi' is already defined                         no-redeclare
-
-src\scales.js
-  Line 27:7:  'getElementByNote' is assigned a value but never used  no-unused-vars
+src\scales\index.js
+  Line 66:7:    'getElementByNote' is assigned a value but never used  no-unused-vars
+  Line 127:17:  'key' is already defined                               no-redeclare
+  Line 128:17:  'midi' is already defined                              no-redeclare
+  Line 137:13:  'midi' is already defined                              no-redeclare
 
 src\scales\state.js
   Line 75:5:    'scalePositionDarkDuplicate' is assigned a value but never used  no-unused-vars
@@ -251,7 +245,7 @@ src\scales\state.js
   Line 429:10:  'getAllSelectedScaleChords' is defined but never used            no-unused-vars
 
 src\scales\ui\scaleTable.js
-  Line 272:18:  Expected '===' and instead saw '=='  eqeqeq
+  Line 271:18:  Expected '===' and instead saw '=='  eqeqeq
 
 src\styles\constants.js
   Line 2:7:   'size0' is assigned a value but never used   no-unused-vars

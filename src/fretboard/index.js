@@ -19,8 +19,7 @@
 // module top-level.
 
 import {processChord, generateSyntheticChords} from '../theory/chords';
-import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from '../scales';
-import {createHeptatonicScaleTable, createQuickScalePicker, getPrimaryScale, getPrimaryRootNote} from '../scaleGenerator';
+import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, createHeptatonicScaleTable, createQuickScalePicker, getPrimaryScale, getPrimaryRootNote} from '../scales';
 import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from '../chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from '../midi';
 import {

@@ -8,8 +8,8 @@
 //
 // Split out of scales.js as part of REFACTOR_PLAN.md Phase 4 (the
 // scaleGenerator.js/scales.js -> src/scales/ half). scales.js's remaining
-// ~60 lines (highlightKeysForScales and the DOM lookup table it uses) stay
-// behind for now - see ARCHITECTURE.md's Phase 4 notes for why.
+// ~60 lines (highlightKeysForScales and the DOM lookup table it uses) live
+// on in ./index.js, the barrel scales.js was eventually folded into.
 
 import { noteToMidi, noteToName } from '../midi';
 import { setScaleContext, getScaleContext } from '../theory/notation';

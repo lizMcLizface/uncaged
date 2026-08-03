@@ -73,7 +73,7 @@ describe('parseChordToken', () => {
 
 describe('resolveRomanChord', () => {
   // Resolution reads module-level scale-selection state from
-  // scaleGenerator.js. With no localStorage entry (as in a fresh test
+  // src/scales/. With no localStorage entry (as in a fresh test
   // environment) that defaults to scale 'Major-6' (Aeolian) rooted on 'E' -
   // this is what makes degree I resolve to E minor below, not a property of
   // resolveRomanChord itself.

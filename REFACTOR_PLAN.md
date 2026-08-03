@@ -14,7 +14,7 @@ session finds its place without re-reading the codebase.
 | 2 — `src/theory/` | done | this commit | Landed as 5 modules, not the 4 the plan sketched, and `scales.js` was **not** moved - see the Phase 2 result note below and `ARCHITECTURE.md` §6.1/§6.2 for why. |
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
-| 4 — Split progression + scales | in progress | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). Second half started: `scaleGenerator.js`/`scales.js` -> `src/scales/`, investigated (`ARCHITECTURE.md` §6.23's intro) and steps 1-4/5 landed - `state.js` (`ARCHITECTURE.md` §6.23), `scaleData.js` (`ARCHITECTURE.md` §6.24), `ui/infoPanel.js` (`ARCHITECTURE.md` §6.25), `ui/rootNoteTable.js`+`ui/scaleTable.js` (`ARCHITECTURE.md` §6.26). Remaining: rename the residual to `src/scales/index.js` as the barrel. |
+| 4 — Split progression + scales | done | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). `scaleGenerator.js` (2,515 lines) + `scales.js` (638 lines) are now `src/scales/`: `state.js`/`scaleData.js`/`ui/infoPanel.js`/`ui/rootNoteTable.js`/`ui/scaleTable.js`/`index.js` (`ARCHITECTURE.md` §6.23-§6.27, the barrel - both original files deleted, every external importer repointed to `./scales`). |
 | 5 — Kill the `window` bus | not started | — | |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
@@ -1102,6 +1102,38 @@ cross-import directions directly - a scale-family-grid click and a
 quick-picker root-note change both updated everything correctly end-to-end.
 This closes out the function-extraction work for this phase-half.
 Remaining: rename the residual to `src/scales/index.js` as the barrel.
+
+**Progress (2026-08-03), step 5/5 (final) - `src/scales/index.js`
+(`scaleGenerator.js`/`scales.js` deleted):** landed - unlike every other
+barrel step in this plan, this one merges **two** shrinking residuals
+(`scaleGenerator.js`'s and `scales.js`'s) into one file, concatenated in
+their original relative evaluation order (`scales.js`'s content first,
+since `scaleGenerator.js` used to `import` from it, including
+`keys_chords`'s DOM-querying object literal that runs once at import
+time). `highlightKeysForScales` (scales.js) and `highlightScaleNotes`
+(scaleGenerator.js) are two different, similarly-named functions that
+stayed separate, as they always were - not investigated for merging, out
+of scope for a move-only phase. Fourteen external files had two import
+statements (one per old file) merged into one pointing at `./scales`;
+two files needed no change since they already imported only from that
+path. Four confirmed-dead `./midi` imports (`noteToName`,
+`getElementByNote`, `getElementByMIDI`, `initializeMouseInput`, unused
+since before this phase) were dropped rather than carried into the
+barrel. Full detail in `ARCHITECTURE.md` §6.27. `npm test` (28/28) and
+`bash scripts/check-build.sh` pass - baseline moved 202 -> 198 (the four
+dropped dead imports, verified by diffing warning messages with line
+numbers stripped rather than line-by-line, given how many files shifted
+by exactly one line from the import merges). Verified via `run-app` with
+the widest check of this phase-half: zero console errors across all six
+tabs, pixel-identical default load; then a full round trip - typed a
+progression, toggled "Show Mini Pianos", clicked Share, reloaded fresh
+from the resulting URL, and confirmed the input, all four chord cards,
+and the toggle state restored correctly through `src/progression/share.js`'s
+repointed import of `src/scales/`, not just a direct call.
+
+**This closes out Phase 4 in its entirety** - both `progressionBuilder.js`
+-> `src/progression/` and `scaleGenerator.js`/`scales.js` -> `src/scales/`
+are done. See the Status table above for the final file/line counts.
 
 ### Phase 5 — Replace `window` with an event bus
 

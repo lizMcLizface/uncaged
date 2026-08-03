@@ -1,7 +1,6 @@
 
 import {processChord} from './theory/chords';
-import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales} from './scales';
-import {createHeptatonicScaleTable, scaleState} from './scaleGenerator';
+import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, createHeptatonicScaleTable, scaleState} from './scales';
 import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from './midi';
 

@@ -31,8 +31,7 @@
 
 import { fretboardState } from '../state';
 import { addInteractiveEvent } from '../Fretboard';
-import { HeptatonicScales, getScaleNotes } from '../../scales';
-import { getPrimaryScale, getPrimaryRootNote } from '../../scaleGenerator';
+import { HeptatonicScales, getScaleNotes, getPrimaryScale, getPrimaryRootNote } from '../../scales';
 import {
     getPresets as getInstrumentPresets,
     getActiveConfig as getActiveInstrumentConfig,

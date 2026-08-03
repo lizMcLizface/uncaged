@@ -20,8 +20,7 @@
 // (frets.js itself folded into ../index.js as the barrel in step 8/8).
 
 import { processChord } from '../../theory/chords';
-import { HeptatonicScales, getScaleNotes } from '../../scales';
-import { getPrimaryScale, getPrimaryRootNote } from '../../scaleGenerator';
+import { HeptatonicScales, getScaleNotes, getPrimaryScale, getPrimaryRootNote } from '../../scales';
 import {
     noteToMidi as notationNoteToMidi,
     translateNotes as notationTranslateNotes,

@@ -20,7 +20,7 @@ import {
     normalizeNote
 } from '../../theory/notation';
 import { getIntervalColor } from '../../theory/intervals';
-import { getPrimaryScale, getPrimaryRootNote } from '../../scaleGenerator';
+import { getPrimaryScale, getPrimaryRootNote } from '../../scales';
 import { assignFingers, selectGripFromPositions } from '../../chordFingering';
 import { fretboardState, persistScalePositionGridSettings } from '../state';
 import { FRET_COUNT } from '../Fretboard';
