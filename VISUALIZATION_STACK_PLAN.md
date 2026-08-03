@@ -28,6 +28,7 @@ Decisions taken 2026-08-03, before any code:
 | Scope of "the stack" | **The main display only** — the main fretboard and the piano, which share `#fretNotPlaceholder` and are mutually exclusive. Mini fretboards and mini pianos are *sources*, never targets. §3.4 |
 | Layer payload | **`PIANO_VIEW_PLAN.md` §5.1's note list**, unchanged, plus an optional fretboard-only `positions` array for fingerings. §2.2 |
 | Overlap rule | **Top layer wins the key it owns; lower layers dim.** Not stripes. §2.4 |
+| A selected chord | **Pushes over the scale, keeping it visible.** The user's call, 2026-08-03. Replacing the scale becomes the *option* (`hideBelow`), not the default. §8.1 |
 | `pressedKey` | **Not a layer.** Transient input feedback, orthogonal to the stack, must survive every stack render. §2.5 |
 | Where it lives | **New `src/visualization/`** — it is neither the fretboard's nor the piano's; both are renderers. §4 |
 | Migration | **Strangler, not big bang.** The stack becomes the source of truth one producer at a time; §6's order is load-bearing. |
@@ -36,7 +37,7 @@ Decisions taken 2026-08-03, before any code:
 
 | Step | State | Notes |
 |---|---|---|
-| 8a — `stack.js` + tests, no renderers | not started | Pure. §6 |
+| 8a — `stack.js` + tests, no renderers | **done** 2026-08-03 | Pure. 59 tests in `src/visualization.test.js` (124 total). Two deviations, both §6's step 8a records: base/overlays as separate fields, and `hideBelow` |
 | 8b — Piano renderer, scale as a base layer | not started | Piano first: it has one writer today. §6 |
 | 8c — Fretboard renderer behind the same API | not started | §6 |
 | 8d — Move the Roman-numeral + chord-grid producers onto push/pop | not started | Deletes `restoreFretboardState`. §6 |
@@ -187,6 +188,10 @@ duplicate, so a source that fails to pop cannot leak more than one layer.
   renders `notes`. §5.2 covers producing both halves from one shape.
 - **`dimBelow`** is the user-facing flag from the brief: everything under
   this layer renders dimmed.
+- **`hideBelow`** is its stronger sibling, added in 8a once a selected chord
+  became a push rather than a replace (§8.1): "show this instead of what is
+  under it" has to stay expressible, and expressing it as a *flag* rather
+  than as "replace the base" keeps the scale one `hideBelow: false` away.
 - **`transient`** marks a layer that must never survive a base change —
   a hover preview is stale the moment the scale moves.
 
@@ -231,6 +236,9 @@ the two layers mean unrelated things, wrong here: a chord tone *is* a scale
 tone, and striping it against its own scale colour reads as a conflict where
 there is none. Winner-takes-all also degrades correctly on the fretboard,
 which has no equivalent of a striped marker.
+
+`hideBelow` drops the hidden layers' entries entirely rather than marking
+them, so a renderer cannot forget to skip them.
 
 Dimming is a render concern, expressed per renderer:
 
@@ -410,6 +418,40 @@ class, `dimBelow` marking exactly the layers below it, enharmonic collapse
 (`'E'` covers `'E/4'`, `'E/4'` does not cover `'E/5'`). This is the step
 where a bug stays invisible until everything sits on it.
 
+### 6.1 How 8a landed (2026-08-03)
+
+Done as written, 59 tests, no new build warnings. Four things worth carrying
+forward:
+
+**Base and overlays are separate fields, not one array with the base at
+index 0** (§2.1 described the latter). With one array, "the base is replaced,
+never popped" is a *convention* that `pushLayer` and `popLayer` each need a
+guard to uphold, an overlay whose id collides with the base is a silent trap,
+and "no base at all" — a real state today, `currentDisplayedChord === null` —
+needs a sentinel. With two fields every one of those is structural.
+`getLayers()` still presents one bottom-first list, which is all a renderer
+ever sees, so nothing downstream knows the difference. `stack.js`'s header
+records this.
+
+**`transient` defaults to true, and `transient: false` is what "pinned"
+means.** That fell out of §8.1's answer: a chord selected (not hovered) is an
+overlay that must outlive a scale change. So `setBaseLayer` drops only the
+transient ones. No extra concept was needed for the pinned case — it is one
+flag on a layer that already existed.
+
+**`hideBelow` was added here**, for the same reason (§2.2).
+
+**A no-op does not notify.** `popLayer` of an absent id, `clearTransient`
+with nothing transient, a push of an invalid layer — all return `false` and
+leave subscribers alone. This is the property that makes hover handlers safe
+to write, and it is asserted directly rather than left implicit.
+
+**`layers.js` duplicates `piano/labels.js` for exactly one step.**
+`buildScaleKeyStyles` and `getKeyLabel` compute a scale's colours and labels
+in the piano's own shape; `scaleLayer` computes them in the stack's. 8a could
+not delete them without touching `Piano.js`. **8b must**, and both file
+headers say so — if that duplication survives 8b, it is a bug.
+
 **8b — Piano renders the stack.** `Piano.renderStack`, subscribed in
 `src/fretboard/index.js`; `refreshPianoScale` becomes `setBaseLayer(scaleLayer(…))`.
 Adds the `dimKey` CSS rule. **Piano first, deliberately**: it has exactly one
@@ -429,7 +471,7 @@ pass condition.
 | Today | After |
 |---|---|
 | `showScaleOnFretboard()` | `setBaseLayer(scaleLayer(…))` |
-| `showChordOnFretboard(i)` / `showChordPatternOnFretboard(n, t)` | build the shape, `setBaseLayer(chordLayer(…))` |
+| `showChordOnFretboard(i)` / `showChordPatternOnFretboard(n, t)` | build the shape, `pushLayer(chordLayer({transient: false, dimBelow: true, …}))` — **over** the scale, not replacing it (§8.1) |
 | the same three, with `isTemporary: true` | `pushLayer({…, transient: true, dimBelow: true})` |
 | `restoreFretboardState()` | `popLayer(id)` — **deleted** |
 | `isInHoverState` | **deleted** |
@@ -479,24 +521,59 @@ touches existing fretboard behaviour and must produce *identical* output.
 - **The progression view has its own display path** (`fretboardDisplay.js`)
   that calls `fretboard.displayChord` and `clearMarkers` directly, and reaches
   the scale through `window.showScaleOnFretboard` (`:128`) with a
-  synthetic-`mouseenter` fallback (`:132-137`). It is out of scope for 8d but
-  it writes to the same fretboard, so it will fight the stack. Decide in 8d:
-  either it moves too, or it is documented as the one legacy writer. Do not
-  discover this in 8f.
+  synthetic-`mouseenter` fallback (`:132-137`). It writes to the same
+  fretboard, so it will fight the stack. **Decided — §8.2: it stays as the
+  one documented legacy writer.** The risk does not go away, it is accepted;
+  do not rediscover it in 8f and treat it as a regression.
 - **`PIANO_VIEW_PLAN.md` step 9 (instrument range) lands after this.** §2.5
   settles its shape in advance so it does not arrive as a fourth kind of thing.
 
 ---
 
-## 8. Open, to decide before 8d
+## 8. Decisions and what is still open
 
-- **Does a clicked chord replace the base, or push a permanent layer over the
-  scale?** Today it replaces (the scale disappears). Pushing with
-  `dimBelow: true` would keep the scale visible under every chord — arguably
-  what the app is *for*, and a visible behaviour change, so it needs its own
-  commit and screenshots the way `PIANO_VIEW_PLAN.md` step 5 did. **My
-  recommendation: keep replace in 8d, and offer push-over-scale as a separate
-  toggle afterwards.** One behaviour change per commit.
+### 8.1 A selected chord pushes over the scale — decided 2026-08-03
+
+The user's call, against this document's original recommendation, and it
+changes 8d's shape rather than deferring a toggle: **push is the default
+behaviour, and hiding the scale is the alternative option.** So a clicked
+chord becomes a pinned overlay (`transient: false`) over the scale base,
+`dimBelow: true`, and the scale stays readable underneath it. Replacing the
+scale outright is `hideBelow: true` on the same layer — a setting, not a
+different code path.
+
+This is still a visible behaviour change (today the scale disappears when a
+chord is selected) and still gets its own commit with before/after
+screenshots inside 8d, per `PIANO_VIEW_PLAN.md` step 5's precedent. What
+changed is which way round the default sits.
+
+Consequences already absorbed in 8a: `transient` and `hideBelow` exist, so
+8d only has to pick the flags. `setBaseLayer` keeps meaning "the scale
+changed", which is now its only meaning.
+
+### 8.2 The legacy fretboard writers — partly decided
+
+The user's answer was conditional: *if* the display in question is the one
+under the Other Controls tab, it can be legacied away as redundant. It is
+not, and the distinction matters:
+
+| Writer | Where | State |
+|---|---|---|
+| `buildDisplayControls`, `buildNoteMarkingControls`, `buildNoteSearchControls`, `buildChordPatternDemoControls` | Other Controls tab | **Already dead** — their `appendChild` calls were commented out before this work (`ui/controls.js:540-548`). Only `Clear All` / `Show All` are live |
+| `progression/fretboardDisplay.js` | **Chord Progression tab** | **Live.** Calls `fretboard.displayChord` and `clearMarkers` directly, and reaches the scale through `window.showScaleOnFretboard` with a synthetic-`mouseenter` fallback (`:128-137`) |
+
+So the redundant thing is already inert, and deleting it is a dead-code
+cleanup on its own schedule, not part of 8d. The *live* second writer is the
+progression one. **Default taken, pending a word otherwise: 8d documents it
+as the one legacy writer and leaves it working; it does not move onto the
+stack and it does not get deleted.** It writes to the same fretboard, so it
+will visibly fight a pushed layer — that is a known, accepted limitation
+until it is dealt with, not something to discover in 8f.
+
+### 8.3 Still open
+
+- **Does a clicked chord replace the base, or push over it?** — decided,
+  §8.1.
 - **Does the piano get the fingering-vs-pitch-class distinction visually?**
   The fretboard distinguishes known shapes from best-effort ones with
   solid/dashed borders (`ui/chordGrid.js:633`). The piano has no equivalent
