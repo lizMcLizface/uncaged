@@ -41,7 +41,7 @@ Decisions taken 2026-08-03, before any code:
 | 8b — Piano renderer, scale as a base layer | **done** 2026-08-03 | 17-check Playwright run, output proved identical against the stashed tree. `src/piano/labels.js` retired. §6.2 |
 | 8c — Fretboard renderer behind the same API | **done** 2026-08-03 | Marker-level parity with `markScale` asserted across 3 scales × 2 label modes, and mutation-checked. Still uncalled. §6.3 |
 | 8d — Move the Roman-numeral + chord-grid producers onto push/pop | **done** 2026-08-03 | `restoreFretboardState`, `isInHoverState`, both Sets and 3 of the 4 ladders deleted. 16-check interaction run. §6.4 |
-| 8e — Chord superimposition on the piano (the original step 8) | not started | §5 |
+| 8e — Chord superimposition on the piano (the original step 8) | **done** 2026-08-03 | `PIANO_VIEW_PLAN.md` step 8 is complete. §6.5 |
 | 8f — Wire the hover sources that never worked | not started | The payoff. §1.3, §6 |
 
 ---
@@ -660,6 +660,39 @@ one field away from finished.
 **8e — Chord superimposition on the piano (§5.2).** The original step 8, and
 by now a layer builder plus a call site. This is where `PIANO_VIEW_PLAN.md`
 step 8 can be marked done.
+
+### 6.5 How 8e landed (2026-08-03)
+
+Small, as 8d predicted: chord layers already carried `positions`, and this
+adds `notes`. The whole step is `getShapeSoundingNotes` - the shared middle
+§5.2 identified inside `getChordVoicingNotes`, which was already resolving a
+displayed fingering to its sounding pitches for the synth and then stripping
+the `/`. The synth wants to *play* what is shown; the piano wants to *light*
+it. One function, two callers, and `getChordVoicingNotes` is now that plus
+`.replace('/', '')`.
+
+**The piano shows the fingering's real octaves, doublings included.** Hovering
+V in E Aeolian lights B2, F♯3, B3, D4, F♯4 - five keys across three pitch
+classes, because the guitar shape doubles B and F♯ an octave apart. F♯2 stays
+dimmed: it is in the scale but not under anyone's fingers. §5.2 warned this
+"will look wrong to someone expecting a triad"; seen on screen it reads as
+the point of the feature rather than a defect.
+
+**A bug caught by writing the change, not by running it.** 8d's
+`showFingeringShape` rebuilds the live chord layer when the position picker
+changes; adding `notes` meant it had to rebuild those too, and the obvious
+`{...layer, notes: soundingNotes}` would have assigned **raw note names where
+resolved objects belong** - a layer that renders nothing, from a code path
+only reachable by clicking a position tab. Fixed by rebuilding through
+`chordLayer` instead of spreading, which required layers to remember their
+own `rootNote` and `labelMode`. There is now a unit test for exactly that
+round-trip.
+
+**Verified** with a 7-check Playwright run: the chord lights specific
+undimmed keys, the scale stays visible dimmed underneath, the lit keys are
+specific pitches rather than every octave, a doubled pitch class lights more
+than one key, and leaving restores the piano exactly. 124 tests, 34 warnings
+unchanged, zero page errors.
 
 **8f — Wire the sources that never worked.** Hovering a chord-grid cell, a
 Roman-numeral button, a mini piano, a mini fretboard, a scale-table cell or a

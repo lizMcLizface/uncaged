@@ -462,6 +462,29 @@ describe('layers: chordLayer', () => {
     expect(layer.hideBelow).toBe(false);
   });
 
+  test('remembers its root and label mode, so it can be rebuilt from itself', () => {
+    // The position picker swaps one fingering of a chord for another by
+    // rebuilding the live layer. Without these two fields it would have to
+    // thread them back through the caller, which is how they drift - and a
+    // naive `{...layer, notes: [...]}` spread produces a layer whose notes
+    // are raw names rather than resolved objects, which nothing can render.
+    const layer = chordLayer({ notes: ['E/2'], rootNote: 'E', labelMode: 'interval' });
+    expect(layer.rootNote).toBe('E');
+    expect(layer.labelMode).toBe('interval');
+
+    const rebuilt = chordLayer({
+      id: layer.id,
+      label: layer.label,
+      rootNote: layer.rootNote,
+      labelMode: layer.labelMode,
+      notes: ['B/2'],
+      dimBelow: layer.dimBelow,
+      transient: layer.transient
+    });
+    expect(rebuilt.notes[0]).toMatchObject({ note: 'B/2', semitone: 7 });
+    expect(flattenLayers([rebuilt]).resolve(47)).not.toBeNull(); // B2
+  });
+
   test('without a root, notes are uncoloured rather than mis-coloured', () => {
     const layer = chordLayer({ notes: ['E', 'G#'] });
     expect(layer.notes[0].color).toBeNull();

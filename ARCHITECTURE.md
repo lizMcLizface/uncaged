@@ -2648,6 +2648,25 @@ Two live direct writers remain outside the stack, both deliberate:
 `progression/fretboardDisplay.js` (§6.17) and the `Show All Notes` debugging
 button. Both paint over the stack and are painted over by it.
 
+**8e closed the loop to the piano** (2026-08-03), completing
+`PIANO_VIEW_PLAN.md` step 8. A chord layer's `positions` are the fingering
+(fretboard only); its `notes` are what that fingering **sounds** — real
+octaves, doublings and all — which is what the piano lights. Both come from
+one shape, so the two instruments cannot disagree about a chord.
+
+`getShapeSoundingNotes` is the seam: it was already the tail of
+`getChordVoicingNotes`, which resolves the *displayed* shape to pitches so
+the synth plays what is shown rather than a generic root-position triad.
+Playing it and lighting it are the same question; `getChordVoicingNotes` is
+now that function plus PolySynth's octave-suffixed spelling. Hovering V in E
+Aeolian lights B2, F♯3, B3, D4, F♯4 — five keys across three pitch classes,
+because the guitar shape doubles B and F♯ an octave apart, while F♯2 stays
+dimmed as a scale tone nobody is fretting.
+
+Layers carry their own `rootNote` and `labelMode` so one can be rebuilt from
+itself — the position picker swaps fingerings that way, and threading those
+back through the caller is how they drift.
+
 **Verified** with 59 new tests (124 total), 34 build warnings unchanged, and
 a direct ESLint run over the new folder — the build check alone cannot
 validate it, because nothing imports it yet and webpack never compiles it
