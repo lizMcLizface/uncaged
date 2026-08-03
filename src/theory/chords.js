@@ -665,6 +665,59 @@ function matchChord(inputChord, chords, verbose = false) {
     return candidates;
 }
 
+/**
+ * Shift a spelled `'C/4'` note by whole octaves, keeping its spelling.
+ * A note without an octave is returned untouched.
+ */
+function bumpOctave(noteWithOctave, bump) {
+    if (!bump) return noteWithOctave;
+    const match = /^(.*)\/(-?\d+)$/.exec(noteWithOctave);
+    if (!match) return noteWithOctave;
+    return `${match[1]}/${parseInt(match[2], 10) + bump}`;
+}
+
+/**
+ * The stacked-thirds chord on every degree of a scale, **rising**.
+ *
+ * Same indexing as `generateSyntheticChords` (every other scale step,
+ * wrapping) with one difference that matters the moment anything plays or
+ * displays the result: when the index wraps past the top of the scale, the
+ * note moves up an octave instead of dropping back to where it started.
+ * `generateSyntheticChords` doesn't bump, so its wrapped tones come out below
+ * the root and the "chord" is a scrambled inversion - fine when the caller
+ * only wants the note *letters* (which is all its callers want), wrong for a
+ * voicing.
+ *
+ * Extracted from `scales/ui/infoPanel.js`, which had the only correct copy,
+ * so the Scale Information cards and the degree hotkeys build one thing.
+ *
+ * @param {string[]} scaleNotes - `getScaleNotes` output, octave-tagged and
+ *        including the trailing octave-duplicate root
+ * @param {number} length - 3 = triad, 4 = seventh, 5 = ninth
+ * @returns {Array<{chord: string[], chordWithOctave: string[], scaleDegrees: number[]}>}
+ */
+function buildStackedThirds(scaleNotes, length) {
+    const degreeCount = scaleNotes.length - 1;
+    const result = [];
+    if (degreeCount < 1) return result;
+
+    for (let i = 0; i < degreeCount; i++) {
+        const scaleDegrees = [];
+        const chord = [];
+        const chordWithOctave = [];
+        for (let j = 0; j < length; j++) {
+            const rawIndex = i + j * 2;
+            const index = rawIndex % degreeCount;
+            const octaveBump = Math.floor(rawIndex / degreeCount);
+            scaleDegrees.push(index + 1);
+            chord.push(scaleNotes[index].slice(0, -2));
+            chordWithOctave.push(bumpOctave(scaleNotes[index], octaveBump));
+        }
+        result.push({ chord, chordWithOctave, scaleDegrees });
+    }
+    return result;
+}
+
 function generateSyntheticChords(scale, length = 3, root = 'C') {
     const scaleNotes = getScaleNotes(root, scale.intervals);
     const syntheticChords = [];
@@ -739,4 +792,4 @@ function identifySyntheticChords(scale, length = 3, root = 'C') {
 // console.log('Identified Chords:', identifiedChords);
 
 
-export { intervalToSemitones, chordToIntervals, notationNoteToMidi as noteToMidi, notationMidiToNote as midiToNote, resolveChord, processChord, matchChord, generateSyntheticChords, identifySyntheticChords };
+export { intervalToSemitones, chordToIntervals, notationNoteToMidi as noteToMidi, notationMidiToNote as midiToNote, resolveChord, processChord, matchChord, generateSyntheticChords, buildStackedThirds, bumpOctave, identifySyntheticChords };

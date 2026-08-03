@@ -46,6 +46,8 @@ Decisions taken 2026-08-03, before any code:
 | 8d — Move the Roman-numeral + chord-grid producers onto push/pop | **done** 2026-08-03 | `restoreFretboardState`, `isInHoverState`, both Sets and 3 of the 4 ladders deleted. 16-check interaction run. §6.4 |
 | 8e — Chord superimposition on the piano (the original step 8) | **done** 2026-08-03 | `PIANO_VIEW_PLAN.md` step 8 is complete. §6.5 |
 | 8f — Wire the hover sources that never worked | **done** 2026-08-03 | `highlightKeysForScales`, `keys_chords` and their `getElementByMIDI` retired. 9-check run. §6.6 |
+| 8g — Retire the progression tab's legacy writer; hover-or-tap sources | **done** 2026-08-03 | Follow-up, not planned: §8.2's accepted limitation turned up as four user-reported bugs. 20-check run. §6.7 |
+| 8h — The Scale Position Grid pushes; `positionLayer` | **done** 2026-08-03 | §10.2's "layer kind the model does not have" turned out to be one flag. 128 tests, 15-check run. §6.8 |
 
 ---
 
@@ -269,7 +271,12 @@ still be *readable* underneath, or `dimBelow` is just "hide".
 - **The instrument-range overlay** (`PIANO_VIEW_PLAN.md` step 9). It is a
   property of the *keys*, not a highlight, and it must show under everything
   including an empty stack. Renderer-level, not a layer — decided here so
-  step 9 does not have to relitigate it.
+  step 9 does not have to relitigate it. **Landed 2026-08-03 exactly as
+  written**, as `Piano.renderBounds` owning two classes of its own
+  (`outOfRangeKey`, `octaveKey`) that `renderStack` never touches — plus a
+  second range on the same footing, the octave the computer keyboard plays in.
+  Settling it in advance is what kept it from arriving as a fourth kind of
+  thing.
 
 ---
 
@@ -401,7 +408,9 @@ Two consequences worth stating before they are discovered:
   actually playing), but it *will* look wrong to someone expecting a triad,
   and at the default three-octave range from C2 part of it may sit off the
   keyboard. Accept it, and note that `PIANO_VIEW_PLAN.md` §8.2's "fit to
-  instrument" action is the escape hatch.
+  instrument" action is the escape hatch. **Overtaken 2026-08-03: the piano
+  now defaults to the full 88 keys**, so the fingering's octaves are on screen
+  by construction and this stopped being a cost anyone pays.
 - **Chords with no playable shape.** `buildFingeringShapes` can return
   nothing (`index.js:417` handles it). The piano layer then falls back to the
   chord's pitch classes, periodic — a real display, not a blank.
@@ -777,6 +786,130 @@ from a closed tab.
 touches existing fretboard behaviour and must produce *identical* output.
 8e-8f are additive.
 
+### 6.7 How 8g landed (2026-08-03) — the follow-up nobody planned
+
+Four bugs reported after using the app, which turned out to be one thing:
+**§8.2's "one documented legacy writer" is on a screen users look at.**
+
+| Reported | Cause |
+|---|---|
+| Clear Progression blanks the neck instead of reverting to the scale | `clearProgression` ran `clearMarkers()` and then tried to redraw the scale through `displayScaleContext` |
+| Leaving a chord card does not reset either | `displayAllChordPatterns` did the same, and skipped the redraw entirely with "Show Scale Context" off |
+| A card, its mini piano and its mini fretboard show the same chord three ways | the card drew directly (plain white markers, no dimming); the children pushed stack previews (dimmed, labelled); and a child's `mouseleave` fires when the pointer moves *back onto the card that still contains it* |
+| The Scale Information panel's chord cards do nothing on hover | never wired — 8f wired the *progression* cards' mini pianos, not these |
+
+**The third one is the interesting one, because both halves were "correct".**
+The mini fretboard popped on `mouseleave` exactly as a preview source should.
+What it could not know is that it sits inside a larger preview source, and
+`mouseleave` on a child fires while the pointer is still inside the parent.
+Nesting preview sources does not work, and the fix is not to make popping
+smarter — it is that **the card is the source and its children have none**.
+One source per thing the user thinks they are pointing at.
+
+**Markers go through the stack; chord lines still do not.** A hovered card is
+`pushChordPreview` / `popPreviewLayer`, so the restore is a pop and the scale
+underneath was never destroyed. `displayScaleContext` is deleted: it reached
+for `window.showScaleOnFretboard` and, failing that, dispatched a synthetic
+`mouseenter` at the Scale button — two ways to re-derive a scale the base
+layer had never stopped holding. Chord lines keep their direct
+`drawChordLine`/`clearChordLines` calls; §2.5 does not model them and this
+step did not invent a model for them.
+
+**"Show Scale Context" became `hideBelow`** rather than being dropped.
+Unchecked used to mean `clearMarkers()`; it now hides the base instead of
+erasing it, which is the same picture and comes back on its own.
+
+**`bindPreviewSource`, and the near-miss inside it.** Hover pushes, leave
+pops, and on touch a tap pushes and *stays* until the next tap lands outside
+any source. Written first as `mouseenter`/`mouseleave` + `touchstart`, it
+looked right and did nothing: a tap makes the browser emulate a mouse over
+the tapped element and then move that phantom pointer away, so the
+synthesized `mouseleave` popped what the tap had just pushed. Net zero, and
+nothing static can see it. Pointer events carry `pointerType`, so hovering
+and tapping stop having to be inferred from event order.
+
+That is the fourth time in this plan a green-looking thing needed checking,
+and the second where the *mechanism* was a browser synthesising an event
+nobody wrote (§6.2's CSS transition was the first). **When the browser is
+allowed to invent input, assert on the outcome, never on the handler.**
+
+**The Scale Information panel is bound per *block*, not per card.** A card
+holds two chords, so the triad half previews the triad and the seventh half
+the seventh; each block includes its own mini piano, so the keys and the text
+beside them do the same thing.
+
+**Verified** with a 20-check run (`.tmp/verify-progression-stack.js`) and
+8b/8d/8e/8f re-run unchanged (17/17, 16/16, 7/7, 9/9). Mutation-checked
+twice: removing the pop in `displayAllChordPatterns` fails the three reset
+checks, and restoring the mini fretboard's `popPreviewLayer` reproduces the
+reported mid-hover flicker exactly. 124 tests, 34 warnings unchanged, zero
+page errors.
+
+### 6.8 How 8h landed (2026-08-03) — the Scale Position Grid
+
+§6.6 left this grid unwired and §10.2 recorded why: it shows "a *region* of
+the neck, not a note set — a layer kind the model does not have, and
+inventing one to finish a step is how §3.4's boundary gets lost." **The
+judgement was right and the cost estimate was wrong.** `positions` has been
+exactly "a region of the neck" since §2.2 defined it. What was missing was
+that section's *other* sentence — "when present the fretboard renders
+`positions` instead of `notes`" — which `Fretboard.renderStack` never
+implemented, and which chord layers have quietly relied on the absence of
+since 8d.
+
+So the new layer kind is one flag. `positionLayer` = `chordLayer` +
+`positionsOnly: true`, and the note pass skips any layer that sets it.
+**Opt-in, not a default**, because turning §2.2's rule on globally would
+change every chord source's fretboard output — a hovered chord currently
+lights every position of its sounding pitches *and* draws its fingering on
+top, which nobody has complained about and 8d's checks assert. Documented at
+both ends so the divergence between §2.2 and the renderer is a decision
+rather than a bug someone finds later.
+
+**The two behaviours, and why the Fret Labels toggle picks between them.**
+
+| Mode | Hovering a cell | Because |
+|---|---|---|
+| Relative labels (`R`, `+1`, `-1`) | the cell's notes as **pitch classes across the whole neck**, over the dimmed scale | relative labels mean the cell is a *movable shape*; "where do these notes live" is the question it is asking |
+| Absolute labels (real fret numbers) | **only that pattern**, at those frets, scale hidden | absolute labels mean the cell is *one position*; anything else on the neck is noise |
+
+That mapping is not an extra setting: it is the setting the user already sets
+to say which of those two things the grid is currently about.
+
+**Column headers are the way back out.** A header is the whole column, so it
+means the notes rather than any one position of them — pitch classes
+board-wide, in either mode. Hovering one from inside an absolute-mode preview
+zooms back out without touching a control.
+
+**Duplicate dots recede by opacity, not by colour.** The cell greys its
+wrap-around duplicates with `shadeColor`; the preview keeps the hue and drops
+presence to 0.4, which is how dimming is expressed everywhere else in the
+stack (§2.4). The candidate therefore carries `baseIntervalColor` alongside
+the shaded one, and `isDuplicate` as a fact rather than only as a colour. It
+follows the **Dark Duplicate** checkbox: with it off, nothing is dimmed in
+either place.
+
+**`buildScalePositionCandidates` was extracted first**, for 8d's reason: the
+preview and the mini board must not be able to disagree about a cell's
+contents. SVG geometry (x/y) stayed in the renderer, which is the whole of
+what the two do differently. **Verified as a non-change** — all 40 mini
+boards' `outerHTML` compared byte-for-byte against the pre-extraction tree,
+0 differing (§2.3 lesson 8 again).
+
+**Verified** with a 15-check run (`.tmp/verify-position-grid.js`) and
+8b/8d/8e/8f/8g re-run unchanged (17/17, 16/16, 7/7, 9/9, 20/20). 128 tests
+(4 new for `positionLayer`), 34 warnings unchanged, zero page errors.
+Mutation-checked: disabling the `positionsOnly` skip turns "only that
+pattern" from 11 markers over 5 frets into 25 over 19, and fails both
+absolute-mode checks.
+
+One check initially failed that was the *check's* fault, not the code's: a
+grid re-render mid-hover leaves the pointer over a freshly built cell, so
+Chromium fires `pointerenter` on it and a preview being on screen right after
+the rebuild is correct. The property that actually matters — leaving
+afterwards still lands on the bare scale — is what it asserts now. Fourth
+step running, fourth green check that needed checking.
+
 ---
 
 ## 7. Risks
@@ -846,6 +979,15 @@ as the one legacy writer and leaves it working; it does not move onto the
 stack and it does not get deleted.** It writes to the same fretboard, so it
 will visibly fight a pushed layer — that is a known, accepted limitation
 until it is dealt with, not something to discover in 8f.
+
+**Superseded 2026-08-03 by 8g (§6.7).** "It will visibly fight a pushed
+layer" was right, and the limitation lasted exactly as long as it took to use
+the tab: the user reported it as four separate bugs without knowing they were
+one. The deferral was still the correct call for 8d — the fix needed
+`pushChordPreview` to exist first — but the lesson is that "known, accepted
+limitation" and "bug nobody has hit yet" are the same thing when the
+limitation is on a screen users look at. Markers now go through the stack;
+chord lines, which the stack does not model, still do not.
 
 **A second live direct writer, found in 8d:** the `Show All Notes` button
 (`ui/controls.js`) calls `fretboard.markAllNotes()`, which draws every note
@@ -918,8 +1060,9 @@ Three things that are easy to get wrong:
 ## 10. Where things stand, and what is next
 
 **Done, 2026-08-03, six commits** (`58a3ce1`, `a371be3`, `171a7af`,
-`1a8769a`, `3f9e81c`, `e17a330`). 124 tests, 34 build warnings unchanged
-throughout, zero page errors.
+`1a8769a`, `3f9e81c`, `e17a330`), plus one unplanned follow-up (8g, §6.7)
+that retired the last legacy fretboard writer. 124 tests, 34 build warnings
+unchanged throughout, zero page errors.
 
 ### 10.1 What exists now
 
@@ -927,8 +1070,8 @@ throughout, zero page errors.
 |---|---|
 | `src/visualization/` | `stack.js` (base + overlays, push/pop/subscribe), `flatten.js` (ordering, specificity, dim/hide), `layers.js` (`scaleLayer`/`chordLayer`/`noteLayer`), `index.js` |
 | Renderers | `Piano.renderStack(resolved)` and `Fretboard.renderStack(resolved, layers)`. Neither imports the stack; `src/fretboard/index.js` subscribes both |
-| Producers | all in `src/fretboard/index.js`: `refreshScaleLayer` (base), `pushChordLayer`, `pushScalePreview`, `pushChordPreview`, `popPreviewLayer`, `popChordLayers`, `showFingeringShape`, `reapplySelection` |
-| Sources | Roman numerals, chord grid, scale table, root-note table, progression cards' mini piano and mini fretboard |
+| Producers | all in `src/fretboard/index.js`: `refreshScaleLayer` (base), `pushChordLayer`, `pushScalePreview`, `pushChordPreview`, `popPreviewLayer`, `popChordLayers`, `showFingeringShape`, `reapplySelection`, `bindPreviewSource` (hover-or-tap binding, §6.7) |
+| Sources | Roman numerals, chord grid, scale table, root-note table, progression chord cards (whole card), Scale Information triad/seventh blocks, Scale Position Grid cells and column headers |
 
 **The rules, in one line each.** Later layers win; specific beats periodic
 only *within* a layer; `dimBelow`/`hideBelow` measure from the topmost layer
@@ -937,13 +1080,17 @@ that sets them; an overlay is transient unless it says `transient: false`;
 
 ### 10.2 Known gaps, all deliberate
 
-- **The Scale Position Grid's mini fretboards do not push.** They show a
-  *region* of the neck, not a note set — a layer kind the model does not
-  have. §6.6.
-- **Two live direct writers remain outside the stack**:
-  `progression/fretboardDisplay.js` (the Chord Progression tab) and the
-  `Show All Notes` button. Both paint over the stack and are painted over by
-  it. §8.2.
+- ~~**The Scale Position Grid's mini fretboards do not push.**~~ **Closed by
+  8h** (§6.8). "A region of the neck, not a note set" was right about the
+  *need* and wrong about the cost: `positions` already carried exactly that,
+  and the only thing missing was §2.2's rule that positions replace notes on
+  the fretboard, which the renderer had never implemented. One flag,
+  `positionsOnly`, opt-in via `positionLayer`.
+- **One live direct writer remains outside the stack**: the `Show All Notes`
+  button. It paints over the stack and is painted over by it. §8.2.
+  `progression/fretboardDisplay.js` was the other and moved onto the stack in
+  8g (§6.7); its chord-*line* overlay is still a direct call, deliberately,
+  because §2.5 does not model lines.
 - **The phantom nav-button handlers survive.** `src/scales/index.js:236-470`
   wires click and hover handlers onto `#prevRootBtn`, `#nextRootBtn`,
   `#prevScaleBtn`, `#nextScaleBtn`, none of which exist anywhere in the repo.
@@ -966,6 +1113,8 @@ but not in the repo). Start the dev server first
 | `node .tmp/verify-8d.js .tmp/out.json` | hover/pop on the neck, no leaked layers, selection restored after a preview |
 | `node .tmp/verify-8e.js .tmp/out.json` | the chord's real sounding pitches on the piano |
 | `node .tmp/verify-8f.js .tmp/out.json` | scale-table, root-note and mini-fretboard previews |
+| `node .tmp/verify-progression-stack.js .tmp/out.json` | 8g: progression card previews are consistent card-wide, leaving and clearing revert to the scale, Scale Information blocks preview on hover **and** on tap |
+| `node .tmp/verify-position-grid.js .tmp/out.json` | 8h: relative mode previews a cell's notes board-wide, absolute mode previews only that pattern with its own duplicates dimmed, the column header is the way back out |
 
 All four passed together at `e17a330`. If a future change breaks one, that is
 signal, not flake — but check it against the previous commit before assuming
@@ -973,11 +1122,17 @@ signal, not flake — but check it against the previous commit before assuming
 
 ### 10.4 What to do next
 
-**`PIANO_VIEW_PLAN.md` step 9 — the instrument-range overlay** — is the only
-piece of the piano feature still outstanding, and §2.5 already settled its
-shape: it is a **renderer-level property of the keys, not a stack layer**, so
-it must show under everything, including an empty stack. `src/piano/range.js`
-and its tests already exist from step 1. Start there.
+~~**`PIANO_VIEW_PLAN.md` step 9 — the instrument-range overlay**~~ **— done
+2026-08-03**, see that plan's §6.3. It went in as §2.5 specified, renderer-level
+rather than a layer, and `src/piano/range.js` finally has a caller after
+existing unused since step 1.
+
+**The piano feature is complete.** What is left across the project is
+`REFACTOR_PLAN.md` Phase 5 (kill the `window` bus — the critical path for
+session mode), `PIANO_VIEW_PLAN.md` step 10 (repoint `MiniPiano.js` onto
+`keyModel.js`, to be judged on merit), and two dead-code cleanups: the phantom
+nav-button handlers in `src/scales/index.js`, and the `Show All Notes` button
+as the last direct writer outside the stack.
 
 Optional after that: `PIANO_VIEW_PLAN.md` step 10 (repoint `MiniPiano.js`
 onto `keyModel.js`), which that plan's §3 says to judge on merit rather than

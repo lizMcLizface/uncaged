@@ -44,6 +44,7 @@ export {
 export {
     scaleLayer,
     chordLayer,
+    positionLayer,
     noteLayer,
     noteLabelFor,
     SCALE_LAYER_ID

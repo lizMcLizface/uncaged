@@ -97,6 +97,8 @@ export function createPiano(container, options = {}) {
         // src/visualization/ at all - the mount site owns that wiring, the
         // same division syncPianoKeyState already uses.
         resolved: null,
+        // The two bounds drawn *under* everything else (see setBounds).
+        bounds: { instrument: null, octave: null },
 
         /**
          * Rebuild every key. Safe to call repeatedly - the keyboard element
@@ -121,9 +123,66 @@ export function createPiano(container, options = {}) {
 
             // The new elements have never been painted; repaint before the
             // caller's hook runs, so onRender sees a complete keyboard.
+            piano.renderBounds();
             if (piano.resolved) piano.renderStack(piano.resolved);
 
             if (onRender) onRender(piano);
+            return piano;
+        },
+
+        /**
+         * The two ranges drawn *underneath* whatever the stack is showing.
+         *
+         * **Not layers, and deliberately so** (VISUALIZATION_STACK_PLAN.md
+         * section 2.5): a range is a property of the keys themselves, not a
+         * highlight competing with the scale, and it has to be visible even
+         * when the stack is empty. So it is renderer-level, on classes this
+         * method owns and `renderStack` never touches.
+         *
+         * Two ranges that must not be conflated (PIANO_VIEW_PLAN.md section
+         * 8.2): the *instrument's* playable span, and the octave the computer
+         * keyboard is currently playing in. The piano's own displayed range is
+         * a third thing again and is `setRange`'s.
+         *
+         * @param {{instrument?: {lowMidi: number, highMidi: number}|null,
+         *          octave?: number|null}} bounds - omitted keys are left as
+         *        they were, so a caller can move one without knowing the other.
+         *        Pass null for either to clear it.
+         */
+        setBounds(bounds = {}) {
+            if ('instrument' in bounds) piano.bounds.instrument = bounds.instrument || null;
+            if ('octave' in bounds) {
+                piano.bounds.octave = Number.isFinite(bounds.octave) ? bounds.octave : null;
+            }
+            return piano.renderBounds();
+        },
+
+        /**
+         * Apply the bounds to the current key elements.
+         *
+         * **Owns exactly two classes**, `outOfRangeKey` and `octaveKey`, and
+         * nothing else here or in `renderStack` touches either - which is what
+         * lets the two run in any order and lets a range change survive a
+         * repaint of the content and vice versa. `pressedKey` is a third
+         * party to both.
+         */
+        renderBounds() {
+            const { instrument, octave } = piano.bounds;
+            // A C-to-B octave, which is what the letter-row keys span from a
+            // given base. Not the same shape as the instrument range, which is
+            // an arbitrary pair of pitches.
+            const octaveLow = Number.isFinite(octave) ? (octave + 1) * 12 : null;
+
+            piano.keyElements.forEach((keyElement, midi) => {
+                const outOfRange = Boolean(instrument)
+                    && (midi < instrument.lowMidi || midi > instrument.highMidi);
+                keyElement.classList.toggle('outOfRangeKey', outOfRange);
+                keyElement.classList.toggle(
+                    'octaveKey',
+                    octaveLow !== null && midi >= octaveLow && midi < octaveLow + 12
+                );
+            });
+
             return piano;
         },
 
@@ -142,7 +201,9 @@ export function createPiano(container, options = {}) {
          * and src/index.js's keydown handler, and a key held down must stay
          * lit across every repaint here (section 2.5). Adding it to the
          * remove list below is the way to break that, and nothing about the
-         * rendering needs to.
+         * rendering needs to. `outOfRangeKey` / `octaveKey` are `renderBounds`'s
+         * for the same reason: a range is not content and must not blink when
+         * the content changes.
          *
          * Held on `piano.resolved` so a range re-render repaints itself
          * without the caller having to know it needs to.

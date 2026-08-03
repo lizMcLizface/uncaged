@@ -11,58 +11,34 @@
 // Split out of scaleGenerator.js as part of REFACTOR_PLAN.md Phase 4 (the
 // scaleGenerator.js/scales.js -> src/scales/ half).
 
-import { matchChord } from '../../theory/chords';
+import { matchChord, buildStackedThirds, bumpOctave } from '../../theory/chords';
 import { chords } from '../../theory/chordSuffixes';
 import { createScalePiano, createIntervalPiano, getIntervalInfo, getSynthBaseOctave, DEFAULT_BASE_OCTAVE } from '../../components/MiniPiano/MiniPiano';
 import { getPrimaryScale, getPrimaryRootNote } from '../state';
 import { HeptatonicScales, getScaleNotes } from '../scaleData';
 import { intToRoman } from './scaleTable';
-
-function bumpOctave(noteWithOctave, bump) {
-    if (!bump) return noteWithOctave;
-    const match = /^(.*)\/(-?\d+)$/.exec(noteWithOctave);
-    if (!match) return noteWithOctave;
-    return `${match[1]}/${parseInt(match[2], 10) + bump}`;
-}
+import { pushChordPreview, bindPreviewSource } from '../../fretboard';
 
 /**
- * Build the stacked-thirds chord for every degree of a scale, at a given
- * chord length (3 = triad, 4 = seventh). Mirrors generateSyntheticChords'
- * indexing (every other scale step, wrapping) but, unlike
- * identifySyntheticChords, never throws when a chord doesn't match any
- * known chord type - some scales (e.g. Blues Minor) don't yield "proper"
- * named chords at every degree. Callers treat an empty `matches` array as
- * a synthetic (unnamed) chord and fall back to showing just the root note.
+ * `buildStackedThirds` plus a chord-name match per degree.
  *
- * Returns both a bare-letter `chord` (for chord-matching/name/interval text,
- * which can't take octave-tagged input) and a `chordWithOctave` carrying
- * each tone's real pitch (bumped up an octave whenever the stacked-third
- * index wraps past the top of scaleNotes) so playback and any octave-aware
- * display can use the note's actual register in the scale rather than
- * re-deriving it from scratch.
+ * The stacking itself moved to `theory/chords.js` once the degree hotkeys
+ * needed it too (`src/degreeKeys.js`); only the naming is this panel's. It
+ * uses `matchChord` directly rather than `identifySyntheticChords` because
+ * that throws when a degree's stack matches no known chord type - some scales
+ * (Blues Minor, say) don't yield "proper" named chords at every degree.
+ * Callers treat an empty `matches` array as a synthetic (unnamed) chord and
+ * fall back to showing just the root note.
+ *
  * @param {Array<string>} scaleNotes - getScaleNotes() output (with octave; includes the trailing octave-duplicate root)
  * @param {number} length - 3 for triads, 4 for sevenths
  * @returns {Array<{ chord: string[], chordWithOctave: string[], scaleDegrees: number[], matches: string[] }>}
  */
 function buildDegreeChords(scaleNotes, length) {
-    const degreeCount = scaleNotes.length - 1;
-    const result = [];
-    for (let i = 0; i < degreeCount; i++) {
-        const scaleDegrees = [];
-        const chord = [];
-        const chordWithOctave = [];
-        for (let j = 0; j < length; j++) {
-            const rawIndex = i + j * 2;
-            const index = rawIndex % degreeCount;
-            const octaveBump = Math.floor(rawIndex / degreeCount);
-            scaleDegrees.push(index + 1);
-            chord.push(scaleNotes[index].slice(0, -2));
-            chordWithOctave.push(bumpOctave(scaleNotes[index], octaveBump));
-        }
-        const matches = matchChord(chord, chords, false) || [];
-        result.push({ chord, chordWithOctave, scaleDegrees, matches });
-    }
-    return result;
+    return buildStackedThirds(scaleNotes, length).map(degree => ({
+        ...degree,
+        matches: matchChord(degree.chord, chords, false) || []
+    }));
 }
 
 /**
@@ -70,6 +46,20 @@ function buildDegreeChords(scaleNotes, length) {
  * its own mini piano) for a chord card. The mini piano is colored relative
  * to scaleRootNote (not the chord's own root) so a given scale tone is the
  * same color on every card and on the scale piano above them.
+ *
+ * **The whole block is a preview source.** Hovering (or tapping) it puts its
+ * chord on the main fretboard/piano over the dimmed scale, which is what the
+ * *sections* rather than the cards are the unit of: a card holds two
+ * different chords, so the top half has to mean the triad and the bottom half
+ * the seventh. The block includes its mini piano, so hovering the keys and
+ * hovering the text beside them do the same thing rather than one of them
+ * doing nothing.
+ *
+ * Pitch classes, not `chordWithOctave`: the same call
+ * `pushChordPreview` makes for every other preview
+ * (VISUALIZATION_STACK_PLAN.md section 6.6). Only a *selected* chord shows a
+ * fingering's real octaves.
+ *
  * @param {string} label - 'Triad' or 'Seventh'
  * @param {{ chord: string[], scaleDegrees: number[], matches: string[] }} chordInfo
  * @param {string} scaleRootNote
@@ -81,7 +71,10 @@ function buildChordSection(label, chordInfo, scaleRootNote) {
     const intervalLabels = chordInfo.chord.map(note => getIntervalInfo(chordRoot, note).label);
 
     const section = document.createElement('div');
-    section.style.cssText = `margin: 6px 0;`;
+    section.style.cssText = `margin: 6px 0; cursor: pointer;`;
+    bindPreviewSource(section, () => {
+        pushChordPreview(chordInfo.chord, chordRoot, chordName);
+    });
 
     const grid = document.createElement('div');
     grid.style.cssText = `

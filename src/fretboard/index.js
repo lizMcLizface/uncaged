@@ -46,6 +46,7 @@ import {
     getPiano,
     pianoState,
     persistPianoSettings,
+    getInstrumentRange,
     VIEW_FRETBOARD,
     VIEW_PIANO
 } from '../piano';
@@ -57,7 +58,8 @@ import {
     subscribe as subscribeToVisualization,
     flattenLayers,
     scaleLayer,
-    chordLayer
+    chordLayer,
+    positionLayer
 } from '../visualization';
 import { createFretboardControls } from './ui/controls';
 import {
@@ -164,6 +166,36 @@ function refreshScaleLayer(scaleData) {
 }
 
 /**
+ * Tell the piano which keys the current instrument can reach, and which
+ * octave the computer keyboard is playing in.
+ *
+ * Lives here for the same reason `refreshScaleLayer` does: this file already
+ * knows about `src/tuning.js` and `src/keyboard.js`, and keeping those reads
+ * on this side is what lets `src/piano/` stay a renderer of things it is
+ * handed. `range.js` has existed since PIANO_VIEW_PLAN.md step 1 with nothing
+ * calling it; this is its caller.
+ *
+ * **Both markers can be switched off** (`pianoState.showInstrumentRange` /
+ * `showOctaveMarker`, from the Other Controls tab). Off is expressed as
+ * *passing null*, not as a flag the renderer checks: `renderBounds` stays a
+ * function of the bounds it is handed, and "no range" is already a state it
+ * has to handle - a tuning it cannot resolve produces exactly the same call.
+ *
+ * @param {string[]} [tuning] - the new tuning, when reacting to a change.
+ *        Omitted, the active instrument's is read.
+ */
+function refreshPianoBounds(tuning) {
+    const piano = getPiano();
+    if (!piano) return;
+
+    const activeTuning = tuning || getActiveInstrumentConfig().tuning;
+    piano.setBounds({
+        instrument: pianoState.showInstrumentRange ? getInstrumentRange(activeTuning) : null,
+        octave: pianoState.showOctaveMarker ? keyboardState.baseOctave : null
+    });
+}
+
+/**
  * Point both renderers at the stack, and keep them pointed there.
  *
  * Each repaints on every stack change whether or not it is the visible view.
@@ -172,15 +204,30 @@ function refreshScaleLayer(scaleData) {
  * left to handle.
  */
 function subscribeRenderersToVisualization() {
-    subscribeToVisualization(layers => {
-        const resolved = flattenLayers(layers);
+    subscribeToVisualization(() => renderMainDisplay());
+}
 
-        const piano = getPiano();
-        if (piano) piano.renderStack(resolved);
+/**
+ * Paint both renderers from whatever the stack currently holds.
+ *
+ * Normally this runs because the stack changed. It is also callable directly,
+ * for the one case where the *renderer* changed instead: `setTuning` rebuilds
+ * the neck's DOM from scratch, so every marker is gone while the stack still
+ * says they should be there. Nothing repainted afterwards, and since
+ * `popLayer` on an absent id deliberately does not notify (`stack.js`), the
+ * `showScaleOnFretboard()` in the instrument-change handler notified nobody
+ * either - so changing instrument left an empty neck until the next hover
+ * happened to push something.
+ */
+function renderMainDisplay() {
+    const layers = getLayers();
+    const resolved = flattenLayers(layers);
 
-        const fretboard = getFretboard('fretNotPlaceholder');
-        if (fretboard) fretboard.renderStack(resolved, layers);
-    });
+    const piano = getPiano();
+    if (piano) piano.renderStack(resolved);
+
+    const fretboard = getFretboard('fretNotPlaceholder');
+    if (fretboard) fretboard.renderStack(resolved, layers);
 }
 
 /**
@@ -263,8 +310,13 @@ function pushScalePreview(scaleNotes, rootNote) {
  * @param {string[]} notes - chord notes, with or without octaves
  * @param {string} rootNote
  * @param {string} [label]
+ * @param {{hideScale?: boolean}} [options] - `hideScale` swaps `dimBelow` for
+ *        `hideBelow`, for the one source that offers the choice: the Chord
+ *        Progression tab's "Show Scale Context" checkbox. Unchecked used to
+ *        mean `clearMarkers()`; on the stack it means hiding the base rather
+ *        than erasing it, so the scale comes back when the preview pops.
  */
-function pushChordPreview(notes, rootNote, label = '') {
+function pushChordPreview(notes, rootNote, label = '', { hideScale = false } = {}) {
     if (!Array.isArray(notes) || notes.length === 0) return;
 
     const pitchClasses = notes
@@ -277,9 +329,104 @@ function pushChordPreview(notes, rootNote, label = '') {
         rootNote: rootNote || pitchClasses[0],
         labelMode: fretboardState.mainFretboardLabelMode,
         notes: pitchClasses,
-        dimBelow: true,
+        dimBelow: !hideScale,
+        hideBelow: hideScale,
         transient: true
     }));
+}
+
+/**
+ * Preview **one region of the neck**: exactly these (string, fret) dots, and
+ * nothing else lit.
+ *
+ * The Scale Position Grid's cells, whose whole subject is *where on the neck*
+ * a pattern sits rather than which pitch classes it contains. That is why
+ * this is not `pushChordPreview`: a pitch-class preview lights every octave
+ * of every chord tone across the whole board, which is the right answer to a
+ * different question and the wrong one to "show me this shape, here".
+ *
+ * `hideBelow` by default, for the same reason. The scale showing through
+ * would put undimmed scale tones next to the pattern's own *deliberately*
+ * dimmed dots (the grid's "Dark Duplicate" notes, which arrive with their own
+ * `opacity`), and the two kinds of dimming would be indistinguishable.
+ *
+ * @param {{
+ *   positions: Array<object>, notes?: string[], rootNote?: string,
+ *   label?: string, hideBelow?: boolean
+ * }} options - `positions` are already marker-shaped, as `markFret` takes
+ *   them; `notes` are the pitches those positions sound, for the piano.
+ */
+function pushPositionPreview({ positions, notes = [], rootNote = null, label = '', hideBelow = true }) {
+    if (!Array.isArray(positions) || positions.length === 0) return;
+
+    pushLayer(positionLayer({
+        id: PREVIEW_LAYER_ID,
+        label,
+        rootNote,
+        labelMode: fretboardState.mainFretboardLabelMode,
+        notes,
+        positions,
+        dimBelow: !hideBelow,
+        hideBelow,
+        transient: true
+    }));
+}
+
+const PREVIEW_SOURCE_ATTR = 'data-preview-source';
+let previewTouchDismissalAttached = false;
+
+/**
+ * Mark an element as a *preview source*: hovering it pushes, leaving pops -
+ * and on a touch screen, tapping it pushes and the preview **stays** until
+ * the next tap lands somewhere that is not a preview source.
+ *
+ * The touch half is why this exists rather than two `addInteractiveEvent`
+ * calls. That helper maps 'leave' onto `touchend`, so a tap pushes and pops
+ * again the instant the finger lifts - correct for a press-and-hold, useless
+ * for "tap this chord to see it on the neck", which is what a phone user
+ * actually does. Dismissal moves to the next tap instead, through one
+ * document-level listener attached lazily and only once: there is a single
+ * preview layer, so one listener can end any of them.
+ *
+ * **Pointer events, and `pointerType` is the whole reason.** Written first
+ * with `mouseenter`/`mouseleave` plus `touchstart`, it looked right and did
+ * nothing: a tap makes the browser *emulate* a mouse over the tapped element
+ * and then move that phantom pointer away again, so the synthesized
+ * `mouseleave` popped the layer the tap had just pushed. Net effect zero, and
+ * invisible in a static check - the Playwright run caught it. Pointer events
+ * report which device caused them, so "hovering" and "tapping" stop having to
+ * be inferred from event order.
+ *
+ * @param {HTMLElement} element
+ * @param {function} push - pushes the preview; called with no arguments
+ */
+function bindPreviewSource(element, push) {
+    if (!element || typeof push !== 'function') return;
+
+    element.setAttribute(PREVIEW_SOURCE_ATTR, '');
+    // A real pointer that can hover: enter shows, leave restores.
+    element.addEventListener('pointerenter', (event) => {
+        if (event.pointerType === 'mouse') push();
+    });
+    element.addEventListener('pointerleave', (event) => {
+        if (event.pointerType === 'mouse') popPreviewLayer();
+    });
+    // Touch and pen have no hover, so the press is the whole gesture and
+    // nothing about it says when the user is finished looking.
+    element.addEventListener('pointerdown', (event) => {
+        if (event.pointerType !== 'mouse') push();
+    });
+
+    if (previewTouchDismissalAttached) return;
+    previewTouchDismissalAttached = true;
+    document.addEventListener('pointerdown', (event) => {
+        if (event.pointerType === 'mouse') return;
+        const target = event.target;
+        // A tap inside a source is that source's business - its own
+        // `pointerdown` has already replaced the preview.
+        if (target && target.closest && target.closest(`[${PREVIEW_SOURCE_ATTR}]`)) return;
+        popPreviewLayer();
+    });
 }
 
 /**
@@ -353,9 +500,10 @@ function setMainViewMode(mode) {
     persistPianoSettings();
 
     const fretboard = fretboardState.mainFretboard;
-    if (fretboard && fretboard.fretboardElement) {
-        fretboard.fretboardElement.style.display = viewMode === VIEW_PIANO ? 'none' : '';
-    }
+    // Through the fretboard's own setVisible, not its element's style: a
+    // later setTuning rebuilds that element and rewrites its cssText, and the
+    // flag is what survives to be reapplied.
+    if (fretboard) fretboard.setVisible(viewMode !== VIEW_PIANO);
     const piano = getPiano();
     if (piano) {
         // Visibility only. The piano no longer needs a repaint on the way in:
@@ -396,6 +544,7 @@ function initializeFretboard() {
         onRender: syncPianoKeyState
     });
     subscribeRenderersToVisualization();
+    refreshPianoBounds();
 
     // setMainViewMode reads the main-fretboard pointer, which
     // initializeFretboardWithScale otherwise only assigns once this function
@@ -427,6 +576,12 @@ function initializeFretboard() {
         showScaleOnFretboard();
         updateChordButtonStyles();
         renderScalePositionGrid();
+        refreshPianoBounds(config.tuning);
+        // `setTuning` threw the neck's DOM away; the stack still holds what
+        // belongs on it. Explicit, because none of the calls above is
+        // guaranteed to change the stack and so none of them is guaranteed to
+        // notify - a no-op pop notifies nobody, by design.
+        renderMainDisplay();
     });
 
     return mainFretboard;
@@ -1250,6 +1405,7 @@ export {
     setMainViewMode,
     getMainViewMode,
     refreshScaleLayer,
+    refreshPianoBounds,
     createSubscaleBoxPattern,
     searchFretboardNote,
     searchFretboardNotes,
@@ -1279,6 +1435,8 @@ export {
     popPreviewLayer,
     pushScalePreview,
     pushChordPreview,
+    pushPositionPreview,
+    bindPreviewSource,
     popChordLayers,
     showFingeringShape,
     reapplySelection,
