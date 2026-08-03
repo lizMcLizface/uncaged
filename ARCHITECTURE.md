@@ -176,13 +176,18 @@ Investigating the ~115 references before writing `dispatch.js` surfaced that
   Migrating this belongs to a later phase, once `progressionBuilder.js` has
   a real module boundary (`REFACTOR_PLAN.md` Phase 4).
 
-`IntervalPractice.jsx`'s `getPolySynthRef()` helper (2 references) is
-similarly untouched: it backs both playback (`playNotes`) and a third,
-also-unrelated surface (`getPitchValues`/`setPitchValues`/
+`IntervalPractice.jsx`'s `getPolySynthRef()` helper (2 references) was
+similarly untouched by Phase 2b: it backed both playback (`playNotes`) and a
+third, also-unrelated surface (`getPitchValues`/`setPitchValues`/
 `resetMicrotonalPitches`, microtonal tuning controls), so splitting it
 without touching the microtonal calls would have meant duplicating the
-helper for no structural benefit. Left as one function reading
-`window.polySynthRef`, both surfaces still bundled.
+helper for no structural benefit.
+
+**Resolved by deletion, Phase 1b (2026-08-03):** `components/IntervalPractice/`
+turned out to be unmounted dead code and was removed (§7), so this helper
+and both its references are gone. Phase 5 has one less special case; the
+microtonal methods survive only as an uncalled part of `PolySynth.jsx`'s
+imperative handle. See the §5.1 row.
 
 Three entry points now dispatch through the registry:
 
@@ -242,8 +247,8 @@ section.
 |---|---|---|---|
 | `window.polySynthRef` (playback surface: `playNotes`/`stopNotes`/`stopAllNotes`/`isActive`/`activate`/`triggerChord`) | `App.js:26` | was counted in the ~115 below; now reached via `getChannel('synth')` (`src/audio/dispatch.js`) at every keyboard/mouse/programmatic call site (`index.js`, `src/fretboard/index.js`, `MiniPiano.js`, `progressionBuilder.js`'s `triggerChordProgression`) | **Migrated, Phase 2b (2026-08-01).** |
 | `window.polySynthRef` (progression-sequencer-control surface: `getProgressionSequencerState`/`toggleProgressionSequencer`/`setProgressionData`/`setProgressionRate`/`setProgressionDuration`/`updateProgressionSettings`) | `App.js:26` | ~40, all in `progressionBuilder.js` | **Still live.** Not note dispatch - see §3.1. Migrates once `progressionBuilder.js` has a real module boundary (Phase 4). |
-| `window.polySynthRef` (microtonal surface: `getPitchValues`/`setPitchValues`/`resetMicrotonalPitches`, bundled with a few playback calls in one shared helper) | `App.js:26` | 2 (`IntervalPractice.jsx`'s `getPolySynthRef()`) | **Still live** — see §3.1 for why this one helper wasn't split. |
-| `window.polySynthEnabled` | `App.js:29` | was small; the `index.js`/`progressionBuilder.js`(click-gate)/`MiniPiano.js` reads that gated *playback* now read `isChannelEnabled('synth')` instead | **Migrated, Phase 2b**, except `IntervalPractice.jsx`'s bundled helper (still live, same reason as above). |
+| `window.polySynthRef` (microtonal surface: `getPitchValues`/`setPitchValues`/`resetMicrotonalPitches`, bundled with a few playback calls in one shared helper) | `App.js:26` | **0** (was 2, in `IntervalPractice.jsx`'s `getPolySynthRef()`) | **Dead as of Phase 1b (2026-08-03)** — `components/IntervalPractice/` was deleted as unmounted dead code (§7), taking both references with it. §3.1's reason for not splitting this helper no longer applies because the helper is gone. `PolySynth.jsx` still exposes the three methods on its imperative handle with no caller; retiring them is Phase 6 cleanup, not Phase 5 migration. |
+| `window.polySynthEnabled` | `App.js:29` | was small; the `index.js`/`progressionBuilder.js`(click-gate)/`MiniPiano.js` reads that gated *playback* now read `isChannelEnabled('synth')` instead | **Fully migrated.** Phase 2b moved every reader except `IntervalPractice.jsx`'s bundled helper; Phase 1b deleted that file (§7), so nothing reads this global any more. `App.js` still writes it. |
 | `window.updateFretboardsForScaleChange` | `frets.js:6920` (pre-Phase-3 baseline; now `src/fretboard/index.js`) | 17 (1 write + call, now in `src/fretboard/index.js`; 16 guarded read/call sites in `scaleGenerator.js:2219-2424`) — verified exactly matches `REFACTOR_PLAN.md`'s count | Phase 5 step 3, or a plain import once `src/fretboard/index.js`/`scaleGenerator.js` don't need load-order independence |
 
 ### 5.2 Live, lower-traffic — remaining Phase 5 work
@@ -319,7 +324,7 @@ when Phase 1 deletes `src/staves.js` and strips `index.js`'s dead code.
 | `src/scales/ui/scaleTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The compact top-bar quick-picker (`createQuickScalePicker`), the detailed "Heptatonic Scales" browsing table (`createHeptatonicScaleTable`), and `intToRoman`. See §6.26. | `src/scales/scaleData`, `theory/chords`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createRootNoteTable`/`positionTooltipSmart` from `./rootNoteTable` | two-way with `src/scales/ui/rootNoteTable.js` - see §6.26 for why |
 | `src/scales/index.js` *(Phase 4 second half, fifth and final step, landed 2026-08-03 - `scaleGenerator.js`/`scales.js` deleted)* | The public barrel for `src/scales/`: `highlightKeysForScales`/`highlightScaleNotes` (two unrelated DOM key-highlighting functions, not merged - see §6.27), `updateCurrentScaleDisplay` (the hub every UI cluster calls after a selection change), navigation-button wiring, plus the re-exports that make this folder's surface a single import. Everything else that used to live in `scaleGenerator.js`/`scales.js` moved to `state.js`/`scaleData.js`/`ui/infoPanel.js`/`ui/rootNoteTable.js`/`ui/scaleTable.js` across this phase's earlier steps (§6.23-6.26); this file is what remained from both plus the barrel role. See §6.27. **Not moved into `src/theory/` in Phase 2** — see §6.1/§6.2 correction; still not moved here either, pending a real `Scale` data model (see the project memory this session recorded). | `../midi`, `src/scales/scaleData`, `src/scales/ui/infoPanel`, `src/scales/ui/scaleTable`, `src/scales/state` | two-way with `src/scales/state.js`, `src/scales/ui/rootNoteTable.js`, `src/scales/ui/scaleTable.js` (§6.23/§6.26); every former `scaleGenerator.js`/`scales.js` external importer now pulls from here (`from './scales'` / `from '../scales'` etc., repointed in this step) |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
-| `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`src/scales/` to consume. 281 lines (Phase 1, was 5,777). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
+| `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`src/scales/` to consume. 262 lines (was 5,777 before Phase 1, 281 after it, then Phase 1b stripped the inert cruft Phase 1 deferred - see §7). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
 | `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`/`window.polySynthEnabled` and registers the `'synth'` channel with `src/audio/dispatch.js` (Phase 2b). | `src/audio/dispatch.js` | — |
 
 ### 6.1 `src/theory/`, as it actually landed (Phase 2, 2026-08-01)
@@ -2024,7 +2029,7 @@ also closes out Phase 4 as a whole - both halves
 
 ---
 
-## 7. Known-dead code (context for Phase 1)
+## 7. Known-dead code (Phases 1 and 1b)
 
 **Removed in Phase 1 (2026-08-01):** everything `REFACTOR_PLAN.md` §2.5
 listed - `App_new.js`, `App_backup.js`, `chord-examples.js`,
@@ -2042,7 +2047,37 @@ so this was a straight deletion rather than a merge. `index.js` dropped from
 5,777 to 281 lines - see the module ownership map above and
 `REFACTOR_PLAN.md`'s Phase 1 result note for what stayed and why.
 
-Confirmed still true and not yet acted on: nothing else in this list has
-turned up since. If a later phase finds another orphan module, add it here
-before deleting it, the same way this section tracked the Phase 0 finds
-until Phase 1 cleared them.
+**Removed in Phase 1b (2026-08-03):** a second wave, invisible to Phase 1
+and only findable once Phases 2-4 had moved everything else. Phase 1 hunted
+orphans by import graph and stripped comments file-by-file; each item below
+evades one of those two methods.
+
+| Removed | Lines | Why Phase 1 missed it |
+|---|---|---|
+| `src/progressions.js` | 1,744 | Not an orphan by import graph - `scaleGenerator.js` (now `src/scales/index.js`) dynamically `import()`ed it. But it has **zero non-comment lines** and no exports at all, so the `refreshProgressionDisplay` that import reached for was always `undefined` and its guarded call site was a permanent no-op. |
+| `src/synth.js` | 227 | Same shape: entirely commented out, but `keyboard.js` imported 19 names from it (all resolving to `undefined`). |
+| `src/cross.js` | 254 | Has live code, so comment-stripping wouldn't touch it, and it had an importer (`keyboard.js`) so the import graph called it reachable. But `keyboard.js` used neither imported name, and **nothing anywhere assigns `window.updateCrossReferenceDisplay`** - so the scale/chord cross-reference table had no way to be built or shown. The four `typeof window.updateCrossReferenceDisplay === 'function'` guards in `chords.js` and `scales/ui/scaleTable.js` went with it. |
+| `src/components/IntervalPractice/` | 1,577 | Unreachable from `src/index.js` - nothing mounts it. Contributed **zero build warnings precisely because webpack never compiled it**, which is why Phase 1's warning-driven pass never saw it. |
+| `src/components/ThemeManagerApp/`, `src/components/CollapsibleMetronome/` | 36 | Same. |
+
+Also stripped in Phase 1b, not deleted: `keyboard.js`'s entire 24-line
+import header (every name unused - 39 warnings in a 61-line file) and its
+dead `modifiers` export; `src/index.js`'s 18 dead bindings, six empty
+function stubs and duplicated `reportWebVitals()` call, all of which Phase
+1's result note consciously deferred rather than turn a comment-stripping
+phase into a judgment-call phase; and `src/fretboard/index.js`'s 12-name
+dead import block. Build warnings fell **198 -> 115** across the sweep and
+`src/` fell to 29,611 lines (3,943 deleted, net 3,926), with zero genuinely
+new warnings at any step.
+
+Consequence for Phase 5: `IntervalPractice.jsx` held the microtonal
+`window.polySynthRef` surface that §3.1 declined to split out of its
+`getPolySynthRef()` helper. That surface now has **zero consumers** -
+`PolySynth.jsx` still exposes `getPitchValues`/`setPitchValues`/
+`resetMicrotonalPitches` on its imperative handle, but nothing calls them.
+See the §5.1 row.
+
+If a later phase finds another orphan module, add it here before deleting
+it, the same way this section tracked the Phase 0 finds until Phase 1
+cleared them - and note which of the two detection methods above it evaded,
+since that is what made this second wave worth a phase of its own.
