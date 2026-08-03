@@ -39,8 +39,7 @@ import { fretboardState, refreshScalePositionTuning } from './state';
 import { getIntervalLabelFromRoot } from './geometry';
 import {
     Fretboard,
-    GUITAR_TUNING,
-    SCALE_COLORS
+    GUITAR_TUNING
 } from './Fretboard';
 import {
     createPiano,
@@ -1069,7 +1068,6 @@ export {
     refreshFretboardDisplay,
     fretboardState,
     GUITAR_TUNING,
-    SCALE_COLORS
 };
 
 // Not part of the public barrel above - exported only so

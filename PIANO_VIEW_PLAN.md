@@ -1,7 +1,7 @@
 # Piano View — Implementation Plan
 
-Investigated 2026-08-03. Steps 1-4 and 6 landed 2026-08-03. **Step 5 is next,
-and is the only remaining step that changes existing behavior.**
+Investigated 2026-08-03. Steps 1-6 landed 2026-08-03. Steps 7-9 remain, all
+additive.
 
 Goal: let the user hide the main fretboard at the top of the page and show a
 multi-octave piano keyboard in its place, carrying the same scale
@@ -35,7 +35,7 @@ Decisions taken 2026-08-03, before any code:
 | 2 — `Piano.js` renders static `<ul id="keyboard">` | **done** 2026-08-03 | §5.2 CSS variable work included. The dormant CSS works — see §5.3 |
 | 3 — Rebuild the element tables, wire mouse + held keys | **done** 2026-08-03 | Mouse + held keys live. `keys_chords` deliberately not touched — §1.3 |
 | 4 — Scale highlighting + labels | **done** 2026-08-03 | §2 palette, `mainFretboardLabelMode`, `'scaleChanged'`. Retired `highlightScaleNotes` — §1.3 |
-| 5 — Convert the fretboard to the semitone palette | not started | **The only step that changes existing behavior.** §2 |
+| 5 — Convert the fretboard to the semitone palette | **done** 2026-08-03 | The only step that changed existing behavior. §2.1 |
 | 6 — The view toggle | **done** 2026-08-03 | **Pulled ahead of 4-5** at the user's request, so the piano is reachable to play with. Hide/show only. §6.1 |
 | 7 — Octave-count control | not started | Top bar, persisted |
 | 8 — Chord superimposition | not started | §5.1 |
@@ -187,6 +187,28 @@ instrument. Cheap and contained:
 **This is a deliberate visual change, not a refactor.** Its own commit, its
 own before/after screenshots, never bundled with a move —
 `REFACTOR_PLAN.md` §2.1's rule with the sign flipped.
+
+### 2.1 How it landed (step 5, 2026-08-03)
+
+Done as written. Two things worth carrying forward:
+
+**A single-scale screenshot barely shows the change, and that is not a sign
+nothing happened.** Within one scale, degree order and semitone order ascend
+together, so the hue *sequence* is nearly unchanged. The defect only exists
+*between* scales — E Aeolian's ♭3 and E Ionian's ♮3 were both
+`rgb(255, 204, 68)`, and are now `rgb(255, 211, 79)` and `rgb(210, 242, 95)`.
+The verification therefore compares two scales and asserts measured
+`borderColor` values rather than trusting the eye.
+
+**Run the verification against the pre-change tree too.** `git stash`, re-run,
+compare — §2.3 lesson 8, used here to *confirm* a change rather than to clear
+a false alarm. Four of the six checks fail on the old code and the piano check
+passes, which states precisely what this step fixed: the piano was already
+right, the fretboard was the exception.
+
+The line numbers in this section had drifted (the barrel's re-export was at
+`:43`/`:1072`, not `:41`/`:933`); the grep before deleting is what mattered,
+and it confirmed the "exactly one real consumer" claim exactly.
 
 ---
 

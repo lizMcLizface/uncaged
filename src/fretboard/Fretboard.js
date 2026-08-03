@@ -11,10 +11,10 @@
  * calculateNote/calculateChordPatternPositions/findChordPatternMatches as
  * instance methods) is unchanged.
  *
- * GUITAR_TUNING/FRET_COUNT (constructor defaults) and SCALE_COLORS/
- * DEFAULT_COLORS (marker coloring) live here rather than in geometry.js or
+ * GUITAR_TUNING/FRET_COUNT (constructor defaults) and DEFAULT_COLORS
+ * (fallback marker coloring) live here rather than in geometry.js or
  * markers.js because they're Fretboard-specific, not generic math/drawing -
- * src/fretboard/index.js (the barrel) imports GUITAR_TUNING/SCALE_COLORS
+ * src/fretboard/index.js (the barrel) imports GUITAR_TUNING
  * back for its own glue code and public re-export, and
  * ui/scalePositionGrid.js imports FRET_COUNT. addInteractiveEvent is a
  * generic DOM helper that happened to live next to this class before Phase
@@ -30,6 +30,7 @@ import {
     findEnharmonicMatch,
     noteArrayContains
 } from '../theory/notation';
+import { getIntervalColor } from '../theory/intervals';
 import { getPatternsByChordType } from '../chordPatterns';
 import { fretboardState } from './state';
 import {
@@ -40,7 +41,8 @@ import {
     extractOctave as geometryExtractOctave,
     getNoteAt as geometryGetNoteAt,
     findNotePositions as geometryFindNotePositions,
-    getIntervalLabelFromRoot
+    getIntervalLabelFromRoot,
+    getSemitoneFromRoot
 } from './geometry';
 import {
     calculateChordPatternPositions as patternsCalculateChordPatternPositions,
@@ -51,18 +53,6 @@ import {
 // Fallback tuning used only if no active instrument config is available yet.
 export const GUITAR_TUNING = ['E4', 'B3', 'G3', 'D3', 'A2', 'E2'];
 export const FRET_COUNT = 21; // Number of frets to display
-
-// Scale degree colors for visual differentiation
-export const SCALE_COLORS = {
-    1: '#ff4444', // Root - red
-    2: '#ff8844', // 2nd - orange
-    3: '#ffcc44', // 3rd - yellow
-    4: '#44ff44', // 4th - green
-    5: '#44ccff', // 5th - light blue
-    6: '#4444ff', // 6th - blue
-    7: '#cc44ff', // 7th - purple
-    8: '#ff4444'  // Octave - red (same as root)
-};
 
 // Default marker colors
 const DEFAULT_COLORS = {
@@ -839,7 +829,15 @@ class Fretboard {
     }
     
     /**
-     * Mark scale notes with color coding based on scale degrees
+     * Mark scale notes, coloured by semitone distance from the root.
+     *
+     * Coloured by *scale degree* until PIANO_VIEW_PLAN.md step 5: a ♭3 and a
+     * natural 3 were both "degree 3" and came out the same yellow, as did
+     * ♭6/6 and ♭7/7, so a minor scale and its parallel major were coloured
+     * identically. Everything else in the app - the Scale Position Grid,
+     * every MiniPiano, and now the piano view - keys off semitones via
+     * theory/intervals.js, so the fretboard was the sole exception to the
+     * palette its own header claimed was shared.
      */
     markScale(scaleNotes, rootNote, options = {}) {
         const {
@@ -861,13 +859,15 @@ class Fretboard {
                 // Use enharmonic matching to find the note in the scale
                 const matchedScaleNote = findEnharmonicMatch(noteName, normalizedScaleNotes);
                 if (matchedScaleNote) {
-                    const scaleIndex = normalizedScaleNotes.indexOf(matchedScaleNote);
-                    const scaleDegree = scaleIndex + 1;
                     const isRoot = areEnharmonicEquivalent(noteName, normalizedRoot);
-                    
-                    // Map scale colors to border colors for the new styling
-                    const scaleColor = isRoot ? SCALE_COLORS[1] : SCALE_COLORS[scaleDegree] || DEFAULT_COLORS.primary;
-                    
+
+                    // Colour and label both derive from the same semitone
+                    // distance, so they can never disagree about an interval.
+                    const semitone = getSemitoneFromRoot(normalizedRoot, matchedScaleNote);
+                    const scaleColor = semitone === null
+                        ? DEFAULT_COLORS.primary
+                        : getIntervalColor(semitone);
+
                     // Use either interval labels relative to the root or note names
                     const intervalLabel = getIntervalLabelFromRoot(normalizedRoot, matchedScaleNote);
                     const displayNoteName = showIntervals && intervalLabel ? intervalLabel : matchedScaleNote;

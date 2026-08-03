@@ -9,16 +9,18 @@ aspirational one — planned features live in `SESSION_MODE_FEASIBILITY.md`
 and `PIANO_VIEW_PLAN.md`. Features land here the same way phases do (§6.29
 is the first): this file maps what exists, whichever plan produced it.
 
-**One known-false claim, recorded here because a plan depends on it:**
-`src/theory/intervals.js`'s header says its palette is shared "so a given
-scale tone reads as the same label and color everywhere in the app: the
-scale piano, every chord piano, and the fretboard." The label half is true;
-the color half is not. `Fretboard.js`'s `markScale` (`:869`) colors by
-**scale degree** via `SCALE_COLORS`, not by semitone, so a ♭3 and a natural
-3 come out the same color there and different colors in the Scale Position
-Grid and every MiniPiano. `PIANO_VIEW_PLAN.md` §2 resolves this by
-converting `markScale` and retiring `SCALE_COLORS`; until that lands, treat
-the fretboard as the exception.
+**A known-false claim in this file's header for its first three days, now
+true (`PIANO_VIEW_PLAN.md` step 5, 2026-08-03):** `src/theory/intervals.js`
+says its palette is shared "so a given scale tone reads as the same label and
+color everywhere in the app: the scale piano, every chord piano, and the
+fretboard." The label half was always true; **the color half was not**, and
+the fretboard was the sole exception — `markScale` colored by *scale degree*
+via `SCALE_COLORS`, so a ♭3 and a natural 3 were both "degree 3" and came out
+the same yellow, while the Scale Position Grid and every MiniPiano gave them
+different colors. Measured before the change: E Aeolian's ♭3 and E Ionian's
+♮3 were both `rgb(255, 204, 68)`. After: `rgb(255, 211, 79)` and
+`rgb(210, 242, 95)`. `SCALE_COLORS` is deleted. The claim now holds for every
+instrument in the app. See §6.30.
 
 **Where the detail lives:** §6 is indexed by *module* (§6.1-§6.28, one per
 extracted module, in the order they landed) rather than by phase, so it stays
@@ -343,10 +345,10 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/nodes/` | Framework-free Web Audio node wrappers (`Gain`, `Filter`, `Distortion`, …), a shared `.getNode()`/`.connect()` interface. | nothing app-specific | — |
 | `chordFingering.js`, `chordPatterns.js` | `{string, fret, finger}` voicing logic — domain logic a future string-synth depends on. Framework-free by design (see header comment). | theory primitives only | must **not** move under `src/fretboard/ui/` — `REFACTOR_PLAN.md` Phase 3 called this out explicitly, and Phase 3's completed `src/fretboard/` split kept them where they were |
 | `src/fretboard/state.js` *(Phase 3, in progress, landed 2026-08-01)* | The ~28 module-level `let`s `frets.js` used to hold directly - Scale Position Grid row anchors/tuning + its persisted display settings, the fretboard instance registry, chord/display state, chord-fingering tab state, and the scale-change debounce timestamps - plus `refreshScalePositionTuning()` and `persistScalePositionGridSettings()`. Exported as one mutable object, `fretboardState`, not bare `let`s - see §6.3 for why. | `theory/notation`, `tuning` | everything that used to read/write these as bare identifiers now imports `fretboardState` instead |
-| `src/fretboard/geometry.js` *(Phase 3, in progress, landed 2026-08-01)* | Pure fret-position and note-at-position math: `calculateFretPositions`, `calculateFretPosition`, `calculateNote`, `extractNoteName`, `extractOctave`, `getNoteAt`, `findNotePositions`. No DOM, no class instance - takes plain data (tuning array, fret count, fret-position table) in, plain data out. The `Fretboard` class keeps same-named methods that delegate to these (e.g. `calculateNote(a, b) { return geometryCalculateNote(a, b); }`), so its public API is unchanged. | `theory/notation` | — |
+| `src/fretboard/geometry.js` *(Phase 3, in progress, landed 2026-08-01)* | Pure fret-position and note-at-position math: `calculateFretPositions`, `calculateFretPosition`, `calculateNote`, `extractNoteName`, `extractOctave`, `getNoteAt`, `findNotePositions`, plus `getSemitoneFromRoot`/`getIntervalLabelFromRoot` (the interval math `markScale` colors and labels from - see §6.30). No DOM, no class instance - takes plain data (tuning array, fret count, fret-position table) in, plain data out. The `Fretboard` class keeps same-named methods that delegate to these (e.g. `calculateNote(a, b) { return geometryCalculateNote(a, b); }`), so its public API is unchanged. | `theory/notation` | — |
 | `src/fretboard/markers.js` *(Phase 3, in progress, landed 2026-08-01)* | `createNoteShapeMarker` - builds one detached SVG shape element (circle/square/diamond/triangle/pentagon/hexagon/star/plus/cross) for a Scale Position Grid dot. Touches the DOM (`document.createElementNS`) but no app state - not framework-free the way `geometry.js` is, just state-free. | nothing app-specific | — |
 | `src/fretboard/patterns.js` *(Phase 3, in progress, landed 2026-08-01)* | CAGED chord-pattern matching and generic fingering-shape scoring: `calculateChordPatternPositions`, `findChordPatternMatches`, `findOptimalChordShape`. Takes tuning/fretCount as parameters instead of reading `this.*`; calls `geometry.js`'s functions directly. Not framework-free - depends on `chordPatterns.js`'s canned shape library and `tuning.js`'s `isStandardGuitarTuning`. The `Fretboard` class keeps same-named delegate methods, matching the Phase 0 characterization tests that call them as instance methods. | `chordPatterns.js`, `tuning.js`, `theory/notation`, `src/fretboard/geometry.js` | — |
-| `src/fretboard/Fretboard.js` *(Phase 3, landed 2026-08-01)* | The `Fretboard` class itself - DOM rendering (neck/fret grid, note/scale/chord marking, subscale boxes, chord-shape lines, CAGED/fingering display) for one fretboard instance. Also owns `GUITAR_TUNING`/`FRET_COUNT` (constructor defaults), `SCALE_COLORS`/`DEFAULT_COLORS` (marker coloring) and `addInteractiveEvent` (a generic DOM helper with no better home yet) - `./index.js` imports `GUITAR_TUNING`/`SCALE_COLORS` back for its own glue code, `ui/scalePositionGrid.js` imports `FRET_COUNT`, and `ui/controls.js`/`ui/chordGrid.js` import `addInteractiveEvent`. | theory, `chordFingering`/`chordPatterns`, `tuning.js`, `src/fretboard/state.js`, `geometry.js`, `patterns.js` | must not import `./index.js` (would be circular - `index.js` imports `Fretboard` from here) |
+| `src/fretboard/Fretboard.js` *(Phase 3, landed 2026-08-01)* | The `Fretboard` class itself - DOM rendering (neck/fret grid, note/scale/chord marking, subscale boxes, chord-shape lines, CAGED/fingering display) for one fretboard instance. Also owns `GUITAR_TUNING`/`FRET_COUNT` (constructor defaults), `DEFAULT_COLORS` (fallback marker coloring - the degree-indexed `SCALE_COLORS` was retired in §6.30) and `addInteractiveEvent` (a generic DOM helper with no better home yet) - `./index.js` imports `GUITAR_TUNING` back for its own glue code, `ui/scalePositionGrid.js` imports `FRET_COUNT`, and `ui/controls.js`/`ui/chordGrid.js` import `addInteractiveEvent`. | theory, `chordFingering`/`chordPatterns`, `tuning.js`, `src/fretboard/state.js`, `geometry.js`, `patterns.js` | must not import `./index.js` (would be circular - `index.js` imports `Fretboard` from here) |
 | `src/fretboard/ui/controls.js` *(Phase 3, in progress, landed 2026-08-01)* | The top bar (title + instrument/tuning picker), the tabbed-panel shell, the hotkey footer, and `createFretboardControls` - the orchestrator that builds the "Other Controls" panel and assembles all six tabs (Scale Information / Chord Progression / Scale Position Grid / Scale Selection / Other Controls / Synthesizer). Called once, from `initializeFretboard()` in `frets.js`. | `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), `src/fretboard/ui/chordGrid`, `src/fretboard/ui/scalePositionGrid`, `src/scales/`, `tuning.js`, `progressionBuilder.js`, and (cross-import, see §6.8) several glue functions from `frets.js` | — (see §6.8 for the two-way relationship with `frets.js`) |
 | `src/fretboard/ui/chordGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Chord Pattern Grid (12-note x 12-chord-type button table, color coded for scale compatibility) and the chord-fingering-shape pipeline it shares with the Roman-numeral chord display: matching `chordPatterns.js` shapes to a chord, a "best-effort" fallback grip, the position-picker tab bar, and the scale/chord-interval math (`getSemitoneFromReference`, `getScaleIntervalEntries`, `deriveChordSuffix`, `getScaleDescriptor`) that both this grid and `src/fretboard/ui/scalePositionGrid.js` depend on. See §6.9. | theory, `src/scales/`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), and (cross-import, see §6.9) glue functions from `frets.js` | must not import `src/fretboard/ui/scalePositionGrid.js` (the dependency runs one way - see §6.10) |
 | `src/fretboard/ui/scalePositionGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Scale Position Grid tab: one movable mini-fretboard pattern per (root string x scale degree) cell, the Focus Selector visibility matrix, and the per-cell rendering options (pattern/dot size, fret-label mode, note shapes, chord-name headers, etc.) on `fretboardState`. See §6.10. | theory, `src/scales/`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`FRET_COUNT`), `src/fretboard/markers`, `src/fretboard/ui/chordGrid` | — |
@@ -2416,6 +2418,63 @@ script: 7 pitch classes lit per octave across all three, root colour and
 label, m3 colour, consistent colour across octaves, sharp spelling preserved,
 out-of-scale keys unlabelled, all three label modes, and a root change
 repainting. 34 warnings unchanged, zero console errors.
+
+### 6.30 The fretboard's scale palette (`PIANO_VIEW_PLAN.md` step 5, 2026-08-03)
+
+The one step of the piano feature that changed **existing** behavior, kept in
+its own commit for that reason.
+
+`Fretboard.js`'s `markScale` colored scale notes by their **position in the
+scale array** — `SCALE_COLORS[scaleIndex + 1]`, a fixed seven-entry
+degree→hue table. Every other surface in the app colors by **semitone
+distance from the root**, through `theory/intervals.js`'s
+`getIntervalColor`. The two disagree wherever a degree can be altered:
+
+| | Degree-indexed (old) | Semitone (new) |
+|---|---|---|
+| E Aeolian ♭3 (G) | `#ffcc44` | `#ffd34f` |
+| E Ionian ♮3 (G♯) | `#ffcc44` — **same** | `#d2f25f` — different |
+
+So a minor scale and its parallel major were colored identically on the
+fretboard while reading correctly everywhere else. Both numbers above are
+measured in Chromium, before and after, not read off the source.
+
+**Why it looks like a small change in a single-scale screenshot:** within one
+scale, degree order and semitone order ascend together, so the *sequence* of
+hues barely moves. The defect only appears when comparing two scales, which
+is why the verification does exactly that.
+
+`markScale` now derives colour and label from one value:
+
+```
+getSemitoneFromRoot(root, note)  ->  getIntervalColor(semitone)
+                                 ->  INTERVAL_LABELS[semitone]
+```
+
+`getSemitoneFromRoot` is new in `geometry.js`, but the computation is not: it
+was already the discarded middle of `getIntervalLabelFromRoot`, which
+computed `(targetMidi - rootMidi + 12) % 12` purely to index a label table
+and threw the number away. Extracting it means colour and label can no longer
+disagree about what interval a note is. `getIntervalLabelFromRoot` now calls
+it, so there is one implementation rather than two.
+
+`SCALE_COLORS` is **deleted**, along with its re-export through
+`src/fretboard/index.js`. Verified by grep first, the way Phase 4c did: one
+real consumer (`markScale`), plus the barrel's import and export lines and
+two mentions in `Fretboard.js`'s own header comment. Nothing outside
+`src/fretboard/` ever imported it. (`PIANO_VIEW_PLAN.md` §2 cited the barrel
+lines as `:41`/`:933`; they had drifted to `:43`/`:1072` — re-measure, as
+§2.3 says.) `DEFAULT_COLORS` survives as the fallback for an unparseable
+note.
+
+**Verified** with 65/65 tests, 34 warnings unchanged, before/after fretboard
+screenshots of the same two scales, and a 6-check Playwright script asserting
+measured `borderColor` values: ♭3 and ♮3 now differ, the root is stable
+across scales, all three match `theory/intervals.js`'s palette exactly, and
+the piano agrees with the fretboard on the same page. Running that same
+script against the stashed pre-change tree fails four of the six and passes
+the piano check — which is the clearest statement of what this step fixed:
+the piano was already right, the fretboard was the exception.
 
 ---
 
