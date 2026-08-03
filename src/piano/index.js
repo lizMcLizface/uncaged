@@ -12,6 +12,13 @@
 export { createPiano, getPiano } from './Piano';
 
 export {
+    pianoState,
+    persistPianoSettings,
+    VIEW_FRETBOARD,
+    VIEW_PIANO
+} from './state';
+
+export {
     buildKeyRange,
     countWhiteKeys,
     isBlackKey,

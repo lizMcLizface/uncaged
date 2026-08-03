@@ -407,6 +407,18 @@
           height: 200px !important; /* Fixed height for fretboard */
         }
 
+        /* The piano shares that slot - only one of the two is ever visible */
+        #keyboard {
+          order: 3 !important;
+          width: 100% !important;
+          margin: 5px 0 !important;
+          flex-shrink: 0 !important;
+          height: 9rem !important;
+        }
+
+        #keyboard .white { height: 9rem !important; }
+        #keyboard .black { height: 5.5rem !important; }
+
         .fretboard .neck-container {
           height: 120px !important;
           margin: 0 5px !important;
@@ -665,6 +677,17 @@
           flex-shrink: 0 !important;
           height: 250px !important; /* Slightly larger for landscape */
         }
+
+        #keyboard {
+          order: 3 !important;
+          width: 100% !important;
+          margin: 5px 0 !important;
+          flex-shrink: 0 !important;
+          height: 11rem !important;
+        }
+
+        #keyboard .white { height: 11rem !important; }
+        #keyboard .black { height: 7rem !important; }
 
         .fretboard .neck-container {
           height: 150px !important;
