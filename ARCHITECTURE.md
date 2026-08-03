@@ -4,7 +4,7 @@ Living document. Updated as `REFACTOR_PLAN.md` phases land — see that file for
 what's left to do (its §1) and the documentation discipline this follows
 (its §2.4). Seeded 2026-08-01 as the Phase 0 baseline (the pre-refactor
 shape, warts included); current through Phase 4c and `PIANO_VIEW_PLAN.md`
-step 1, 2026-08-03. Sections describe the *current* shape, not an
+steps 1-2, 2026-08-03. Sections describe the *current* shape, not an
 aspirational one — planned features live in `SESSION_MODE_FEASIBILITY.md`
 and `PIANO_VIEW_PLAN.md`. Features land here the same way phases do (§6.29
 is the first): this file maps what exists, whichever plan produced it.
@@ -368,7 +368,7 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/scales/ui/rootNoteTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The detailed "Root Note Selection" table (`createRootNoteTable`) plus `positionTooltipSmart`. See §6.26. | `src/scales/scaleData`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createHeptatonicScaleTable` from `./scaleTable` | two-way with `src/scales/ui/scaleTable.js` - see §6.26 for why |
 | `src/scales/ui/scaleTable.js` *(Phase 4 second half, fourth step, landed 2026-08-03)* | The compact top-bar quick-picker (`createQuickScalePicker`), the detailed "Heptatonic Scales" browsing table (`createHeptatonicScaleTable`), and `intToRoman`. See §6.26. | `src/scales/scaleData`, `theory/chords`, MiniPiano, `src/scales/state`, and (cross-import) `highlightKeysForScales`/`updateCurrentScaleDisplay` from `..` (the barrel), `createRootNoteTable`/`positionTooltipSmart` from `./rootNoteTable` | two-way with `src/scales/ui/rootNoteTable.js` - see §6.26 for why |
 | `src/scales/index.js` *(Phase 4 second half, fifth and final step, landed 2026-08-03 - `scaleGenerator.js`/`scales.js` deleted)* | The public barrel for `src/scales/`: `highlightKeysForScales`/`highlightScaleNotes` (two unrelated DOM key-highlighting functions, not merged - see §6.27), `updateCurrentScaleDisplay` (the hub every UI cluster calls after a selection change), navigation-button wiring, plus the re-exports that make this folder's surface a single import. Everything else that used to live in `scaleGenerator.js`/`scales.js` moved to `state.js`/`scaleData.js`/`ui/infoPanel.js`/`ui/rootNoteTable.js`/`ui/scaleTable.js` across this phase's earlier steps (§6.23-6.26); this file is what remained from both plus the barrel role. See §6.27. **Not moved into `src/theory/` in Phase 2** — see §6.1/§6.2 correction; still not moved here either, pending a real `Scale` data model (see the project memory this session recorded). | `../midi`, `src/scales/scaleData`, `src/scales/ui/infoPanel`, `src/scales/ui/scaleTable`, `src/scales/state` | two-way with `src/scales/state.js`, `src/scales/ui/rootNoteTable.js`, `src/scales/ui/scaleTable.js` (§6.23/§6.26); every former `scaleGenerator.js`/`scales.js` external importer now pulls from here (`from './scales'` / `from '../scales'` etc., repointed in this step) |
-| `src/piano/` *(`PIANO_VIEW_PLAN.md` step 1, landed 2026-08-03 — a feature, not a refactor phase)* | The piano view. `keyModel.js`: which keys exist in a MIDI range, which are black, the white-key count `--num-keys` is set from, octave-span → MIDI range. `range.js`: the active instrument's playable range as `{ lowMidi, highMidi, openStrings }`. Both pure — no DOM, no app state. Standard MIDI (60 = C4) throughout, which is forced by `midi.js`'s `keys` table; see §6.29 for the conversion trap at the `tuning.js` boundary. | `keyModel.js`: nothing at all. `range.js`: `tuning.js` (`getNoteAtStringFret`), `theory/notation` (`noteToMidi`) | nothing imports it yet — step 2's `Piano.js` is the first consumer |
+| `src/piano/` *(`PIANO_VIEW_PLAN.md` steps 1-2, landed 2026-08-03 — a feature, not a refactor phase)* | The piano view. `keyModel.js`: which keys exist in a MIDI range, which are black, the white-key count `--num-keys` is set from, octave-span → MIDI range. `range.js`: the active instrument's playable range as `{ lowMidi, highMidi, openStrings }`. Both pure. `Piano.js`: the `<ul id="keyboard">` markup and the only DOM-touching file here — `<li midi="N" class="white\|black">` is a contract with `midi.js`/`scales/index.js`/`index.css`, not a free choice. `index.js`: the barrel. Standard MIDI (60 = C4) throughout, forced by `midi.js`'s `keys` table; see §6.29 for the conversion trap at the `tuning.js` boundary. | `keyModel.js`: nothing at all. `range.js`: `tuning.js` (`getNoteAtStringFret`), `theory/notation` (`noteToMidi`). `Piano.js`: `./keyModel` only | `src/fretboard/index.js`'s `initializeFretboard` builds the keyboard into `#fretNotPlaceholder` after the fretboard element, hidden |
 | `src/components/PolySynth/` | The synth UI + the module-scope `AC`/node graph in §2.1. Slated to be wrapped behind a channel adapter (`SESSION_MODE_FEASIBILITY.md` §2.2), not opened, so Phase 6 (internal cleanup) is optional and off the critical path. | `src/nodes/`, `src/audio/` | — |
 | `index.js` (app entry point - not `src/fretboard/index.js`, the barrel) | Keyboard entry point (`onKeyPress`), mouse-input wiring, React root mount, a handful of `window.*` exports for `src/fretboard/index.js`/`src/scales/` to consume. 262 lines (was 5,777 before Phase 1, 281 after it, then Phase 1b stripped the inert cruft Phase 1 deferred - see §7). Reads the `'synth'` channel via `src/audio/dispatch.js` (Phase 2b) rather than `window.polySynthRef`. | `src/audio/dispatch.js` | — |
 | `App.js` | React root component: theme provider, portals `PolySynthWrapper` into the vanilla UI's synth tab, sets `window.polySynthRef`/`window.polySynthEnabled` and registers the `'synth'` channel with `src/audio/dispatch.js` (Phase 2b). | `src/audio/dispatch.js` | — |
@@ -2169,7 +2169,7 @@ triad and seventh through `matchChord` (`Em`/`F#o`/`GM7`/`F#ø`/`D7`), and
 produced zero page or console errors - that grid's hover handler being
 where the deleted `highlightKeysForChords` call sat.
 
-### 6.29 `src/piano/` (`PIANO_VIEW_PLAN.md` step 1, 2026-08-03)
+### 6.29 `src/piano/` (`PIANO_VIEW_PLAN.md` steps 1-2, 2026-08-03)
 
 The first module here that is **not** a refactor product: new code for the
 piano view, not a relocation. Two files so far, both pure, neither reachable
@@ -2211,6 +2211,55 @@ and `check-build.sh` at 34 warnings, unchanged. Note that the build is *not*
 evidence here: nothing imports `src/piano/` yet, so webpack never compiled
 it — §2.3 lesson 11 in reverse. The tests are the only thing exercising this
 code until step 2.
+
+**Step 2 (2026-08-03) added `Piano.js` and `index.js`**, and with them the
+first markup the dormant piano CSS has ever had to attach to:
+
+```
+src/piano/Piano.js      builds <ul id="keyboard"><li class="white|black"
+                         midi="N">, sets --num-keys, shows/hides. The only
+                         DOM-touching file in the folder.
+src/piano/index.js      the barrel: createPiano/getPiano plus the pure
+                         helpers.
+```
+
+**Three names in that markup are contracts, not choices.** `[midi="N"]` is
+what `src/midi.js`'s `getElementByMIDI` queries, so it is how `keys`,
+`keys_chords` and `initializeMouseInput` find a key; `white`/`black` are what
+`src/index.css` styles; `#keyboard` is the container those rules hang off.
+Rendering this markup is the whole of why steps 3-4 are wiring rather than
+new code (`PIANO_VIEW_PLAN.md` §1.1).
+
+**Where it mounts.** `initializeFretboard()` (`src/fretboard/index.js`)
+inserts it into `#fretNotPlaceholder` directly after `mainFretboard.fretboardElement`,
+so the piano occupies the fretboard's own slot with the top bar and all six
+tabs untouched. It is built **once, hidden**, and from here on only ever
+shown or hidden — never rebuilt. That is not stylistic: this container also
+hosts the Synthesizer tab's React portal target, and re-running
+`initializeFretboard()` used to pull it out from under a mounted React tree
+(`src/index.js:230-236`). `Piano.js` keeps the single instance in a
+module-level `activePiano` reachable via `getPiano()`, rather than adding a
+`window.*` global that Phase 5 would then have to remove.
+
+**The CSS restructuring (`PIANO_VIEW_PLAN.md` §5.2/§5.3) happened here**,
+while the block was still dead and editing it was free. State stays in the
+classes (`.scaleKey`/`.highlightedKey`/`.pressedKey`); hue moved into
+`--scale-key-color`/`--highlight-key-color`, defaulted on `#keyboard li` and
+overridable per `<li>`, so step 4's semitone palette has somewhere to write.
+`--pressed-key-color` is deliberately *not* variable. Two colour variables
+rather than the one the plan sketched, because the striped
+scale-plus-chord rules need two hues at once. Two latent layout bugs in the
+same block were fixed at the same time: black keys had a fixed `-0.75rem`
+margin against percentage widths (now proportional, and the unused `.offset`
+nudge that existed to paper over it is deleted), and `float: left` was inert
+inside the `display: flex` parent (now `flex: none`).
+
+**Verified** with 53/53 tests, `check-build.sh` at 34 warnings unchanged, and
+in Chromium: the default view is pixel-unchanged with the piano hidden and
+zero console errors, and with the keyboard revealed all 15 black keys measure
+0.00px off their white-key boundary at 1600px while the 21 white keys span
+1599.94 of 1600px. Every highlight state and striped combination renders, and
+a per-`<li>` hue override works.
 
 ---
 
