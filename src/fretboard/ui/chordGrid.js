@@ -9,9 +9,9 @@
 //
 // getFretboard, showChordPatternOnFretboard, restoreFretboardState,
 // playChordVoicing and getChordVoicingNotes are glue that stays in
-// ../index.js (the src/fretboard/ barrel - called from
-// index.js/chords.js/progressionBuilder.js too, not just from this grid) -
-// imported back from there. This is the same safe two-way import shape as
+// ../index.js (the src/fretboard/ barrel - called from src/index.js and
+// src/progression/ too, not just from this grid) - imported back from
+// there. This is the same safe two-way import shape as
 // src/fretboard/ui/controls.js <-> ../index.js (see ARCHITECTURE.md §6.8):
 // every cross-import here is only touched inside a function body invoked
 // later, never at module top-level.

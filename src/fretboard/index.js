@@ -12,15 +12,13 @@
 // src/frets.js. The export surface below is unchanged from what frets.js
 // exported - this step is a pure move, not a public-API change.
 //
-// Two-way imports with src/chords.js and with ./ui/controls.js /
-// ./ui/chordGrid.js are pre-existing (frets.js had the same shape before
-// this move) and safe for the same reason noted throughout Phase 3: every
-// cross-import is only read inside a function body invoked later, never at
-// module top-level.
+// Two-way imports with ./ui/controls.js / ./ui/chordGrid.js are pre-existing
+// (frets.js had the same shape before this move) and safe for the same reason
+// noted throughout Phase 3: every cross-import is only read inside a function
+// body invoked later, never at module top-level.
 
 import {processChord, generateSyntheticChords} from '../theory/chords';
 import {HeptatonicScales, getScaleNotes, createHeptatonicScaleTable, createQuickScalePicker, getPrimaryScale, getPrimaryRootNote} from '../scales';
-import {highlightKeysForChords} from '../chords';
 import {noteToMidi, noteToName} from '../midi';
 import {
     translateNotes,
@@ -308,11 +306,6 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
         }
     } catch (error) {
         console.warn('Could not display chord pattern:', error);
-        // Fallback to basic chord display
-        const chordInfo = processChord(rootNote + chordType);
-        if (chordInfo && chordInfo.notes) {
-            highlightKeysForChords(chordInfo.notes);
-        }
     }
 }
 
