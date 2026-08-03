@@ -1,7 +1,3 @@
-src\chordPatterns.js
-  Line 397:9:  Duplicate key 'diminished7_A_string'  no-dupe-keys
-  Line 507:9:  Duplicate key 'augmented_E_string'    no-dupe-keys
-
 src\chords.js
   Line 191:24:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote'                                                                             no-loop-func
   Line 211:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
