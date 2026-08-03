@@ -78,9 +78,7 @@ const bindMouseInputToKeys = () => {
         currentMouseNote = noteWithOctave;
         
         // Only play if PolySynth is enabled and note isn't already pressed
-        if (playNote2Callback && typeof playNote2Callback === 'function' && 
-            document.getElementById('polySynthMidiBox') && 
-            document.getElementById('polySynthMidiBox').checked &&
+        if (playNote2Callback && typeof playNote2Callback === 'function' &&
             !pressedNotes.has(noteWithOctave)) {
           console.log('Playing note via mouse press:', noteWithOctave);
           playNote2Callback([noteWithOctave], 70); // Default volume of 70
@@ -118,9 +116,7 @@ const bindMouseInputToKeys = () => {
           }
 
           // Play the new note if not already playing
-          if (playNote2Callback && typeof playNote2Callback === 'function' && 
-              document.getElementById('polySynthMidiBox') && 
-              document.getElementById('polySynthMidiBox').checked &&
+          if (playNote2Callback && typeof playNote2Callback === 'function' &&
               !pressedNotes.has(noteWithOctave)) {
             console.log('Playing new note via mouse glide:', noteWithOctave);
             playNote2Callback([noteWithOctave], 70); // Default volume of 70
@@ -187,9 +183,7 @@ const bindMouseInputToKeys = () => {
         console.log('Touch start on key:', noteWithOctave, 'MIDI:', midiNote);
         
         // Only play if PolySynth is enabled and note isn't already pressed
-        if (playNote2Callback && typeof playNote2Callback === 'function' && 
-            document.getElementById('polySynthMidiBox') && 
-            document.getElementById('polySynthMidiBox').checked &&
+        if (playNote2Callback && typeof playNote2Callback === 'function' &&
             !pressedNotes.has(noteWithOctave)) {
           playNote2Callback([noteWithOctave], 70); // Default volume of 70
           pressedNotes.add(noteWithOctave);
