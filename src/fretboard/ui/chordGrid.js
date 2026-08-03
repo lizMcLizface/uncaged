@@ -7,7 +7,7 @@
 // getScaleIntervalEntries, deriveChordSuffix, getScaleDescriptor) used by
 // both this grid and src/fretboard/ui/scalePositionGrid.js.
 //
-// getFretboard, showChordPatternOnFretboard, restoreFretboardState,
+// getFretboard, showChordPatternOnFretboard, popChordHoverLayer,
 // playChordVoicing and getChordVoicingNotes are glue that stays in
 // ../index.js (the src/fretboard/ barrel - called from src/index.js and
 // src/progression/ too, not just from this grid) - imported back from
@@ -36,7 +36,8 @@ import { assignFingers, selectGripFromPositions, classifyFingeringSource } from 
 import {
     getFretboard,
     showChordPatternOnFretboard,
-    restoreFretboardState,
+    popChordHoverLayer,
+    showFingeringShape,
     playChordVoicing,
     getChordVoicingNotes
 } from '..';
@@ -274,8 +275,11 @@ export function createChordButtonGrid() {
                 cell.style.transform = 'scale(1)';
                 cell.style.zIndex = '1';
 
-                // Restore previous fretboard state
-                restoreFretboardState();
+                // Pop the preview. Whatever was underneath - the scale, or a
+                // selected chord over it - is simply revealed again, with
+                // nothing re-derived and nothing re-rendered from flags
+                // (VISUALIZATION_STACK_PLAN.md section 1.1).
+                popChordHoverLayer();
             });
 
             addInteractiveEvent(cell, 'click', () => {
@@ -607,38 +611,49 @@ export function getFingeringMarkerLabel(position, labelMode) {
 }
 
 /**
- * Render a single chord shape's positions on the fretboard, styled to
- * distinguish predefined (known chordPatterns.js) shapes from best-effort
- * generated ones (solid vs. dashed marker border).
- * @param {Fretboard} fretboard
- * @param {Object} shape
+ * Resolve a chord shape into display-ready marker descriptions: where each
+ * dot goes, what colour and border it gets, and what it says.
+ *
+ * Extracted from `renderFingeringShape` in VISUALIZATION_STACK_PLAN.md step
+ * 8d, which then had nothing left and was deleted: a chord now reaches the
+ * neck only as a `chordLayer`'s `positions`. Keeping the drawing decisions
+ * in one function is what made "8d must not change what the fretboard draws"
+ * a property of the code rather than a promise.
+ *
+ * Deliberately resolves everything here rather than leaving `Fretboard` to
+ * work it out: `getFingeringMarkerLabel` and the known-shape distinction
+ * live in this file, and `Fretboard.js` cannot import them - it is what
+ * this file imports.
+ *
+ * The colour cycle is by position index, not by interval. That is the
+ * pre-existing behaviour and it is left alone here; whether a fingering
+ * should use the semitone palette is a display question for another step,
+ * not something to change inside a move.
+ *
+ * @param {Object} shape - as built by buildFingeringShapes
  * @param {'note'|'interval'|'finger'} labelMode
+ * @returns {Array<Object>} markFret-ready descriptors
  */
-export function renderFingeringShape(fretboard, shape, labelMode) {
-    fretboard.clearMarkers();
-    fretboard.clearChordLines();
-
-    if (!shape || !Array.isArray(shape.positions)) {
-        return;
-    }
+export function buildFingeringPositions(shape, labelMode) {
+    if (!shape || !Array.isArray(shape.positions)) return [];
 
     const isPredefined = shape.source === 'predefined';
     const colorMap = ['#ff4444', '#ffcc44', '#44ff44', '#4444ff'];
 
-    shape.positions.forEach((position, index) => {
-        fretboard.markFret(position.string, position.fret, {
-            backgroundColor: '#ffffff',
-            borderColor: colorMap[index % colorMap.length],
-            borderWidth: position.isRoot ? 4 : 3,
-            borderStyle: isPredefined ? 'solid' : 'dashed',
-            textColor: '#333333',
-            size: position.isRoot ? 30 : 26,
-            label: getFingeringMarkerLabel(position, labelMode),
-            isRoot: position.isRoot,
-            useCustomStyle: true,
-            disableAnimation: true
-        });
-    });
+    return shape.positions.map((position, index) => ({
+        string: position.string,
+        fret: position.fret,
+        backgroundColor: '#ffffff',
+        borderColor: colorMap[index % colorMap.length],
+        borderWidth: position.isRoot ? 4 : 3,
+        borderStyle: isPredefined ? 'solid' : 'dashed',
+        textColor: '#333333',
+        size: position.isRoot ? 30 : 26,
+        label: getFingeringMarkerLabel(position, labelMode),
+        isRoot: position.isRoot,
+        useCustomStyle: true,
+        disableAnimation: true
+    }));
 }
 
 /**
@@ -712,8 +727,7 @@ export function renderFingeringTabs(fretboard, labelMode) {
             color: #fff;
         `;
         tab.addEventListener('click', () => {
-            fretboardState.selectedFingeringTabIndex = index;
-            renderFingeringShape(fretboard, fretboardState.chordFingeringShapes[index], labelMode);
+            showFingeringShape(index);
             renderFingeringTabs(fretboard, labelMode);
         });
         container.appendChild(tab);

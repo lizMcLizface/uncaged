@@ -51,15 +51,19 @@ import {
 } from '../piano';
 import {
     setBaseLayer,
+    pushLayer,
+    popLayer,
+    getLayers,
     subscribe as subscribeToVisualization,
     flattenLayers,
-    scaleLayer
+    scaleLayer,
+    chordLayer
 } from '../visualization';
 import { createFretboardControls } from './ui/controls';
 import {
     buildIntervalLabelMap,
     buildFingeringShapes,
-    renderFingeringShape,
+    buildFingeringPositions,
     renderFingeringTabs,
     clearFingeringTabs,
     analyzeChordScaleCompatibility,
@@ -160,18 +164,91 @@ function refreshScaleLayer(scaleData) {
 }
 
 /**
- * Point the piano at the stack, and keep it pointed there.
+ * Point both renderers at the stack, and keep them pointed there.
  *
- * The piano repaints on every stack change whether or not it is the visible
- * view. That is deliberate and it is what let `setMainViewMode` stop
- * repainting on the way in: a hidden piano stays current, so there is no
- * "it may have gone stale while hidden" case left to handle.
+ * Each repaints on every stack change whether or not it is the visible view.
+ * That is deliberate and it is what let `setMainViewMode` stop repainting on
+ * the way in: neither can go stale while hidden, so there is no such case
+ * left to handle.
  */
-function subscribePianoToVisualization() {
+function subscribeRenderersToVisualization() {
     subscribeToVisualization(layers => {
+        const resolved = flattenLayers(layers);
+
         const piano = getPiano();
-        if (piano) piano.renderStack(flattenLayers(layers));
+        if (piano) piano.renderStack(resolved);
+
+        const fretboard = getFretboard('fretNotPlaceholder');
+        if (fretboard) fretboard.renderStack(resolved, layers);
     });
+}
+
+/**
+ * The two ids a chord can occupy, and why there are two.
+ *
+ * A *selected* chord is pinned (`transient: false`) and survives a scale
+ * change; a *hovered* one is transient and is popped on `mouseleave`. If
+ * they shared an id, hovering while a chord was selected would replace the
+ * selection and leaving would pop it - losing it. Two ids is what
+ * `restoreFretboardState` used to hand-roll by re-deriving the selection
+ * from `fretboardState` flags and re-running its producer.
+ */
+const CHORD_LAYER_ID = 'chord';
+const CHORD_HOVER_LAYER_ID = 'chord-hover';
+
+function chordLayerIdFor(isTemporary) {
+    return isTemporary ? CHORD_HOVER_LAYER_ID : CHORD_LAYER_ID;
+}
+
+/**
+ * End a hover preview. **This is the whole of what `restoreFretboardState`
+ * used to do**, and the clearest single measure of what the stack bought:
+ * that function re-derived the previous display from three `fretboardState`
+ * flags and re-ran its producer, in a ladder copied four times across three
+ * files. Popping reveals what was underneath because it was never destroyed.
+ *
+ * Safe to call without a matching hover - a `mouseleave` that arrives on its
+ * own (tab switch, element replaced under the pointer) pops nothing and
+ * notifies nobody.
+ */
+function popChordHoverLayer() {
+    popLayer(CHORD_HOVER_LAYER_ID);
+}
+
+/**
+ * Swap which fingering of the current chord is shown, from the position
+ * picker tab bar.
+ *
+ * Re-pushes the chord layer that is already on the stack with new positions,
+ * rather than rebuilding one: the id, label, root and transience all have to
+ * survive, and copying the live layer is the only way that cannot drift from
+ * what pushed it. Topmost first, so picking a position while hovering
+ * updates the preview rather than the pinned selection underneath it.
+ */
+function showFingeringShape(shapeIndex) {
+    const shape = fretboardState.chordFingeringShapes[shapeIndex];
+    if (!shape) return;
+
+    fretboardState.selectedFingeringTabIndex = shapeIndex;
+
+    const current = getLayers()
+        .slice()
+        .reverse()
+        .find(layer => layer.id === CHORD_HOVER_LAYER_ID || layer.id === CHORD_LAYER_ID);
+    if (!current) return;
+
+    pushLayer({
+        ...current,
+        positions: buildFingeringPositions(shape, fretboardState.mainFretboardLabelMode)
+    });
+}
+
+/**
+ * Drop the selected chord as well as any preview, leaving the bare scale.
+ */
+function popChordLayers() {
+    popLayer(CHORD_HOVER_LAYER_ID);
+    popLayer(CHORD_LAYER_ID);
 }
 
 /**
@@ -234,7 +311,7 @@ function initializeFretboard() {
         visible: false,
         onRender: syncPianoKeyState
     });
-    subscribePianoToVisualization();
+    subscribeRenderersToVisualization();
 
     // setMainViewMode reads the main-fretboard pointer, which
     // initializeFretboardWithScale otherwise only assigns once this function
@@ -293,6 +370,33 @@ function initializeScalesInFretboard() {
 }
 
 /**
+ * Re-apply whatever the user has selected, after something the selection is
+ * computed *from* has changed - the scale, the label mode, the tuning.
+ *
+ * **The one surviving copy of a ladder that existed four times.** Before
+ * VISUALIZATION_STACK_PLAN.md step 8d, this three-way choice was open-coded
+ * in `restoreFretboardState`, in `refreshFretboardDisplay`, in the
+ * label-mode `change` handler and (differently again) inside
+ * `updateFretboardsForScaleChange` - and the copies had already drifted:
+ * only one of them cleared the fingering tabs. Restoring after a *hover* is
+ * no longer one of its jobs; that is `popChordHoverLayer`.
+ *
+ * `currentDisplayedChord` and `currentChordGridSelection` survive only to
+ * answer "which button is active", here and for button styling. They no
+ * longer decide what is drawn.
+ */
+function reapplySelection() {
+    const gridSelection = fretboardState.currentChordGridSelection;
+    if (gridSelection) {
+        showChordPatternOnFretboard(gridSelection.note, gridSelection.chordType, false);
+    } else if (fretboardState.currentDisplayedChord > 0) {
+        showChordOnFretboard(fretboardState.currentDisplayedChord - 1);
+    } else {
+        showScaleOnFretboard();
+    }
+}
+
+/**
  * Force refresh of fretboard and chord grid (useful for manual calls)
  */
 function refreshFretboardDisplay() {
@@ -307,20 +411,7 @@ function refreshFretboardDisplay() {
             updateChordGridColors();
             renderScalePositionGrid();
 
-            // Then restore the appropriate fretboard display
-            if (fretboardState.currentChordGridSelection) {
-                // Re-apply chord grid selection with new scale context
-                showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);
-            } else if (fretboardState.currentDisplayedChord === 0) {
-                // Show scale
-                showScaleOnFretboard();
-            } else if (fretboardState.currentDisplayedChord !== null && fretboardState.currentDisplayedChord > 0) {
-                // Show Roman numeral chord
-                showChordOnFretboard(fretboardState.currentDisplayedChord - 1);
-            } else {
-                // Default to showing scale
-                showScaleOnFretboard();
-            }
+            reapplySelection();
         } else {
             console.log('Cannot refresh: no scale selected or HeptatonicScales not available');
         }
@@ -435,14 +526,13 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                     fretboardState.selectedFingeringTabIndex = 0;
 
                     const labelMode = fretboardState.mainFretboardLabelMode;
-                    if (fretboardState.chordFingeringShapes.length > 0) {
-                        renderFingeringShape(fretboard, fretboardState.chordFingeringShapes[0], labelMode);
-                        console.log(`Displaying ${chordName} with ${fretboardState.chordFingeringShapes.length} playable shape(s) ${isTemporary ? 'temporarily' : 'persistently'}`);
-                    } else {
-                        fretboard.clearMarkers();
-                        fretboard.clearChordLines();
-                        console.log(`Displaying ${chordName} (no playable shape found)`);
-                    }
+                    pushChordLayer({
+                        isTemporary,
+                        label: `${rootNote} ${chordType}`,
+                        rootNote: chordNotes[0],
+                        shape: fretboardState.chordFingeringShapes[0],
+                        labelMode
+                    });
                     renderFingeringTabs(fretboard, labelMode);
 
                     // Update chord info display for chord grid selections (both hover and click)
@@ -457,33 +547,35 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
 }
 
 /**
- * Restore fretboard to previous state (local version)
+ * Put a chord on the stack, over the scale.
+ *
+ * The single place a chord becomes visible - both the Roman-numeral buttons
+ * and the chord grid come through here, which is what collapses the four
+ * divergent copies of the old restore ladder into one path.
+ *
+ * **A chord pushes over its scale rather than replacing it**
+ * (VISUALIZATION_STACK_PLAN.md section 8.1, the user's call). `dimBelow`
+ * recedes the scale so the chord reads clearly against it while the scale
+ * stays legible underneath - which is what the app is for. Setting
+ * `hideBelow` here instead is the whole of the "hide the scale" alternative,
+ * should it ever be offered as a setting.
+ *
+ * A shape with no playable fingering pushes a layer with no positions rather
+ * than nothing at all: the fretboard then shows the dimmed scale, where it
+ * used to blank entirely. Deliberate - a blank neck reads as a bug.
  */
-function restoreFretboardState() {
-    // Check if we have a permanent chord grid selection
-    if (fretboardState.currentChordGridSelection) {
-        // Restore the chord grid selection
-        showChordPatternOnFretboard(fretboardState.currentChordGridSelection.note, fretboardState.currentChordGridSelection.chordType, false);
-        return;
-    }
+function pushChordLayer({ isTemporary, label, rootNote, shape, labelMode }) {
+    const positions = shape ? buildFingeringPositions(shape, labelMode) : [];
 
-    // Try to restore the previous Roman numeral state
-    if (fretboardState.currentDisplayedChord === null) {
-        // Clear fretboard and chord info display
-        const fretboard = getFretboard('fretNotPlaceholder');
-        if (fretboard) {
-            fretboard.clearMarkers();
-            fretboard.clearChordLines();
-        }
-        clearFingeringTabs();
-        updateChordInfoDisplay(); // Clear chord info display
-    } else if (fretboardState.currentDisplayedChord === 0) {
-        // Show scale
-        showScaleOnFretboard();
-    } else {
-        // Show current chord
-        showChordOnFretboard(fretboardState.currentDisplayedChord - 1);
-    }
+    pushLayer(chordLayer({
+        id: chordLayerIdFor(isTemporary),
+        label,
+        rootNote,
+        labelMode,
+        positions,
+        dimBelow: true,
+        transient: isTemporary
+    }));
 }
 
 /**
@@ -534,14 +626,13 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
             fretboardState.selectedFingeringTabIndex = 0;
 
             const labelMode = fretboardState.mainFretboardLabelMode;
-            if (fretboardState.chordFingeringShapes.length > 0) {
-                renderFingeringShape(fretboard, fretboardState.chordFingeringShapes[0], labelMode);
-                console.log(`Displaying ${chordName} with ${fretboardState.chordFingeringShapes.length} playable shape(s)`);
-            } else {
-                fretboard.clearMarkers();
-                fretboard.clearChordLines();
-                console.log(`Displaying ${chordName} (no playable shape found)`);
-            }
+            pushChordLayer({
+                isTemporary,
+                label: chordName,
+                rootNote: chord[0],
+                shape: fretboardState.chordFingeringShapes[0],
+                labelMode
+            });
             renderFingeringTabs(fretboard, labelMode);
         }
     } catch (error) {
@@ -550,12 +641,21 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
 }
 
 /**
- * Helper function to show scale on fretboard
+ * Show the scale on its own - the Scale button, clicked or hovered.
+ *
+ * The scale itself is always on the stack as the base layer
+ * (`refreshScaleLayer`), so this is not about *adding* it. It is about
+ * getting the chord out of the way:
+ *
+ * - **Clicked** (`isTemporary` false): pop the chord layers. What is left is
+ *   the base, undimmed.
+ * - **Hovered**: push the scale again as a transient layer with
+ *   `hideBelow`, which hides the pinned chord *below* it for as long as the
+ *   pointer is there. Popping it on `mouseleave` restores the chord with no
+ *   state to remember - which is the whole reason
+ *   `restoreFretboardState` no longer exists.
  */
 function showScaleOnFretboard(isTemporary = false) {
-    const fretboard = getFretboard('fretNotPlaceholder');
-    if (!fretboard) return;
-
     try {
         const primaryScale = getPrimaryScale();
         const rootNote = getPrimaryRootNote();
@@ -578,19 +678,17 @@ function showScaleOnFretboard(isTemporary = false) {
         const scaleName = `${rootNote} ${family} (Mode ${mode})`;
         updateChordInfoDisplay(scaleName, scaleNotes);
 
-        // Clear markers and lines first to prevent overlap
-        fretboard.clearMarkers();
-        fretboard.clearChordLines();
-        clearFingeringTabs();
-
-        fretboard.markScale(scaleNotes, rootNote, {
-            showIntervals: fretboardState.mainFretboardLabelMode === 'interval'
-        });
-
-        if (!isTemporary) {
-            // Add to scale tracking only if this is a permanent selection
-            fretboardState.fretboardsShowingScale.add(fretboard.containerId);
-            fretboardState.fretboardsShowingChords.delete(fretboard.containerId);
+        const labelMode = fretboardState.mainFretboardLabelMode;
+        if (isTemporary) {
+            pushLayer({
+                ...scaleLayer(scaleNotes, rootNote, labelMode),
+                id: CHORD_HOVER_LAYER_ID,
+                hideBelow: true,
+                transient: true
+            });
+        } else {
+            popChordLayers();
+            clearFingeringTabs();
         }
     } catch (error) {
         console.warn('Could not show scale:', error);
@@ -653,12 +751,27 @@ function updateChordButtonStyles() {
 }
 
 /**
- * Update all fretboards that are currently showing the scale
- * This function should be called whenever the primary scale changes
+ * Bring the display back in line after the primary scale changes.
+ *
+ * **This used to be the fourth and most elaborate copy of the restore
+ * ladder** (VISUALIZATION_STACK_PLAN.md section 1.1): it walked two Sets of
+ * container ids, re-ran `markScale` on one group, re-derived and re-rendered
+ * the selected chord for the other, and special-cased "a hover is in
+ * progress" by drawing the scale instead. Every one of those concerns is now
+ * structural:
+ *
+ * - the scale is the base layer, and `refreshScaleLayer` (its own
+ *   `'scaleChanged'` listener) has already rebuilt it;
+ * - which surfaces show it is "the ones subscribed", not a Set that drawing
+ *   code had to remember to add itself to;
+ * - a hover in progress is a transient layer, and `setBaseLayer` dropped it
+ *   on the way through - no flag to check.
+ *
+ * What is genuinely left is re-deriving the *selected chord*, whose notes
+ * depend on the scale that just moved.
  */
 function updateFretboardsForScaleChange(scaleData) {
-    // Skip if no fretboards are showing scales or chords, or if already updating
-    if ((fretboardState.fretboardsShowingScale.size === 0 && fretboardState.fretboardsShowingChords.size === 0) || fretboardState.isUpdatingFretboards) return;
+    if (fretboardState.isUpdatingFretboards) return;
 
     try {
         fretboardState.isUpdatingFretboards = true;
@@ -670,64 +783,10 @@ function updateFretboardsForScaleChange(scaleData) {
             return;
         }
 
-        console.log(`Updating fretboards for scale change: ${rootNote} ${primaryScale}`);
-
-        console.log('Scale notes:', scaleNotes);
         const [family, mode] = primaryScale.split('-');
-        const scaleName = `${rootNote} ${family} (Mode ${mode})`;
-        updateChordInfoDisplay(scaleName, scaleNotes);
-        // Update all fretboards that are showing the scale
-        fretboardState.fretboardsShowingScale.forEach(containerId => {
-            const fretboard = fretboardState.fretboardInstances.get(containerId);
-            if (fretboard) {
-                fretboard.markScale(scaleNotes, rootNote, {
-                    showIntervals: fretboardState.mainFretboardLabelMode === 'interval'
-                });
-            }
-        });
+        updateChordInfoDisplay(`${rootNote} ${family} (Mode ${mode})`, scaleNotes);
 
-        // Update all fretboards that are showing chords
-        fretboardState.fretboardsShowingChords.forEach(containerId => {
-            const fretboard = fretboardState.fretboardInstances.get(containerId);
-            if (fretboard && fretboardState.currentDisplayedChord !== null) {
-                // If we're in a hover state, show the full scale instead of chord
-                if (fretboardState.isInHoverState) {
-                    fretboard.clearMarkers();
-                    fretboard.clearChordLines();
-                    fretboard.markScale(scaleNotes, rootNote, {
-                        showIntervals: fretboardState.mainFretboardLabelMode === 'interval'
-                    });
-                    return;
-                }
-
-                // Re-generate and display the current chord with new scale
-                try {
-                    if (fretboardState.currentDisplayedChord === 0) {
-                        // Scale is selected, show scale
-                        showScaleOnFretboard();
-                    } else {
-                        // Chord is selected (adjust index for chord array)
-                        const [family, mode] = primaryScale.split('-');
-                        // Guard against accessing HeptatonicScales before it's initialized
-                        if (!HeptatonicScales || !HeptatonicScales[family]) {
-                            console.warn('HeptatonicScales not yet initialized, skipping chord update');
-                            return;
-                        }
-                        const intervals = HeptatonicScales[family][parseInt(mode, 10) - 1].intervals;
-                        const chordLength = fretboardState.currentChordType === 'sevenths' ? 4 : 3;
-                        const syntheticChords = generateSyntheticChords({ intervals }, chordLength, rootNote);
-
-                        const chordIndex = fretboardState.currentDisplayedChord - 1;
-                        if (chordIndex >= 0 && chordIndex < syntheticChords.length) {
-                            // Use the updated showChordOnFretboard function which includes pattern matching
-                            showChordOnFretboard(chordIndex);
-                        }
-                    }
-                } catch (error) {
-                    console.warn('Could not update chord for scale change:', error);
-                }
-            }
-        });
+        reapplySelection();
     } catch (error) {
         console.warn('Could not update fretboards for scale change:', error);
     } finally {
@@ -1099,7 +1158,10 @@ export {
 // note at the top of this file for why this is safe.
 export {
     showChordPatternOnFretboard,
-    restoreFretboardState,
+    popChordHoverLayer,
+    popChordLayers,
+    showFingeringShape,
+    reapplySelection,
     updateChordButtonStyles,
     updateChordInfoDisplay,
     playChordVoicing,

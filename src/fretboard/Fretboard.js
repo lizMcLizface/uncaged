@@ -21,6 +21,14 @@
  * 3; it has no better home yet among today's modules, so it moved here
  * too, and ui/controls.js's and ui/chordGrid.js's button/hover handlers
  * import it back the same way.
+ *
+ * **This class holds no application state.** It used to import
+ * `fretboardState` purely so that drawing could register itself in the
+ * `fretboardsShowingScale`/`fretboardsShowingChords` Sets - bookkeeping about
+ * what was on screen, updated from inside the render. VISUALIZATION_STACK_PLAN.md
+ * step 8d deleted those Sets (the layer stack answers that question), and
+ * with them the last reason this file knew anything about the app. It now
+ * draws what it is told and nothing else.
  */
 
 import { HeptatonicScales, getScaleNotes, getPrimaryScale, getPrimaryRootNote } from '../scales';
@@ -32,7 +40,6 @@ import {
 } from '../theory/notation';
 import { getIntervalColor } from '../theory/intervals';
 import { getPatternsByChordType } from '../chordPatterns';
-import { fretboardState } from './state';
 import {
     calculateFretPositions,
     calculateFretPosition as geometryCalculateFretPosition,
@@ -662,11 +669,6 @@ class Fretboard {
             }
         });
         this.markers.clear();
-        
-        // Only remove from scale tracking if not in an automatic update cycle
-        if (!fretboardState.isUpdatingFretboards) {
-            fretboardState.fretboardsShowingScale.delete(this.containerId);
-        }
     }
     
     /**
@@ -894,9 +896,6 @@ class Fretboard {
                 }
             }
         });
-        
-        // Always add to tracking if showing scale, whether from user action or auto-update
-        fretboardState.fretboardsShowingScale.add(this.containerId);
     }
     
     /**
@@ -918,16 +917,20 @@ class Fretboard {
      * `fretboardsShowingScale`. Under the stack the stack *is* the tracking;
      * drawing and bookkeeping stop being the same call (section 6, step 8d).
      *
-     * Fingering layers (`layer.positions`) are **not** rendered here. A
-     * fingering is a set of (string, fret) pairs that no note list implies,
-     * and `renderFingeringShape` still owns drawing them; 8d moves the
-     * producer and the renderer together, against that function's real
-     * output, rather than guessing its shape a step early.
+     * **Fingering layers are drawn last, and from `layer.positions`.** A
+     * fingering is a set of (string, fret) pairs no note list implies - the
+     * one thing in the layer model the piano cannot render and this can - so
+     * those positions arrive already resolved to markers by
+     * `buildFingeringPositions` (`ui/chordGrid.js`), the same function the
+     * direct path used before 8d retired it. Drawing them after the
+     * note pass is what lets a chord's own marker win the fret it shares
+     * with the scale underneath.
      *
      * @param {{resolve: (midi: number) => object|null}|null} resolved -
      *        `flattenLayers(getLayers())`, or null to clear the neck.
+     * @param {Array<object>} [layers] - the raw layer list, for `positions`.
      */
-    renderStack(resolved) {
+    renderStack(resolved, layers = []) {
         this.clearMarkers();
         if (!resolved) return;
 
@@ -951,6 +954,22 @@ class Fretboard {
                     opacity: entry.dimmed ? 0.4 : 1
                 });
             }
+        });
+
+        // A hidden layer contributes nothing, positions included - the same
+        // rule flattenLayers applies to notes.
+        const hideIndex = resolved.hideIndex;
+        layers.forEach((layer, layerIndex) => {
+            if (!layer || !Array.isArray(layer.positions)) return;
+            if (layerIndex < hideIndex) return;
+
+            const dimmed = layerIndex < resolved.dimIndex;
+            layer.positions.forEach(position => {
+                this.markFret(position.string, position.fret, {
+                    ...position,
+                    opacity: dimmed ? 0.4 : (position.opacity ?? 1)
+                });
+            });
         });
     }
 
@@ -1031,10 +1050,6 @@ class Fretboard {
             }
         });
         
-        // Remove from scale tracking since we're showing specific notes
-        if (clearFirst) {
-            fretboardState.fretboardsShowingScale.delete(this.containerId);
-        }
     }
     
     /**
@@ -1051,10 +1066,6 @@ class Fretboard {
             this.markNote(note, { ...options, clearFirst: false });
         });
         
-        // Remove from scale tracking since we're showing specific notes
-        if (clearFirst) {
-            fretboardState.fretboardsShowingScale.delete(this.containerId);
-        }
     }
     
     /**
@@ -1188,9 +1199,7 @@ class Fretboard {
         }
         
         // Add to chord tracking
-        fretboardState.fretboardsShowingChords.add(this.containerId);
         // Remove from scale tracking since we're showing chords
-        fretboardState.fretboardsShowingScale.delete(this.containerId);
     }
     
     /**

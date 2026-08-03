@@ -2532,12 +2532,15 @@ the piano was already right, the fretboard was the exception.
 display?" — a persistent base layer plus overlays pushed on top of it, and
 the rules for resolving them into per-key output.
 
-**What depends on it:** `src/fretboard/index.js`, which subscribes the piano
-(`subscribePianoToVisualization`) and sets the base layer from the app's
-scale (`refreshScaleLayer`); and both renderers' `renderStack` methods. The
-producers move in 8d — until then `markScale` and `renderFingeringShape`
-still drive the fretboard, and `Fretboard.renderStack` exists but is
-uncalled.
+**What depends on it:** `src/fretboard/index.js`, which subscribes both
+renderers (`subscribeRenderersToVisualization`), sets the base layer from the
+app's scale (`refreshScaleLayer`), and owns every producer that puts a chord
+on it; `ui/controls.js` and `ui/chordGrid.js`'s hover handlers, which push
+and pop through that barrel; and both renderers' `renderStack` methods.
+
+**As of 8d this is the only thing that decides what the main display shows.**
+The six `fretboardState` flags it replaced are gone or demoted — see the
+table below.
 
 **What it depends on:** `theory/notation` (note name → MIDI) and
 `theory/intervals` (the semitone palette). Nothing else — and specifically
@@ -2610,12 +2613,40 @@ markers are **provably identical to `markScale`'s**: asserted on the
 so the assertion is known to fail when it should. That equivalence is what
 lets 8d move the producers without changing what is drawn.
 
-Two things it deliberately does *not* do: write display-tracking state
-(`markScale` adds to `fretboardsShowingScale`; under the stack the stack is
-the tracking), and render fingering `positions` — a fingering is a set of
-(string, fret) pairs no note list implies, and 8d moves that producer and
-renderer together. `markFret` gained an `opacity` option for the dimmed
-case, defaulting to 1 so no existing call site changes.
+`markFret` gained an `opacity` option for the dimmed case, defaulting to 1 so
+no existing call site changes.
+
+**8d made it the only path** (2026-08-03). What was deleted, and what each
+thing was:
+
+| Deleted | What it was |
+|---|---|
+| `restoreFretboardState` | 25 lines that re-derived the previous display from three flags and re-ran its producer, called from both hover sites |
+| `isInHoverState` | a boolean, so two hover sources could not both be true |
+| `fretboardsShowingScale` / `fretboardsShowingChords` | Sets that *drawing code registered itself in* — `markScale` added to one from inside the render |
+| three of the four ladder copies | in `refreshFretboardDisplay`, the label-mode handler, and `updateFretboardsForScaleChange` |
+| `renderFingeringShape` | emptied once `buildFingeringPositions` was extracted from it |
+
+`currentDisplayedChord` and `currentChordGridSelection` survive, demoted to
+recording *which button is active* — for button styling and for
+`reapplySelection`, the one surviving ladder, which is genuinely needed
+because a Roman-numeral chord's notes depend on the scale that just moved.
+
+**A chord pushes over its scale rather than replacing it** — the visible
+behaviour change of this step, decided by the user
+(`VISUALIZATION_STACK_PLAN.md` §8.1). `dimBelow` recedes the scale to
+`opacity: 0.4` so it stays readable underneath. Two layer ids, not one:
+`'chord'` is pinned (`transient: false`), `'chord-hover'` is transient, and
+they must differ or hovering while something is selected would replace the
+selection and leaving would pop it.
+
+**`Fretboard.js` stopped importing `fretboardState` entirely.** The only
+reason the renderer knew about application state was to register itself in
+those two Sets. It now draws what it is told and holds nothing.
+
+Two live direct writers remain outside the stack, both deliberate:
+`progression/fretboardDisplay.js` (§6.17) and the `Show All Notes` debugging
+button. Both paint over the stack and are painted over by it.
 
 **Verified** with 59 new tests (124 total), 34 build warnings unchanged, and
 a direct ESLint run over the new folder — the build check alone cannot

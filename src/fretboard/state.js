@@ -38,15 +38,24 @@ export const fretboardState = {
     scalePositionAllLabelsMode: 'interval', // 'none' | 'note' | 'interval' - text label on every dot (chord cells and the full scale column)
     scalePositionShowGripLines: false, // Draw a connecting line between the picked grip's dots
 
-    // Fretboard instance registry and display-mode tracking.
+    // Fretboard instance registry.
+    //
+    // fretboardsShowingScale / fretboardsShowingChords / isInHoverState were
+    // deleted in VISUALIZATION_STACK_PLAN.md step 8d. All three existed to
+    // answer "what is on screen right now?", which src/visualization/'s layer
+    // stack answers directly - and answers without drawing code having to
+    // remember to register itself (markScale used to add to the first Set
+    // from inside the render).
     fretboardInstances: new Map(),
-    fretboardsShowingScale: new Set(),
-    fretboardsShowingChords: new Set(),
 
     // Chord grid / chord display state.
+    //
+    // currentDisplayedChord and currentChordGridSelection survived 8d but
+    // were demoted: they record WHICH BUTTON IS ACTIVE, for button styling
+    // and for rebuilding the selection when the scale moves. They no longer
+    // decide what is drawn - the stack does.
     currentChordType: 'triads', // 'triads' or 'sevenths'
-    currentDisplayedChord: null, // Currently displayed chord index (0-6)
-    isInHoverState: false, // Track if we're currently in a temporary hover state
+    currentDisplayedChord: null, // Active Roman-numeral button (0 = Scale, 1-7 = chord)
     mainFretboardLabelMode: 'note', // 'note' | 'interval' | 'finger' - marker label mode for chord/scale displays
     currentChordGridSelection: null, // Track permanent chord grid selections {note, chordType}
 
