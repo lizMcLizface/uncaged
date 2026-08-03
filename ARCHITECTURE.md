@@ -3,8 +3,20 @@
 Living document. Updated as `REFACTOR_PLAN.md` phases land — see that file for
 what's left to do (its §1) and the documentation discipline this follows
 (its §2.4). Seeded 2026-08-01 as the Phase 0 baseline (the pre-refactor
-shape, warts included); current through Phase 1c, 2026-08-03. Sections
-describe the *current* shape, not an aspirational one.
+shape, warts included); current through Phase 4c, 2026-08-03. Sections
+describe the *current* shape, not an aspirational one — planned features
+live in `SESSION_MODE_FEASIBILITY.md` and `PIANO_VIEW_PLAN.md`.
+
+**One known-false claim, recorded here because a plan depends on it:**
+`src/theory/intervals.js`'s header says its palette is shared "so a given
+scale tone reads as the same label and color everywhere in the app: the
+scale piano, every chord piano, and the fretboard." The label half is true;
+the color half is not. `Fretboard.js`'s `markScale` (`:869`) colors by
+**scale degree** via `SCALE_COLORS`, not by semitone, so a ♭3 and a natural
+3 come out the same color there and different colors in the Scale Position
+Grid and every MiniPiano. `PIANO_VIEW_PLAN.md` §2 resolves this by
+converting `markScale` and retiring `SCALE_COLORS`; until that lands, treat
+the fretboard as the exception.
 
 **Where the detail lives:** §6 is indexed by *module* (§6.1-§6.28, one per
 extracted module, in the order they landed) rather than by phase, so it stays

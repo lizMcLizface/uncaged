@@ -139,6 +139,23 @@ Consolidating the three styling systems (inline `.style`/`cssText`,
 to React, and adding a build step beyond CRA. Each is a bigger decision than
 this plan, and each got easier as the phases above landed.
 
+New user-facing features are also out of scope and live in their own docs:
+`SESSION_MODE_FEASIBILITY.md` (backing tracks, the Timing Grid, input
+detection) and **`PIANO_VIEW_PLAN.md`** (a multi-octave piano that can
+replace the main fretboard, investigated 2026-08-03).
+
+Two things in `PIANO_VIEW_PLAN.md` touch this plan, both deliberately:
+
+- Its §7 commits the piano to the `'scaleChanged'` CustomEvent rather than
+  `window.updateFretboardsForScaleChange`, so it adds **nothing** to Phase
+  5's burden. If a later session finds the piano reaching for that global
+  instead, that is a regression against a decision already made.
+- Its step 4 retires `SCALE_COLORS` from `src/fretboard/Fretboard.js` and
+  converts `markScale` to the semitone palette everything else already uses.
+  That is a **deliberate visual change**, not a refactor step, and §2.1's
+  "restructuring only" rule is why it is isolated in its own commit there
+  rather than folded into a move.
+
 ---
 
 ## 2. How to work on this
