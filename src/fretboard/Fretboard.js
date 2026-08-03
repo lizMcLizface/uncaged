@@ -23,8 +23,7 @@
  * import it back the same way.
  */
 
-import { HeptatonicScales, getScaleNotes } from '../scales';
-import { getPrimaryScale, getPrimaryRootNote } from '../scaleGenerator';
+import { HeptatonicScales, getScaleNotes, getPrimaryScale, getPrimaryRootNote } from '../scales';
 import {
     translateNotes as notationTranslateNotes,
     areEnharmonicEquivalent,

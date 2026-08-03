@@ -11,7 +11,6 @@
 // scaleGenerator.js/scales.js -> src/scales/ half).
 
 import { HeptatonicScales, getScaleNotes } from '../scaleData';
-import { highlightKeysForScales } from '../../scales';
 import { createScalePiano } from '../../components/MiniPiano/MiniPiano';
 import {
     scaleState,
@@ -22,7 +21,7 @@ import {
     getPrimaryRootNote,
     refreshChordsForRootNote
 } from '../state';
-import { updateCurrentScaleDisplay } from '../../scaleGenerator';
+import { highlightKeysForScales, updateCurrentScaleDisplay } from '..';
 import { createHeptatonicScaleTable } from './scaleTable';
 
 function positionTooltipSmart(tooltip, e) {

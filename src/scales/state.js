@@ -20,7 +20,7 @@
 // Lifted from scaleGenerator.js as part of REFACTOR_PLAN.md Phase 4.
 
 import { HeptatonicScales, precomputeScaleChords, getChordsForScale } from './scaleData';
-import { updateCurrentScaleDisplay } from '../scaleGenerator';
+import { updateCurrentScaleDisplay } from '.';
 import { createHeptatonicScaleTable } from './ui/scaleTable';
 
 const SCALE_SELECTION_STORAGE_KEY = 'PolySynth-ScaleSelection';

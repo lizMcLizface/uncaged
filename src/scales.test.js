@@ -1,8 +1,9 @@
 import { getScaleNotes } from './scales';
 
-// Characterization tests written ahead of REFACTOR_PLAN.md Phase 2, which
-// relocates this into src/theory/scales.js as data plus a builder. Pins
-// today's behavior so the move can be verified, not a spec of correctness.
+// Characterization tests written ahead of REFACTOR_PLAN.md Phase 2. Pins
+// today's behavior so later moves can be verified, not a spec of
+// correctness - getScaleNotes itself now lives in src/scales/scaleData.js,
+// reached here via the src/scales/ barrel (Phase 4).
 
 describe('getScaleNotes', () => {
   test('major scale (W W H W W W H) from C', () => {

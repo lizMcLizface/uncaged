@@ -8,7 +8,6 @@
 // scaleGenerator.js/scales.js -> src/scales/ half).
 
 import { HeptatonicScales, getScaleNotes } from '../scaleData';
-import { highlightKeysForScales } from '../../scales';
 import { identifySyntheticChords } from '../../theory/chords';
 import { createScalePiano } from '../../components/MiniPiano/MiniPiano';
 import {
@@ -17,7 +16,7 @@ import {
     getPrimaryRootNote,
     toggleSelectionMode
 } from '../state';
-import { updateCurrentScaleDisplay } from '../../scaleGenerator';
+import { highlightKeysForScales, updateCurrentScaleDisplay } from '..';
 import { createRootNoteTable, positionTooltipSmart } from './rootNoteTable';
 
 function intToRoman(num){

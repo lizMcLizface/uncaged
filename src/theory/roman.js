@@ -3,7 +3,7 @@
  * plain chord-token parsing. Framework-free except for one deliberate
  * exception: resolveRomanChord/resolveFallbackRomanChord read the live
  * scale-selection state (getPrimaryScale/getPrimaryRootNote) from
- * ../scaleGenerator, because "which chord does 'I' mean" is meaningless
+ * ../scales, because "which chord does 'I' mean" is meaningless
  * without knowing the currently selected scale. That is app state, not a
  * DOM dependency, and it's exactly what these functions already did before
  * this module existed - moving them here didn't add the coupling.
@@ -17,8 +17,7 @@
  * Moved from progressionBuilder.js:549-1073 (REFACTOR_PLAN.md Phase 2).
  */
 import { processChord, identifySyntheticChords } from './chords';
-import { HeptatonicScales, getScaleNotes } from '../scales';
-import { getPrimaryScale, getPrimaryRootNote } from '../scaleGenerator';
+import { HeptatonicScales, getScaleNotes, getPrimaryScale, getPrimaryRootNote } from '../scales';
 import { noteToMidi, noteToName } from './notes';
 import { stripOctave as notationStripOctave } from './notation';
 

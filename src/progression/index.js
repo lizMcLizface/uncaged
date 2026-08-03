@@ -1,6 +1,6 @@
 import { resolveRomanChord } from '../theory/roman';
 import { subscribe as subscribeToInstrumentChanges } from '../tuning';
-import { initializeNavigationButtonsDirect } from '../scaleGenerator';
+import { initializeNavigationButtonsDirect } from '../scales';
 import {
     progressionState,
     MINI_FRETBOARD_CONFIG

@@ -1,6 +1,7 @@
 // Keeps the chord progression in sync with the active scale/root note,
-// which is owned by scaleGenerator.js and can change from several places
-// in the app (the Scale Selection tab, hotkeys, a shared URL). Re-resolves
+// which is owned by src/scales/ (its scaleState object) and can change from
+// several places in the app (the Scale Selection tab, hotkeys, a shared
+// URL). Re-resolves
 // any Roman-numeral chords in the progression against the new scale,
 // refreshes the scale-notes display, and re-renders both the progression
 // list and the main fretboard so mini pianos/staves and Roman numerals
@@ -17,8 +18,7 @@
 //
 // Lifted from progressionBuilder.js as part of REFACTOR_PLAN.md Phase 4.
 
-import { getPrimaryScale, getPrimaryRootNote } from '../scaleGenerator';
-import { getScaleNotes } from '../scales';
+import { getPrimaryScale, getPrimaryRootNote, getScaleNotes } from '../scales';
 import { CHROMATIC } from '../theory/notes';
 import { resolveRomanChord } from '../theory/roman';
 import { progressionState } from './state';

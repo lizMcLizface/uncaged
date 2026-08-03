@@ -1,8 +1,36 @@
+// Public barrel for src/scales/. This is what src/scaleGenerator.js and
+// src/scales.js were reduced to across REFACTOR_PLAN.md Phase 4's
+// extraction steps: state.js, scaleData.js, ui/infoPanel.js,
+// ui/rootNoteTable.js, ui/scaleTable.js all moved out (see ARCHITECTURE.md
+// §6.23-6.26); what's left here is pure glue - the two DOM key-highlighting
+// functions (highlightKeysForScales, from scales.js, and highlightScaleNotes,
+// from scaleGenerator.js - two unrelated functions with similar names and
+// jobs, both kept as-is rather than merged), updateCurrentScaleDisplay (the
+// hub every UI cluster calls to refresh after a selection change), and the
+// navigation-button wiring - plus the re-exports that make this folder's
+// public surface a single import.
+//
+// External callers previously split their imports between
+// `from './scaleGenerator'` and `from './scales'`; both files are deleted
+// and every external importer now pulls everything from here
+// (`from './scales'`, which now resolves to this directory's index). The
+// export surface below is the union of what both files exported - this
+// step is a pure move, not a public-API change.
+//
+// scales.js's own module-evaluation order is preserved: its content
+// (including the `keys_chords` DOM-lookup table, built once at import time)
+// runs before scaleGenerator.js's content below it, same as when
+// scaleGenerator.js used to `import` from scales.js.
+//
+// Two-way imports with ./state.js, ./ui/scaleTable.js and
+// ./ui/rootNoteTable.js are expected, not a sign of a design problem - see
+// their own file headers for why.
+
 import $ from 'jquery';
-import {HeptatonicScales, highlightKeysForScales, getScaleNotes} from './scales';
-import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
-import { updateScaleInfoPanel } from './scales/ui/infoPanel';
-import { createHeptatonicScaleTable, createQuickScalePicker } from './scales/ui/scaleTable';
+import { noteToMidi, keys } from '../midi';
+import { HeptatonicScales, HexatonicScales, PentatonicScales, scales, getScaleNotes, precomputeScaleChords, precomputeChordsForScales, getPrecomputedChords, getChordsForScale, clearChordCache, getChordCacheStats } from './scaleData';
+import { updateScaleInfoPanel } from './ui/infoPanel';
+import { createHeptatonicScaleTable, createQuickScalePicker } from './ui/scaleTable';
 import {
     scaleState,
     persistScaleSelection,
@@ -23,18 +51,70 @@ import {
     setPrimaryRootNote,
     setPrimaryScale,
     refreshChordsForRootNote
-} from './scales/state';
+} from './state';
 
 // Import progression refresh function (use dynamic import to avoid circular dependency)
 let refreshProgressionDisplay = null;
 try {
-    import('./progressions').then(module => {
+    import('../progressions').then(module => {
         refreshProgressionDisplay = module.refreshProgressionDisplay;
     });
 } catch (e) {
     console.warn('Could not import progression refresh function:', e);
 }
 
+const getElementByNote = (note) =>
+  note && document.querySelector(`[note="${note}_scale"]`);
+const getElementByMIDI = (note) =>
+  note && document.querySelector(`[midi="${note}_scale"]`);
+
+const keys_chords = {
+    60 : { element: getElementByMIDI("60"), note: "C",  octave: 4 },
+    61 : { element: getElementByMIDI("61"), note: "C#", octave: 4 },
+    62 : { element: getElementByMIDI("62"), note: "D",  octave: 4 },
+    63 : { element: getElementByMIDI("63"), note: "D#", octave: 4 },
+    64 : { element: getElementByMIDI("64"), note: "E",  octave: 4 },
+    65 : { element: getElementByMIDI("65"), note: "F",  octave: 4 },
+    66 : { element: getElementByMIDI("66"), note: "F#", octave: 4 },
+    67 : { element: getElementByMIDI("67"), note: "G",  octave: 4 },
+    68 : { element: getElementByMIDI("68"), note: "G#", octave: 4 },
+    69 : { element: getElementByMIDI("69"), note: "A",  octave: 4 },
+    70 : { element: getElementByMIDI("70"), note: "A#", octave: 4 },
+    71 : { element: getElementByMIDI("71"), note: "B",  octave: 4 },
+    72 : { element: getElementByMIDI("72"), note: "C",  octave: 5 },
+    73 : { element: getElementByMIDI("73"), note: "C#", octave: 5 },
+    74 : { element: getElementByMIDI("74"), note: "D",  octave: 5 },
+    75 : { element: getElementByMIDI("75"), note: "D#", octave: 5 },
+    76 : { element: getElementByMIDI("76"), note: "E",  octave: 5 },
+    77 : { element: getElementByMIDI("77"), note: "F",  octave: 5 },
+    78 : { element: getElementByMIDI("78"), note: "F#", octave: 5 },
+    79 : { element: getElementByMIDI("79"), note: "G",  octave: 5 },
+    80 : { element: getElementByMIDI("80"), note: "G#", octave: 5 },
+    81 : { element: getElementByMIDI("81"), note: "A",  octave: 5 },
+    82 : { element: getElementByMIDI("82"), note: "A#", octave: 5 },
+    83 : { element: getElementByMIDI("83"), note: "B",  octave: 5 },
+    84 : { element: getElementByMIDI("84"), note: "C",  octave: 6 },
+};
+
+function highlightKeysForScales(notes){
+    for(var key in keys_chords) {
+        if (keys_chords[key].element) {
+            keys_chords[key].element.classList.remove('highlightedKey');
+        }
+    }
+    // console.log("Highlighting keys for notes:", notes);
+    if (notes && notes.length > 0) {
+        notes.forEach(note => {
+            var n = noteToMidi(note) + 12;
+            let key = keys_chords[n];
+            // console.log("Key for note:", note, "is", key, "MIDI:", n);
+            if (key && key.element) {
+                // console.log("Highlighting key:", key.note, "Octave:", key.octave);
+                key.element.classList.add('highlightedKey');
+            }
+        });
+    }
+}
 
 var currentScaleHighlight = []
 function highlightScaleNotes(noteArray){
@@ -403,6 +483,18 @@ function initializeNavigationButtonsDirect() {
 initializeNavigationButtons();
 
 export {
+    HeptatonicScales,
+    HexatonicScales,
+    PentatonicScales,
+    scales,
+    highlightKeysForScales,
+    getScaleNotes,
+    precomputeScaleChords,
+    precomputeChordsForScales,
+    getPrecomputedChords,
+    getChordsForScale,
+    clearChordCache,
+    getChordCacheStats,
     createHeptatonicScaleTable,
     createQuickScalePicker,
     scaleState,
@@ -426,4 +518,4 @@ export {
     navigateScaleFamilyDownExclusive,
     navigateSequentialUpExclusive,
     navigateSequentialDownExclusive
-}
+};
