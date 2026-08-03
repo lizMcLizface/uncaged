@@ -1,14 +1,3 @@
-src\chords.js
-  Line 191:24:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote'                                                                             no-loop-func
-  Line 211:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
-  Line 244:29:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
-  Line 624:58:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
-  Line 625:58:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes'                                                                             no-loop-func
-  Line 636:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
-  Line 758:28:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes', 'selectedChordSuffixes'  no-loop-func
-  Line 788:32:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
-  Line 834:33:  Function declared in a loop contains unsafe references to variable(s) 'selectedChordRootNote', 'selectedChordSuffixes'                                                    no-loop-func
-
 src\components\MonoSynth\MonoSynth.js
   Line 864:9:   Unreachable code          no-unreachable
   Line 886:9:   Unreachable code          no-unreachable
