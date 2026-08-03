@@ -21,7 +21,8 @@ import {
     getPrimaryRootNote,
     refreshChordsForRootNote
 } from '../state';
-import { highlightKeysForScales, updateCurrentScaleDisplay } from '..';
+import { updateCurrentScaleDisplay } from '..';
+import { pushScalePreview, popPreviewLayer } from '../../fretboard';
 import { createHeptatonicScaleTable } from './scaleTable';
 
 function positionTooltipSmart(tooltip, e) {
@@ -459,7 +460,7 @@ function createRootNoteTable() {
                         let scaleNotes = getScaleNotes(note, intervals);
                         
                         // Highlight keyboard for preview
-                        highlightKeysForScales(scaleNotes);
+                        pushScalePreview(scaleNotes, note);
                         console.log(`Scale notes for ${note}:`, scaleNotes);
 
                         // Create mini piano
@@ -492,7 +493,7 @@ function createRootNoteTable() {
                         // Fallback to just keyboard highlighting
                         let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
                         let scaleNotes = getScaleNotes(note, intervals);
-                        highlightKeysForScales(scaleNotes);
+                        pushScalePreview(scaleNotes, note);
                     }
                 }
                 
@@ -517,14 +518,7 @@ function createRootNoteTable() {
                 });
                 
                 // Restore original scale highlighting
-                if (scaleState.selectedScales.length > 0) {
-                    let scales = HeptatonicScales;
-                    let firstScaleId = scaleState.selectedScales[0];
-                    let [family, mode] = firstScaleId.split('-');
-                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-                    let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
-                    highlightKeysForScales(scaleNotes);
-                }
+                popPreviewLayer();
                 topDiv.onmousemove = null;
             };
             
@@ -569,7 +563,7 @@ function createRootNoteTable() {
                         let scaleNotes = getScaleNotes(flatNote, intervals);
                         
                         // Highlight keyboard for preview
-                        highlightKeysForScales(scaleNotes);
+                        pushScalePreview(scaleNotes, flatNote);
                         
                         // Create mini piano
                         const scaleNotesNoOctave = scaleNotes.map(n => typeof n === 'string' && n.includes('/') ? n.split('/')[0] : n);
@@ -601,7 +595,7 @@ function createRootNoteTable() {
                         // Fallback to just keyboard highlighting
                         let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
                         let scaleNotes = getScaleNotes(flatNote, intervals);
-                        highlightKeysForScales(scaleNotes);
+                        pushScalePreview(scaleNotes, flatNote);
                     }
                 }
                 
@@ -625,14 +619,7 @@ function createRootNoteTable() {
                 });
                 
                 // Restore original scale highlighting
-                if (scaleState.selectedScales.length > 0) {
-                    let scales = HeptatonicScales;
-                    let firstScaleId = scaleState.selectedScales[0];
-                    let [family, mode] = firstScaleId.split('-');
-                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-                    let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
-                    highlightKeysForScales(scaleNotes);
-                }
+                popPreviewLayer();
                 bottomDiv.onmousemove = null;
             };
             
@@ -701,7 +688,7 @@ function createRootNoteTable() {
                         let scaleNotes = getScaleNotes(note, intervals);
                         
                         // Highlight keyboard for preview
-                        highlightKeysForScales(scaleNotes);
+                        pushScalePreview(scaleNotes, note);
                         
                         // Create mini piano
                         const scaleNotesNoOctave = scaleNotes.map(n => typeof n === 'string' && n.includes('/') ? n.split('/')[0] : n);
@@ -733,7 +720,7 @@ function createRootNoteTable() {
                         // Fallback to just keyboard highlighting
                         let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
                         let scaleNotes = getScaleNotes(note, intervals);
-                        highlightKeysForScales(scaleNotes);
+                        pushScalePreview(scaleNotes, note);
                     }
                 }
                 
@@ -757,14 +744,7 @@ function createRootNoteTable() {
                     }
                 });
                 
-                if (scaleState.selectedScales.length > 0) {
-                    let scales = HeptatonicScales;
-                    let firstScaleId = scaleState.selectedScales[0];
-                    let [family, mode] = firstScaleId.split('-');
-                    let intervals = scales[family][parseInt(mode, 10) - 1].intervals;
-                    let scaleNotes = getScaleNotes(getPrimaryRootNote(), intervals);
-                    highlightKeysForScales(scaleNotes);
-                }
+                popPreviewLayer();
                 cell.onmousemove = null;
             };
         }

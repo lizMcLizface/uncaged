@@ -7,7 +7,7 @@
 // getScaleIntervalEntries, deriveChordSuffix, getScaleDescriptor) used by
 // both this grid and src/fretboard/ui/scalePositionGrid.js.
 //
-// getFretboard, showChordPatternOnFretboard, popChordHoverLayer,
+// getFretboard, showChordPatternOnFretboard, popPreviewLayer,
 // playChordVoicing and getChordVoicingNotes are glue that stays in
 // ../index.js (the src/fretboard/ barrel - called from src/index.js and
 // src/progression/ too, not just from this grid) - imported back from
@@ -36,7 +36,7 @@ import { assignFingers, selectGripFromPositions, classifyFingeringSource } from 
 import {
     getFretboard,
     showChordPatternOnFretboard,
-    popChordHoverLayer,
+    popPreviewLayer,
     showFingeringShape,
     playChordVoicing,
     getChordVoicingNotes
@@ -279,7 +279,7 @@ export function createChordButtonGrid() {
                 // selected chord over it - is simply revealed again, with
                 // nothing re-derived and nothing re-rendered from flags
                 // (VISUALIZATION_STACK_PLAN.md section 1.1).
-                popChordHoverLayer();
+                popPreviewLayer();
             });
 
             addInteractiveEvent(cell, 'click', () => {

@@ -42,7 +42,7 @@ Decisions taken 2026-08-03, before any code:
 | 8c — Fretboard renderer behind the same API | **done** 2026-08-03 | Marker-level parity with `markScale` asserted across 3 scales × 2 label modes, and mutation-checked. Still uncalled. §6.3 |
 | 8d — Move the Roman-numeral + chord-grid producers onto push/pop | **done** 2026-08-03 | `restoreFretboardState`, `isInHoverState`, both Sets and 3 of the 4 ladders deleted. 16-check interaction run. §6.4 |
 | 8e — Chord superimposition on the piano (the original step 8) | **done** 2026-08-03 | `PIANO_VIEW_PLAN.md` step 8 is complete. §6.5 |
-| 8f — Wire the hover sources that never worked | not started | The payoff. §1.3, §6 |
+| 8f — Wire the hover sources that never worked | **done** 2026-08-03 | `highlightKeysForScales`, `keys_chords` and their `getElementByMIDI` retired. 9-check run. §6.6 |
 
 ---
 
@@ -503,9 +503,12 @@ neither touched here:
   not exist anywhere in the repo.** `src/scales/index.js:236-470` attaches
   click and hover handlers to all four, twice over. Verified by grep across
   `src/`, `public/` and every `.html`/`.js`/`.css` outside `node_modules`.
-  Those hover handlers are among `highlightKeysForScales`'s ten call sites —
-  so part of 8f's cleanup is deleting handlers for buttons that were never
-  built, not rewiring them.
+  ~~Those hover handlers are among `highlightKeysForScales`'s ten call
+  sites~~ — **wrong, corrected in 8f: they are not.** Those handlers call
+  `navigateTo…` and `updateCurrentScaleDisplay`, never
+  `highlightKeysForScales`. Two unrelated pieces of dead wiring that happen
+  to sit in the same file, and 8f did not shrink because of it. The
+  phantom-button handlers are still there, still their own cleanup.
 - **The Roman-numeral buttons and the `Labels` select live in the Other
   Controls tab panel**, which is `display: none` until that tab is opened.
   Worth knowing before 8f wires hover sources: they are not reachable by a
@@ -701,6 +704,71 @@ root-note cell pushes a `dimBelow` layer and pops it on leave, via
 their `getElementByMIDI` (`src/scales/index.js:60-120`) — its ten call sites
 become pushes, which is the cleanup `PIANO_VIEW_PLAN.md` §1.3 left
 outstanding, now with somewhere to land.
+
+### 6.6 How 8f landed (2026-08-03)
+
+**The 2019 feature renders.** `highlightKeysForScales` had **twelve** call
+sites, not the ten §1.3 counted (nine in `ui/rootNoteTable.js`, **two** in
+`ui/scaleTable.js`, and one in `scales/index.js` itself). Eleven were hover
+previews in a single uniform shape - compute the hovered scale's notes and
+highlight them on enter, recompute the *selected* scale's notes and
+re-highlight those on leave. Push and pop, hand-rolled, against a keyboard
+that never existed. They are now `pushScalePreview` / `popPreviewLayer`.
+
+The twelfth, in `updateCurrentScaleDisplay`, was not a preview at all: it
+highlighted the newly selected scale, three lines above the `'scaleChanged'`
+dispatch that already tells the stack to rebuild its base layer. It was
+deleted rather than converted - it was the third mechanism for one job, and
+the only one that never worked.
+
+`highlightKeysForScales`, `keys_chords` and this file's own
+`getElementByMIDI` are **gone**, and with them `src/scales/index.js`'s import
+of `src/midi.js`: **the scales module no longer touches the DOM keyboard at
+all.** That also retires the module-evaluation-order constraint
+`ARCHITECTURE.md` §6.27 recorded, which existed only because `keys_chords`
+resolved elements at import time.
+
+**A correction to §6.2.** That section claimed the phantom nav buttons'
+handlers were among `highlightKeysForScales`'s call sites, so 8f would partly
+be deleting handlers for buttons that were never built. **They are not** -
+verified by grep. Two unrelated pieces of dead wiring in one file. The
+phantom-button handlers survive, still their own cleanup, and 8f was no
+smaller for it.
+
+**`CHORD_HOVER_LAYER_ID` became `PREVIEW_LAYER_ID`.** With scale-table,
+root-note, chord-grid and Roman-numeral sources all pushing previews, "chord
+hover" was the wrong name. One preview id for all of them, deliberately: only
+one thing is under the pointer at a time, so whichever fires last replaces
+the previous preview rather than stacking on it.
+
+**Two preview flavours, and the difference is the point.**
+
+| Source | Flag | Why |
+|---|---|---|
+| scale table, root-note table | `hideBelow` | "what would *this* scale look like" - showing it against the current one would read as a chord over a scale, which it is not |
+| chord grid, Roman numerals, card mini piano/fretboard | `dimBelow` | a chord *is* part of the scale under it, and seeing which scale tones it uses is the reason to look |
+
+**Mini pianos and mini fretboards push, exactly as §3.4 requires** - the
+progression cards' mini piano and mini fretboard now put their chord on the
+main display on hover, and neither subscribes to the stack. `pushChordPreview`
+strips octaves on purpose, the opposite of what a *selected* chord does
+(§5.2 keeps a fingering's real pitches): the source is a mini piano showing
+pitch classes in one octave, and lighting different keys from the thing being
+hovered would read as a mismatch rather than as extra precision.
+
+**Not wired, deliberately:** the Scale Position Grid's mini fretboards. Those
+show scale *positions* - a region of the neck rather than a note set - which
+is a layer kind the model does not have yet, and inventing one to finish a
+step is how §3.4's boundary gets lost. The Scale Information panel's scale
+piano is also left alone: it shows the scale that is already on the display,
+so previewing it would do nothing.
+
+**Verified** with a 9-check run over the newly live sources, plus re-running
+8b's, 8d's and 8e's scripts unchanged as regression (17/17, 16/16, 7/7). Two
+of the new checks initially failed on selectors, not on code: both tables
+live in `#scaleControlsContainer` and have no ids, and indexing
+`document.querySelectorAll('table')` instead picks up a zero-height table
+from a closed tab.
 
 8a-8c are independently useful and reviewable. 8d is the only step that
 touches existing fretboard behaviour and must produce *identical* output.

@@ -2667,6 +2667,33 @@ Layers carry their own `rootNote` and `labelMode` so one can be rebuilt from
 itself — the position picker swaps fingerings that way, and threading those
 back through the caller is how they drift.
 
+**8f wired the sources and retired the 2019 attempt** (2026-08-03).
+`highlightKeysForScales` had twelve call sites — eleven hover previews in
+`ui/rootNoteTable.js` and `ui/scaleTable.js`, all in one shape (highlight the
+hovered scale on enter, recompute and re-highlight the *selected* one on
+leave: push and pop, hand-rolled), plus one in `updateCurrentScaleDisplay`
+that was not a preview at all. The eleven became `pushScalePreview` /
+`popPreviewLayer`; the twelfth was deleted, since the `'scaleChanged'`
+dispatch three lines below it already rebuilds the base layer.
+
+`highlightKeysForScales`, `keys_chords` and `scales/index.js`'s own
+`getElementByMIDI` are gone, along with that file's import of `src/midi.js`:
+**`src/scales/` no longer touches the DOM keyboard at all.** That also
+retires the module-evaluation-order constraint §6.27 records, which existed
+solely because `keys_chords` resolved elements at import time.
+
+There is **one** preview id (`PREVIEW_LAYER_ID`) shared by every source —
+only one thing is under the pointer at a time, so the last one to fire
+replaces the previous preview rather than stacking on it. Two flavours:
+scale-table and root-note previews use `hideBelow` ("what would *this* scale
+look like"), while chord previews use `dimBelow` (a chord is part of the
+scale under it). The progression cards' mini piano and mini fretboard push
+too — and, per the boundary above, neither subscribes.
+
+Still deliberately unwired: the Scale Position Grid's mini fretboards, which
+show a *region* of the neck rather than a note set — a layer kind the model
+does not have, and not worth inventing to finish a step.
+
 **Verified** with 59 new tests (124 total), 34 build warnings unchanged, and
 a direct ESLint run over the new folder — the build check alone cannot
 validate it, because nothing imports it yet and webpack never compiles it
