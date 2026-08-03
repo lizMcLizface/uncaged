@@ -15,7 +15,8 @@ session finds its place without re-reading the codebase.
 | 2b — `src/audio/` foundation (context, bus, dispatch) | done | this commit | one shared `AudioContext`, `masterBus`, and a channel registry replacing `window.polySynthRef`/`polySynthEnabled` at the playback entry points only - see the Phase 2b result note and `ARCHITECTURE.md` §3.1 for the two surfaces that turned out to share that one global |
 | 3 — Split `frets.js` | done | this commit | `src/frets.js` (6,974 lines) is now `src/fretboard/`: `state.js` (`ARCHITECTURE.md` §6.3), `geometry.js` (§6.4), `markers.js` (§6.5), `patterns.js` (§6.6), `Fretboard.js` (§6.7), `ui/controls.js` (§6.8), `ui/chordGrid.js` (§6.9), `ui/scalePositionGrid.js` (§6.10), `index.js` (§6.11, the barrel - `frets.js` deleted, its 3 external importers repointed to `./fretboard`). |
 | 4 — Split progression + scales | done | this commit | `progressionBuilder.js` (4,119 lines) is now `src/progression/`: `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js`/`index.js` (`ARCHITECTURE.md` §6.12-§6.22, the barrel - `progressionBuilder.js` deleted, its 1 external importer repointed to `./progression`). `scaleGenerator.js` (2,515 lines) + `scales.js` (638 lines) are now `src/scales/`: `state.js`/`scaleData.js`/`ui/infoPanel.js`/`ui/rootNoteTable.js`/`ui/scaleTable.js`/`index.js` (`ARCHITECTURE.md` §6.23-§6.27, the barrel - both original files deleted, every external importer repointed to `./scales`). |
-| 5 — Kill the `window` bus | not started | — | |
+| 1b — Second dead-code sweep | done | this commit | Added after Phase 4, not in the original plan. `progressions.js`/`synth.js`/`cross.js` + three unmounted component folders deleted, `keyboard.js`/`index.js`/`fretboard/index.js` stripped of dead bindings. 3,943 lines gone (net 3,926), build warnings **198 → 115**. See the Phase 1b section below and `ARCHITECTURE.md` §7. |
+| 5 — Kill the `window` bus | not started | — | Phase 1b removed one of its special cases: the microtonal `polySynthRef` surface has zero consumers now (`ARCHITECTURE.md` §3.1/§5.1). |
 | 6 — PolySynth | not started | — | optional, off critical path |
 
 Goal: break the five oversized files into modules that match how the code
@@ -284,6 +285,61 @@ judgment-call phase. Step 5 turned out to be pure deletion, not a merge:
 already contained everything in it plus more (NOISE, ENVELOPE_SHAPE,
 generateEnvelopeCurve, extra WAVEFORM entries) and already had four live
 importers. No importer updates were needed.
+
+### Phase 1b — Second dead-code sweep
+
+Not in the original plan. Added 2026-08-03, after Phase 4, because a second
+wave of dead code became *findable* only once Phases 2-4 had moved
+everything else out of the five oversized files.
+
+Phase 1 hunted dead code two ways: orphans by import graph, and
+commented-out blocks file-by-file. Every item in this phase evades one of
+those. The general lesson, worth applying to any future sweep: **a file with
+an importer is not necessarily reachable, and a file with zero warnings is
+not necessarily clean** — an unreachable file produces no warnings at all,
+because webpack never compiles it.
+
+1. `src/progressions.js` (1,744 lines) — zero non-comment lines, no exports.
+   Survived Phase 1 only because `scaleGenerator.js` dynamically
+   `import()`ed a name it never exported.
+2. `src/keyboard.js`'s 24-line import header — every name unused, 39 of the
+   repo's then-198 warnings in a 61-line file. Removing it orphaned
+   `src/synth.js` (227 lines, entirely commented out) and `src/cross.js`
+   (254 lines, live code but no reachable caller — nothing ever assigned
+   `window.updateCrossReferenceDisplay`, so its four guarded call sites
+   could never fire).
+3. `src/components/IntervalPractice/` (1,577), `ThemeManagerApp/`,
+   `CollapsibleMetronome/` — unreachable from `src/index.js`.
+4. `src/index.js` and `src/fretboard/index.js` — the inert cruft Phase 1's
+   result note explicitly deferred (dead imports, six empty function stubs,
+   a duplicated `reportWebVitals()` call, a dead module-load computation).
+
+**Result (2026-08-03):** landed as four commits, one per item above, each
+tests+build verified. **3,943 lines deleted (net 3,926), build warnings
+198 → 115**; `src/` is now 29,611 lines, down from the plan's 44,751-line
+baseline. Zero genuinely new warnings at any step (verified per step with line
+numbers *and* ESLint's column padding normalized, not a raw line diff —
+padding shifts when a file's longest warning message changes, which
+otherwise reads as a new warning). `npm test` 28/28 throughout;
+`src/progressionBuilder.test.js` renamed to `src/roman.test.js`, since it
+has tested `theory/roman.js` since Phase 2 and the file it was named after
+no longer exists.
+
+Verified via `run-app` with an interaction check, not just screenshots —
+three of the four items edited code *inside* live handlers, which a static
+render can't exercise: all six tabs loaded with zero console errors
+(Synthesizer included, confirming the documented portal race is still
+fine), then a scale-family-grid click, a root-note cell click, and the `.`
+and `m` keyboard hotkeys each correctly moved the scale display
+(`E Major (Mode 6)` → `Mode 2` → `A Major` → `A♯ Major` → `Mode 3`), zero
+errors. One selector fought back exactly as §6.1 insight 8 predicted —
+`getByText('A', {exact:true})` resolves to a hidden `<select>` `<option>`;
+`getByRole('cell', ...)` is the fix.
+
+Deliberately **not** touched: `src/index.js`'s 18 `eqeqeq` and one
+`no-redeclare` warning. Those are lint style, not dead code, and belong to
+a separate pass. `PolySynth.jsx`'s now-uncalled microtonal methods were
+left in place too — opening a 3,900-line component is Phase 6's job.
 
 ### Phase 2 — Extract `src/theory/`
 
