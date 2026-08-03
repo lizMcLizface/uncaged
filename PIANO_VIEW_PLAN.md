@@ -24,6 +24,22 @@ Decisions taken 2026-08-03, before any code:
 | Relationship to `MiniPiano.js` | **New `src/piano/`.** Less is shareable than first thought — see §3. |
 | Playability | **Yes** — click/mouse *and* live highlighting of keys held on the computer keyboard. §8.1 |
 | Instrument range | **Yes** — show each instrument's lowest open string and highest practical fret on the piano. §8.2 |
+| Placement | **Replaces the fretboard in place.** Same slot in `#fretNotPlaceholder`; top bar and all six tabs unchanged. Not a seventh tab. §9 |
+
+## Status
+
+| Step | State | Notes |
+|---|---|---|
+| 1 — `keyModel.js` + `range.js` + tests | not started | Pure. The only step whose bugs stay invisible |
+| 2 — `Piano.js` renders static `<ul id="keyboard">` | not started | Includes the §5.2 CSS variable work. First proof the dormant CSS works |
+| 3 — Rebuild the element tables, wire mouse + held keys | not started | **The ordering trap — §7.** Makes §1.1's machinery live |
+| 4 — Scale highlighting + labels | not started | §2 palette, `mainFretboardLabelMode`, `'scaleChanged'` |
+| 5 — Convert the fretboard to the semitone palette | not started | **The only step that changes existing behavior.** §2 |
+| 6 — The view toggle | not started | Hide/show only, never re-init. §7, §9 |
+| 7 — Octave-count control | not started | Top bar, persisted |
+| 8 — Chord superimposition | not started | §5.1 |
+| 9 — Instrument range overlay | not started | §8.2 |
+| 10 — Repoint `MiniPiano.js` *(optional)* | not started | Judge on merit — §3 |
 
 ---
 
@@ -432,11 +448,73 @@ look like a bug.
   `Piano.js` will always set it explicitly this is probably harmless, but the
   inconsistency suggests the original author was mid-iteration, so don't
   treat either number as meaningful.
-- **Does the piano belong in the tab shell or above it?** The plan assumes it
-  replaces `.fretboard` in place, keeping the top bar and all six tabs. If it
-  should instead be a seventh tab, step 6 changes shape substantially.
+- ~~**Does the piano belong in the tab shell or above it?**~~ **Decided
+  2026-08-03: the piano replaces the fretboard in place.** It occupies the
+  same slot in `#fretNotPlaceholder`, and the top bar and all six tabs stay
+  exactly where they are. It is *not* a seventh tab. §7's "toggle by hiding,
+  never by re-initializing" is therefore the whole of step 6, and the two
+  `.fretboard` consumers in `public/index.html` (`:903`'s
+  `reorganizeForMobile` and the mobile CSS at `:392`/`:577`) are the only
+  things that need to learn the element can be absent.
 - **`currentScaleContext` is a module-level singleton**
   (`theory/notation.js:400`) set as a *side effect* of `getScaleNotes`. The
   piano must not assume it is populated — either call `setScaleContext`
   itself or take an explicit context. A latent sharp edge, not one the piano
   introduces.
+
+---
+
+## 10. Session kickoff prompt
+
+```
+Build the unCAGED piano view.
+
+Read PIANO_VIEW_PLAN.md first, all of it — it is short and every section
+is load-bearing. Section 1.1 is the finding the whole plan rests on and
+the one most likely to be re-discovered the hard way. The Status table
+shows what's done. Section 6 is the build order.
+
+Then read REFACTOR_PLAN.md section 2 for the working rules, the
+verification tooling and the lessons list (2.3 — read it properly), and
+ARCHITECTURE.md for module contracts. You do NOT need to read
+REFACTOR_PLAN.md section 1; the piano is not a refactor phase.
+
+Do NOT re-survey the codebase. PIANO_VIEW_PLAN.md already records the
+file:line of every piece this feature builds on, and it exists so that
+investigation is not repeated. Trust it — but re-verify any specific
+line number or count you are about to act on, since those drift. If you
+find something that contradicts the doc, fix the doc as part of your
+work and say so.
+
+Three things that are easy to get wrong:
+- This is a FEATURE, not a refactor. REFACTOR_PLAN.md 2.1's
+  "restructuring only" rule does not apply. Its discipline does: one
+  commit per step, tests green, no new build warnings, docs updated.
+- Step 5 is the only step that changes existing behavior. Keep it in
+  its own commit with before/after screenshots. Never fold it into
+  another step.
+- Most of this feature already exists and is inert (1.1). Reach for the
+  existing code before writing new code, and if you find yourself
+  reimplementing key highlighting, mouse input or a key table, stop and
+  re-read 1.1.
+
+Then:
+1. Tell me which step from the Status table you are starting and your
+   first few moves. Wait for my go-ahead before editing anything.
+2. Do only that step. Do not begin the next one.
+```
+
+To resume mid-step, append what landed and what remains.
+
+**Verification for this feature specifically.** `REFACTOR_PLAN.md` §2.2's
+tooling applies unchanged (`npm test -- --watchAll=false`,
+`bash scripts/check-build.sh`, the `run-app` skill), with two additions:
+
+- Steps 2-4 are the first time anything renders `#keyboard`, so a
+  screenshot is the *primary* evidence, not a sanity check. `run-app`'s
+  `--tabs` flag is not needed — the piano is above the tab strip.
+- Step 3 cannot be verified by a screenshot at all: mouse and held-key
+  highlighting only appear during interaction. Drive it with Playwright
+  (`REFACTOR_PLAN.md` §2.3 lesson 10) and assert `pressedKey` lands on the
+  right `<li>`. Lesson 9's warning about fiddly selectors applies — prefer
+  `[midi="60"]` over text matching.
