@@ -120,10 +120,11 @@ export function createPiano(container, options = {}) {
                 const style = styles.get(pitchClassOf(midi));
                 if (style) {
                     keyElement.classList.add('scaleKey');
+                    keyElement.classList.toggle('rootKey', style.semitone === 0);
                     keyElement.style.setProperty('--scale-key-color', style.color);
                     keyElement.textContent = style.label;
                 } else {
-                    keyElement.classList.remove('scaleKey');
+                    keyElement.classList.remove('scaleKey', 'rootKey');
                     keyElement.style.removeProperty('--scale-key-color');
                     keyElement.textContent = '';
                 }
@@ -135,7 +136,7 @@ export function createPiano(container, options = {}) {
         clearScale() {
             piano.scale = null;
             piano.keyElements.forEach(keyElement => {
-                keyElement.classList.remove('scaleKey');
+                keyElement.classList.remove('scaleKey', 'rootKey');
                 keyElement.style.removeProperty('--scale-key-color');
                 keyElement.textContent = '';
             });

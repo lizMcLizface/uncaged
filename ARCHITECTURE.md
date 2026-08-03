@@ -2384,6 +2384,12 @@ Three details worth knowing:
   `Labels` select, not a second control. `'finger'` is guitar-only and falls
   back to note names rather than blanking the key.
 
+Labels render horizontally at the bottom-centre of each key, deliberately
+matching `MiniPiano.js`'s SVG text placement (`text-anchor: middle`,
+`y = height - 8`) and its bold-root cue, so the big piano and the mini pianos
+read the same. The dormant CSS's `writing-mode: vertical-rl` was dropped once
+it was on screen: a rotated flat sign (♭) does not read as a flat.
+
 `refreshPianoScale()` lives in `src/fretboard/index.js` for the same reason
 `syncPianoKeyState` does: it is the file that already knows `src/scales/` and
 `fretboardState`, and keeping those reads on this side is what lets

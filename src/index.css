@@ -130,18 +130,20 @@ body {
 .black {
   position: relative;
   flex: none;
+  /* Labels sit horizontally at the bottom-centre of the key, matching
+     MiniPiano's SVG text (text-anchor: middle, y = height - 8) so the two
+     read the same. The original CSS rotated them with writing-mode:
+     vertical-rl; that was dropped because a rotated flat sign (♭) does not
+     read as a flat. */
   display: flex;
-  justify-content: right;
+  flex-direction: column;
+  justify-content: flex-end;
   align-items: center;
-  padding: 0.5rem 0;
+  padding: 0 0 0.5rem;
   user-select: none;
   cursor: pointer;
-  /* Labels read bottom-to-top along the near end of the key, which is why
-     justify-content: right above puts them at the player's edge. */
-  writing-mode: vertical-rl;
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 /* Only in-scale keys carry a label, and they always have a coloured
@@ -151,6 +153,12 @@ body {
 .black.scaleKey {
   color: hsla(0, 0%, 0%, 0.75);
   text-shadow: 0 1px 0 hsla(0, 0%, 100%, 0.35);
+}
+
+/* The root reads bold, the same cue MiniPiano uses. */
+.white.rootKey,
+.black.rootKey {
+  font-weight: 700;
 }
 
 #keyboard li:first-child {
