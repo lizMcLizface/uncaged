@@ -9,7 +9,15 @@
  * the app; `Piano.js` is the only file here that touches the DOM.
  */
 
-export { createPiano, getPiano } from './Piano';
+export {
+    createPiano,
+    getPiano,
+    setPianoOctaveSpan,
+    MIN_OCTAVE_COUNT,
+    MAX_OCTAVE_COUNT,
+    MIN_LOW_OCTAVE,
+    MAX_LOW_OCTAVE
+} from './Piano';
 
 export {
     pianoState,

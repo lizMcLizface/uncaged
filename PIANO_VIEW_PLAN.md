@@ -1,6 +1,6 @@
 # Piano View — Implementation Plan
 
-Investigated 2026-08-03. Steps 1-6 landed 2026-08-03. Steps 7-9 remain, all
+Investigated 2026-08-03. Steps 1-7 landed 2026-08-03. Steps 8-9 remain, both
 additive.
 
 Goal: let the user hide the main fretboard at the top of the page and show a
@@ -37,7 +37,7 @@ Decisions taken 2026-08-03, before any code:
 | 4 — Scale highlighting + labels | **done** 2026-08-03 | §2 palette, `mainFretboardLabelMode`, `'scaleChanged'`. Retired `highlightScaleNotes` — §1.3 |
 | 5 — Convert the fretboard to the semitone palette | **done** 2026-08-03 | The only step that changed existing behavior. §2.1 |
 | 6 — The view toggle | **done** 2026-08-03 | **Pulled ahead of 4-5** at the user's request, so the piano is reachable to play with. Hide/show only. §6.1 |
-| 7 — Octave-count control | not started | Top bar, persisted |
+| 7 — Octave-count control | **done** 2026-08-03 | **Other Controls tab, not the top bar** — §6.2. Start octave + span, persisted |
 | 8 — Chord superimposition | not started | §5.1 |
 | 9 — Instrument range overlay | not started | §8.2 |
 | 10 — Repoint `MiniPiano.js` *(optional)* | not started | Judge on merit — §3 |
@@ -432,10 +432,11 @@ One commit per step; tests green, no new build warnings
 5. **Convert the fretboard to the semitone palette**, retire `SCALE_COLORS`
    (§2). Standalone commit, before/after screenshots, nothing else in it.
 6. **The view toggle** — hide the fretboard, show the piano (§7).
-7. **Octave-count control** in the top bar (`ui/controls.js:409`
-   `createTopBar`, beside the instrument picker), persisted via `pianoState`.
-   Suggested 1-7 octaves, default 3 from C2 — but pick by what stays
-   readable at the app's real width, not by theory.
+7. **Octave-count control**, persisted via `pianoState`. Suggested 1-7
+   octaves, default 3 from C2 — but pick by what stays readable at the app's
+   real width, not by theory. ~~In the top bar (`ui/controls.js:409`
+   `createTopBar`, beside the instrument picker)~~ — **moved to the Other
+   Controls tab at the user's request, §6.2.**
 8. **Chord superimposition** (§5.1), driven from the chord grid and
    Roman-numeral buttons, matching what the fretboard already shows.
 9. **Instrument range overlay** (§8.2).
@@ -480,6 +481,43 @@ mobile stack. Done.
 **Verified** with a 9-check Playwright script: default view, both switch
 directions, active-button state, the piano still playable while shown, the
 Synthesizer tab intact after a swap, and the choice surviving a reload.
+
+---
+
+### 6.2 Step 7 as it landed (2026-08-03)
+
+**Placed in the Other Controls tab, not the top bar.** The user's call, and
+the right one: the top bar already carries the title, the view toggle, the
+instrument picker and the scale quick-picker, and the piano range is a
+set-once setting rather than something reached for constantly.
+
+Two selects — start octave and span — plus a read-back of the range actually
+shown (`C2–B4`). The read-back matters because what is asked for and what
+fits are not always the same: the 88-key window ends at A0 and C8.
+
+- **The span slides rather than truncating.** Asking for 7 octaves from C2
+  would run past the top of the keyboard, so the *start* moves down to C1 and
+  you get the seven octaves you asked for. Truncating instead would leave the
+  select reading "7 octaves" while showing six and a bit.
+- **1-7 octaves is a legibility ceiling, not a technical one.** Seven octaves
+  is 49 white keys; at the app's real width that is about as narrow as a
+  two-character label (`F♯`, `m3`) can usefully get. Key labels now scale off
+  `--num-keys` in CSS (`clamp(7px, calc(100vw / var(--num-keys) / 5), 13px)`,
+  with a smaller ramp for the half-width black keys), so they shrink with the
+  key count and are correct on the first paint with no measuring.
+- **The read-back is computed, not observed.** This panel is built *before*
+  `createPiano` runs, so asking the live piano for its range leaves the
+  summary blank until the first change. `setPianoOctaveSpan` returns the
+  applied `{lowOctave, octaveCount, lowMidi, highMidi}` instead.
+
+**This is the step that made step 3's re-render promise reachable, and it
+holds.** §8.1 predicted that a render happening mid-press would build `<li>`s
+that never saw the `keydown`, and moved `currentPressed` out of
+`src/index.js` so it could be reapplied. Step 3 built that path but had no way
+to trigger it; step 7 does. Verified: hold a computer key, change the octave
+count, and the held key is still lit on the freshly-built element — and
+releasing it still clears. Mouse input rebinds onto the new elements too, and
+the scale layer repaints itself from `piano.scale`.
 
 ---
 
