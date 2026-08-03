@@ -6,7 +6,7 @@ import reportWebVitals from './reportWebVitals';
 import $ from 'jquery';
 import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, createHeptatonicScaleTable, scaleState, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scales';
 import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI, initializeMouseInput} from './midi';
-import {modifiers, keyToNote} from './keyboard';
+import {keyToNote} from './keyboard';
 import {initializeFretboard, getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState} from './fretboard';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { getChannel, isChannelEnabled } from './audio/dispatch';

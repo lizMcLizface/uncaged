@@ -1,30 +1,6 @@
-import { context,
-    masterVolume,
-    customWaveform,
-    waveform,
-    pianoNotes,
-    attackTime,
-    sustainLevel,
-    releaseTime,
-    noteLength,
-    vibratoSpeed,
-    vibratoAmount,
-    delay,
-    feedback,
-    delayAmountGain,
-    startButton,
-    stopButton,
-    tempoControl,
-    tempo,
-    isPlaying} from './synth';
-import {processChord} from './theory/chords';
-import {HeptatonicScales, scales, getScaleNotes, highlightKeysForScales, createHeptatonicScaleTable} from './scales';
-import {chords, highlightKeysForChords, createChordRootNoteTable, createChordSuffixTable, selectedChordRootNote, selectedChordSuffixes} from './chords';
-import {noteToMidi, noteToName, keys, getElementByNote, getElementByMIDI} from './midi';
-import {createScaleChordCrossReference, updateCrossReferenceDisplay} from './cross';
-
-
-
+// Maps a physical key to a note name, in the two-row piano layout the
+// on-screen keyboard uses: the home row plays the naturals, the row above
+// plays the sharps that sit between them.
 function keyToNote(event, octave){
     switch (event.code){
         case 'KeyA': return 'G/' + (octave - 1);
@@ -50,13 +26,4 @@ function keyToNote(event, octave){
     return undefined;
 }
 
-var modifiers = {
-    'LeftShift': false,
-    'RightShift': false,
-    'LeftControl': false,
-    'RightControl': false,
-    'LeftAlt': false,
-    'RightAlt': false,
-}
-
-export {modifiers, keyToNote}
+export {keyToNote}
