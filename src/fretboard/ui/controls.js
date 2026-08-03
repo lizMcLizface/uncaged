@@ -49,7 +49,17 @@ import {
     getMainViewMode,
     refreshPianoScale
 } from '..';
-import { VIEW_FRETBOARD, VIEW_PIANO } from '../../piano';
+import {
+    VIEW_FRETBOARD,
+    VIEW_PIANO,
+    pianoState,
+    setPianoOctaveSpan,
+    MIN_OCTAVE_COUNT,
+    MAX_OCTAVE_COUNT,
+    MIN_LOW_OCTAVE,
+    MAX_LOW_OCTAVE
+} from '../../piano';
+import { noteToName } from '../../midi';
 import {
     clearFingeringTabs,
     createChordButtonGrid,
@@ -1532,6 +1542,89 @@ function buildChordPatternDemoControls(fretboard, buttonStyle, buttonHoverStyle)
  * fingering tabs, plus several dead demo-button groups kept for parity with
  * the original (see the comment above buildDisplayControls).
  */
+/**
+ * How much of the piano keyboard is shown: where it starts and how many
+ * octaves it spans.
+ *
+ * In the Other Controls tab rather than the top bar, which is where
+ * PIANO_VIEW_PLAN.md step 7 proposed it - the top bar is already carrying the
+ * title, view toggle, instrument picker and scale quick-picker, and this is a
+ * set-once-and-forget setting, not one you reach for constantly.
+ */
+function buildPianoRangeControls() {
+    const container = document.createElement('div');
+    container.id = 'pianoRangeControls';
+    container.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    `;
+
+    const labelStyle = `font-size: 12px; color: #fff; user-select: none; white-space: nowrap;`;
+    const selectStyle = `
+        padding: 2px 4px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+    `;
+
+    const heading = document.createElement('span');
+    heading.textContent = 'Piano range:';
+    heading.style.cssText = labelStyle + ' font-weight: 600;';
+    container.appendChild(heading);
+
+    const startSelect = document.createElement('select');
+    startSelect.id = 'pianoStartOctave';
+    startSelect.style.cssText = selectStyle;
+    for (let octave = MIN_LOW_OCTAVE; octave <= MAX_LOW_OCTAVE; octave++) {
+        const option = document.createElement('option');
+        option.value = String(octave);
+        option.textContent = `C${octave}`;
+        startSelect.appendChild(option);
+    }
+
+    const countSelect = document.createElement('select');
+    countSelect.id = 'pianoOctaveCount';
+    countSelect.style.cssText = selectStyle;
+    for (let count = MIN_OCTAVE_COUNT; count <= MAX_OCTAVE_COUNT; count++) {
+        const option = document.createElement('option');
+        option.value = String(count);
+        option.textContent = count === 1 ? '1 octave' : `${count} octaves`;
+        countSelect.appendChild(option);
+    }
+
+    const summary = document.createElement('span');
+    summary.id = 'pianoRangeSummary';
+    summary.style.cssText = labelStyle + ' color: #bbb;';
+
+    // What is asked for and what is shown can differ at the extremes - the
+    // 88-key window ends at A0 and C8 - so read the applied range back rather
+    // than restating the request. It comes from the return value, not from the
+    // live piano: this panel is built before createPiano runs, and reading
+    // getPiano() here would leave the summary blank until the first change.
+    const apply = () => {
+        const applied = setPianoOctaveSpan(Number(startSelect.value), Number(countSelect.value));
+        startSelect.value = String(applied.lowOctave);
+        countSelect.value = String(applied.octaveCount);
+        summary.textContent =
+            `${noteToName(applied.lowMidi)}–${noteToName(applied.highMidi)}`.replace(/\//g, '');
+    };
+
+    startSelect.addEventListener('change', apply);
+    countSelect.addEventListener('change', apply);
+
+    startSelect.value = String(pianoState.lowOctave);
+    countSelect.value = String(pianoState.octaveCount);
+    apply();
+
+    container.appendChild(startSelect);
+    container.appendChild(countSelect);
+    container.appendChild(summary);
+    return container;
+}
+
 function buildOtherControlsPanel(fretboard) {
     const controlsContainer = document.createElement('div');
     controlsContainer.style.cssText = `
@@ -1577,6 +1670,7 @@ function buildOtherControlsPanel(fretboard) {
 
     controlsContainer.appendChild(clearButton);
     controlsContainer.appendChild(showAllButton);
+    controlsContainer.appendChild(buildPianoRangeControls());
     // controlsContainer.appendChild(showScaleButton);
     controlsContainer.appendChild(chordControlsContainer);
     controlsContainer.appendChild(chordInfoContainer);

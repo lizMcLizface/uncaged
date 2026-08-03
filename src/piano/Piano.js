@@ -22,14 +22,31 @@
 
 import { buildKeyRange, countWhiteKeys, octaveSpanToMidiRange, pitchClassOf } from './keyModel';
 import { buildScaleKeyStyles } from './labels';
+import { pianoState, persistPianoSettings } from './state';
 
 /**
- * Hardcoded until the octave-count control lands (PIANO_VIEW_PLAN.md step 7)
- * and these become persisted `pianoState` settings. Three octaves from C2
- * covers a standard guitar's open strings through the 12th fret.
+ * Fallbacks for a caller that passes no range. The live values are
+ * `pianoState.lowOctave`/`octaveCount`. Three octaves from C2 covers a
+ * standard guitar's open strings through the 12th fret.
  */
 const DEFAULT_LOW_OCTAVE = 2;
 const DEFAULT_OCTAVE_COUNT = 3;
+
+/**
+ * Selectable span, in octaves. The ceiling is a legibility limit, not a
+ * technical one: seven octaves is 49 white keys, which at the app's real
+ * width leaves each one narrow enough that a two-character label (`F♯`, `m3`)
+ * is about as small as it can usefully get. `keyModel.js` clamps whatever it
+ * is handed to the 88-key window regardless.
+ */
+export const MIN_OCTAVE_COUNT = 1;
+export const MAX_OCTAVE_COUNT = 7;
+export const MIN_LOW_OCTAVE = 0;
+export const MAX_LOW_OCTAVE = 7;
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
 
 // One keyboard per page. Held here rather than on `window` so the toggle and
 // the key-table refresh can reach it without adding a global.
@@ -171,4 +188,39 @@ export function createPiano(container, options = {}) {
  */
 export function getPiano() {
     return activePiano;
+}
+
+/**
+ * Change how much of the keyboard is shown, and remember it.
+ *
+ * The rebuild this triggers is the only routine re-render the piano has, and
+ * everything hanging off a key element has to survive it: the scale layer
+ * repaints itself from `piano.scale`, and `createPiano`'s `onRender` hook
+ * re-resolves `src/midi.js`'s key table, rebinds mouse input and reapplies
+ * any notes currently held on the computer keyboard. That last one is why
+ * `keyboardState.currentPressed` was lifted out of `src/index.js` in step 3 -
+ * this is the call that makes it matter.
+ */
+export function setPianoOctaveSpan(lowOctave, octaveCount) {
+    const count = clamp(Math.round(octaveCount), MIN_OCTAVE_COUNT, MAX_OCTAVE_COUNT);
+    let low = clamp(Math.round(lowOctave), MIN_LOW_OCTAVE, MAX_LOW_OCTAVE);
+
+    // Slide the start down rather than truncate the span: asking for 7
+    // octaves from C2 would otherwise silently give six and a bit, because
+    // B8 is past the top of an 88-key piano. Starting lower honours the
+    // request. If it still doesn't fit at the bottom, keyModel's clamp
+    // decides, and the caller reads the real range back from lowMidi/highMidi.
+    while (low > MIN_LOW_OCTAVE && octaveSpanToMidiRange(low, count).highMidi < (low + 1) * 12 + count * 12 - 1) {
+        low -= 1;
+    }
+
+    pianoState.lowOctave = low;
+    pianoState.octaveCount = count;
+    persistPianoSettings();
+
+    const piano = getPiano();
+    if (piano) piano.setOctaveSpan(low, count);
+
+    const { lowMidi, highMidi } = octaveSpanToMidiRange(low, count);
+    return { lowOctave: low, octaveCount: count, lowMidi, highMidi };
 }

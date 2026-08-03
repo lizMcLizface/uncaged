@@ -142,8 +142,19 @@ body {
   padding: 0 0 0.5rem;
   user-select: none;
   cursor: pointer;
-  font-size: 11px;
+  /* Labels scale with how many keys are on screen: at three octaves there is
+     room for 11px, at seven each white key is a third as wide. Derived from
+     --num-keys rather than measured, so it is right on the first paint with
+     no JS. Black keys are half a white key wide and get their own, smaller
+     ramp below. */
+  font-size: clamp(7px, calc(100vw / var(--num-keys, 52) / 5), 13px);
   letter-spacing: 0.3px;
+  white-space: nowrap;
+}
+
+.black {
+  font-size: clamp(6px, calc(100vw / var(--num-keys, 52) / 8), 11px);
+  letter-spacing: 0;
 }
 
 /* Only in-scale keys carry a label, and they always have a coloured
