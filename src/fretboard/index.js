@@ -237,10 +237,27 @@ function showFingeringShape(shapeIndex) {
         .find(layer => layer.id === CHORD_HOVER_LAYER_ID || layer.id === CHORD_LAYER_ID);
     if (!current) return;
 
-    pushLayer({
-        ...current,
-        positions: buildFingeringPositions(shape, fretboardState.mainFretboardLabelMode)
-    });
+    // Both halves move together: a different fingering of the same chord is a
+    // different set of frets *and* a different set of sounding pitches, so
+    // the piano follows the picker too. Rebuilt through `chordLayer` rather
+    // than spread over the old layer, because `notes` there are already
+    // resolved objects - assigning raw names would quietly produce a layer
+    // nothing could render.
+    const fretboard = getFretboard('fretNotPlaceholder');
+    const labelMode = fretboardState.mainFretboardLabelMode;
+    const soundingNotes = getShapeSoundingNotes(fretboard, shape);
+
+    pushLayer(chordLayer({
+        id: current.id,
+        label: current.label,
+        rootNote: current.rootNote,
+        labelMode,
+        notes: soundingNotes,
+        positions: buildFingeringPositions(shape, labelMode),
+        dimBelow: current.dimBelow,
+        hideBelow: current.hideBelow,
+        transient: current.transient
+    }));
 }
 
 /**
@@ -421,6 +438,29 @@ function refreshFretboardDisplay() {
 }
 
 /**
+ * The pitches a fingering actually sounds, with their real octaves:
+ * `['E/2', 'B/2', 'E/3', 'G#/3', 'B/3', 'E/4']` for an open E minor.
+ *
+ * Two callers want this from opposite directions, which is why it is its own
+ * function (VISUALIZATION_STACK_PLAN.md section 5.2): the synth wants it to
+ * play what is displayed rather than a generic root-position triad, and the
+ * piano wants it to *light the keys a guitarist's fingers are actually
+ * producing*. Same pitches, one octave-bearing form; `getChordVoicingNotes`
+ * below is this plus PolySynth's octave-suffixed spelling.
+ *
+ * @param {Fretboard} fretboard
+ * @param {Object} shape - as built by buildFingeringShapes
+ * @returns {Array<string>} slash-form notes, e.g. 'E/2'
+ */
+function getShapeSoundingNotes(fretboard, shape) {
+    if (!fretboard || !shape || !Array.isArray(shape.positions)) return [];
+
+    return shape.positions
+        .map(position => fretboard.getNoteAt(position.string, position.fret))
+        .filter(note => typeof note === 'string');
+}
+
+/**
  * Resolve the actual sounding pitches (real octave, per string) for a
  * chord's best playable fretboard shape - the same shape-picking logic
  * used to display the chord's fingering on hover - so playback matches
@@ -445,15 +485,10 @@ function getChordVoicingNotes(fretboard, rootNote, chordType) {
     const specificPatterns = patternType ? getPatternsByChordType(patternType) : null;
 
     const shapes = buildFingeringShapes(fretboard, chordNotes, chordNotes[0], {}, specificPatterns);
-    const bestShape = shapes[0];
-    if (!bestShape || !Array.isArray(bestShape.positions)) {
-        return [];
-    }
 
-    return bestShape.positions
-        .map(position => fretboard.getNoteAt(position.string, position.fret))
-        .filter(note => typeof note === 'string')
-        .map(note => note.replace('/', ''));
+    // PolySynth wants 'C4', not 'C/4'; that stripping is the only difference
+    // between playing the chord and showing it on the piano.
+    return getShapeSoundingNotes(fretboard, shapes[0]).map(note => note.replace('/', ''));
 }
 
 /**
@@ -531,7 +566,9 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
                         label: `${rootNote} ${chordType}`,
                         rootNote: chordNotes[0],
                         shape: fretboardState.chordFingeringShapes[0],
-                        labelMode
+                        labelMode,
+                        fretboard,
+                        chordNotes
                     });
                     renderFingeringTabs(fretboard, labelMode);
 
@@ -563,15 +600,27 @@ function showChordPatternOnFretboard(rootNote, chordType, isTemporary) {
  * A shape with no playable fingering pushes a layer with no positions rather
  * than nothing at all: the fretboard then shows the dimmed scale, where it
  * used to blank entirely. Deliberate - a blank neck reads as a bug.
+ *
+ * **`positions` and `notes` describe the same chord to the two renderers**
+ * (step 8e). `positions` is the fingering, which only a fretboard can show.
+ * `notes` is what that fingering *sounds* - real octaves, doublings and all -
+ * which is what the piano lights, and is the honest answer to "what is the
+ * guitarist actually playing" rather than a tidied-up root-position triad.
+ * When there is no playable shape they fall back to the chord's bare pitch
+ * classes, which light in every octave: less precise, but a real display
+ * rather than a blank one (section 5.2).
  */
-function pushChordLayer({ isTemporary, label, rootNote, shape, labelMode }) {
+function pushChordLayer({ isTemporary, label, rootNote, shape, labelMode, fretboard, chordNotes }) {
     const positions = shape ? buildFingeringPositions(shape, labelMode) : [];
+    const soundingNotes = getShapeSoundingNotes(fretboard, shape);
+    const notes = soundingNotes.length > 0 ? soundingNotes : (chordNotes || []);
 
     pushLayer(chordLayer({
         id: chordLayerIdFor(isTemporary),
         label,
         rootNote,
         labelMode,
+        notes,
         positions,
         dimBelow: true,
         transient: isTemporary
@@ -631,7 +680,9 @@ function showChordOnFretboard(chordIndex, isTemporary = false) {
                 label: chordName,
                 rootNote: chord[0],
                 shape: fretboardState.chordFingeringShapes[0],
-                labelMode
+                labelMode,
+                fretboard,
+                chordNotes: chord
             });
             renderFingeringTabs(fretboard, labelMode);
         }

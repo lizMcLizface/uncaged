@@ -143,7 +143,13 @@ export function chordLayer(options = {}) {
         positions,
         dimBelow,
         hideBelow,
-        transient
+        transient,
+        // Kept so a layer can be rebuilt from itself - the position picker
+        // swaps one fingering of a chord for another and needs the root and
+        // label mode the first one was measured with. Storing them beats
+        // threading them back through the caller, which is how they drift.
+        rootNote,
+        labelMode
     };
 
     if (!Array.isArray(noteNames)) return layer;

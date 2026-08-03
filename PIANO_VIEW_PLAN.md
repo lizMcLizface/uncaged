@@ -38,7 +38,7 @@ Decisions taken 2026-08-03, before any code:
 | 5 — Convert the fretboard to the semitone palette | **done** 2026-08-03 | The only step that changed existing behavior. §2.1 |
 | 6 — The view toggle | **done** 2026-08-03 | **Pulled ahead of 4-5** at the user's request, so the piano is reachable to play with. Hide/show only. §6.1 |
 | 7 — Octave-count control | **done** 2026-08-03 | **Other Controls tab, not the top bar** — §6.2. Start octave + span, persisted |
-| 8 — Chord superimposition | **superseded** 2026-08-03 | Widened into `VISUALIZATION_STACK_PLAN.md` — see §10.1 below. Lands as its step 8e |
+| 8 — Chord superimposition | **done** 2026-08-03 | Widened into `VISUALIZATION_STACK_PLAN.md` (§10.1 below) and landed as its step 8e. The piano shows the fingering's real sounding pitches, over a dimmed scale |
 | 9 — Instrument range overlay | not started | §8.2. Its shape is settled in advance by `VISUALIZATION_STACK_PLAN.md` §2.5: a renderer-level property of the keys, **not** a stack layer |
 | 10 — Repoint `MiniPiano.js` *(optional)* | not started | Judge on merit — §3 |
 
