@@ -53,6 +53,18 @@ import {
     refreshChordsForRootNote
 } from './state';
 
+// NOT the same lookup as src/midi.js's getElementByMIDI: this one queries a
+// separate `midi="N_scale"` attribute namespace, and `keys_chords` below is
+// its table. **No markup in src/ or public/ has ever carried that attribute**
+// (verified 2026-08-03) - it is the surviving sibling of the `midi="N_chord"`
+// namespace Phase 4c deleted with `highlightKeysForChords` (ARCHITECTURE.md
+// §6.28). Three namespaces were designed - plain, `_scale`, `_chord` - which
+// is what `theory/intervals.js`'s header means by "the scale piano, every
+// chord piano, and the fretboard": three separate keyboards, only one of
+// which (the plain one, now built by src/piano/) was ever rendered.
+//
+// So `highlightKeysForScales` below is dead for a reason repopulating this
+// table cannot fix, unlike src/midi.js's `keys` - see PIANO_VIEW_PLAN.md §1.3.
 const getElementByMIDI = (note) =>
   note && document.querySelector(`[midi="${note}_scale"]`);
 
@@ -104,11 +116,25 @@ function highlightKeysForScales(notes){
     }
 }
 
+// Unlike highlightKeysForScales above, this one keys off src/midi.js's `keys`
+// - the plain `midi="N"` namespace src/piano/ actually renders - so as of
+// PIANO_VIEW_PLAN.md step 3 its elements are real. It still highlights
+// nothing, for an unrelated second reason: the range gate below reads
+// #lowestNoteSelection/#highestNoteSelection, and **neither element exists
+// anywhere in src/ or public/** (verified 2026-08-03), so `parseInt(undefined)`
+// is NaN and every comparison is false. Pre-existing, not introduced here.
+// Step 4 decides whether to revive this or to drive the scale layer from
+// src/piano/ - see PIANO_VIEW_PLAN.md §1.3.
+//
+// The null guards are new: before step 3 every `keys[midi].element` was
+// permanently null and these lines were unreachable, so they could assume an
+// element. Now that some keys resolve and others (outside the piano's
+// displayed range) don't, the difference is a real TypeError away.
 var currentScaleHighlight = []
 function highlightScaleNotes(noteArray){
     for( const key of currentScaleHighlight){
         const midi = noteToMidi(key) + 12;
-        keys[midi].element.classList.remove('scaleKey');
+        if (keys[midi] && keys[midi].element) keys[midi].element.classList.remove('scaleKey');
     }
     currentScaleHighlight = [];
     if(Array.isArray(noteArray)){
@@ -117,14 +143,14 @@ function highlightScaleNotes(noteArray){
             // console.log('key: ', key, ' midi note:', midi);
             // console.log(keys[midi])
             if(midi >=  parseInt($('#lowestNoteSelection').val()) && midi <=  parseInt($('#highestNoteSelection').val())){
-            keys[midi].element.classList.add('scaleKey');;
+            if (keys[midi] && keys[midi].element) keys[midi].element.classList.add('scaleKey');
             currentScaleHighlight.push(key);
             }
         }
     }else{
         const midi = noteToMidi(noteArray) + 12;
-        keys[midi].element.classList.add('scaleKey');;
-        currentScaleHighlight.push(noteArray);     
+        if (keys[midi] && keys[midi].element) keys[midi].element.classList.add('scaleKey');
+        currentScaleHighlight.push(noteArray);
     }
 }
 

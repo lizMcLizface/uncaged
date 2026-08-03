@@ -5,7 +5,7 @@ import App from './App';
 import reportWebVitals from './reportWebVitals';
 import {HeptatonicScales, getScaleNotes, scaleState, navigateToNextScale, navigateToPreviousScale, navigateToNextRootNote, navigateToPreviousRootNote, refreshChordsForRootNote, getPrimaryScale, getPrimaryRootNote, navigateRootUpExclusive, navigateRootDownExclusive, navigateModeUpExclusive, navigateModeDownExclusive, navigateScaleFamilyUpExclusive, navigateScaleFamilyDownExclusive, navigateSequentialUpExclusive, navigateSequentialDownExclusive, updateCurrentScaleDisplay} from './scales';
 import {noteToMidi, keys, initializeMouseInput} from './midi';
-import {keyToNote} from './keyboard';
+import {keyToNote, keyboardState} from './keyboard';
 import {getFretboard, showChordOnFretboard, showScaleOnFretboard, fretboardState} from './fretboard';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { getChannel, isChannelEnabled } from './audio/dispatch';
@@ -33,8 +33,6 @@ const { Vex, Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, D
 // Make VexFlow available globally for other modules
 window.Vex = Vex;
 window.VexFlowComponents = { Formatter, Renderer, Stave, Accidental, StaveNote, BarNote, Beam, Dot, StaveConnector, Voice, GhostNote };
-
-var currentPressed = [];
 
 let baseOctave = 4;
 
@@ -155,9 +153,9 @@ function onKeyPress(event, up) {
     // Convert note format for PolySynth
     const noteWithOctave = note.replace('/', '');
 
-    if (event.type === 'keydown' && !currentPressed.includes(note)) {
+    if (event.type === 'keydown' && !keyboardState.currentPressed.includes(note)) {
         console.log('Key Down: ', note, '-> PolySynth format:', noteWithOctave);
-        currentPressed.push(note);
+        keyboardState.currentPressed.push(note);
 
         // Trigger note on PolySynth using the exposed methods
         if (synthChannel && synthChannel.playNotes) {
@@ -186,9 +184,9 @@ function onKeyPress(event, up) {
             keys[midi].element.classList.add('pressedKey');
         }
     }
-    else if (event.type === 'keyup' && currentPressed.includes(note)) {
+    else if (event.type === 'keyup' && keyboardState.currentPressed.includes(note)) {
         console.log('Key Up: ', note, '-> PolySynth format:', noteWithOctave);
-        currentPressed = currentPressed.filter(item => item !== note);
+        keyboardState.currentPressed = keyboardState.currentPressed.filter(item => item !== note);
 
         // Stop note on PolySynth using the exposed methods
         if (synthChannel && synthChannel.stopNotes) {

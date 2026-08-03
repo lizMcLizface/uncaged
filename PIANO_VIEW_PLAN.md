@@ -1,6 +1,6 @@
 # Piano View — Implementation Plan
 
-Investigated 2026-08-03. Steps 1-2 landed 2026-08-03.
+Investigated 2026-08-03. Steps 1-3 landed 2026-08-03.
 
 Goal: let the user hide the main fretboard at the top of the page and show a
 multi-octave piano keyboard in its place, carrying the same scale
@@ -32,7 +32,7 @@ Decisions taken 2026-08-03, before any code:
 |---|---|---|
 | 1 — `keyModel.js` + `range.js` + tests | **done** 2026-08-03 | Pure. 25 tests in `src/piano.test.js` (53 total). Surfaced §4.1, the MIDI-convention seam |
 | 2 — `Piano.js` renders static `<ul id="keyboard">` | **done** 2026-08-03 | §5.2 CSS variable work included. The dormant CSS works — see §5.3 |
-| 3 — Rebuild the element tables, wire mouse + held keys | not started | **The ordering trap — §7.** Makes §1.1's machinery live |
+| 3 — Rebuild the element tables, wire mouse + held keys | **done** 2026-08-03 | Mouse + held keys live. `keys_chords` deliberately not touched — §1.3 |
 | 4 — Scale highlighting + labels | not started | §2 palette, `mainFretboardLabelMode`, `'scaleChanged'` |
 | 5 — Convert the fretboard to the semitone palette | not started | **The only step that changes existing behavior.** §2 |
 | 6 — The view toggle | not started | Hide/show only, never re-init. §7, §9 |
@@ -59,7 +59,7 @@ styled, imported code that currently does nothing:
 | Held-key highlighting — `classList.add('pressedKey')` / `.remove(...)` on keydown/keyup | `src/index.js:186`, `:201` | Live handler, no-op |
 | 88-key element table (MIDI 21-108) | `src/midi.js:237+` `keys` | Built at import, all `element` null |
 | Mouse input — press, drag across keys, release | `src/midi.js` `initializeMouseInput` | Function ready, finds 0 keys |
-| Scale highlighting | `src/scales/index.js:87` `highlightKeysForScales` | Live, no-op |
+| Scale highlighting | `src/scales/index.js` — `highlightKeysForScales` **and** `highlightScaleNotes` | Live, no-op — **but not for the reason this table implied. See §1.3** |
 | Physical-key → note map (two-row layout) | `src/keyboard.js` `keyToNote` | **Live and working** — drives the synth today |
 
 The CSS expects `<ul id="keyboard"><li class="white" midi="60">…`. Nothing
@@ -77,6 +77,55 @@ app's namesake.
 makes `keys`, `initializeMouseInput`, `pressedKey` highlighting and
 `highlightKeysForScales` all start working, rather than reimplementing four
 things that exist. This is the single highest-leverage decision in the plan.
+
+### 1.3 Correction, found in step 3: there were THREE keyboards, not one
+
+§1.1 lists scale highlighting as one more thing that starts working once the
+import-time key table is repopulated. **That is wrong, and the shape of the
+mistake matters more than the fact of it.**
+
+`src/scales/index.js` has its *own* `getElementByMIDI`, and it does not query
+`[midi="N"]` — it queries **`[midi="N_scale"]`**. `keys_chords` is that
+namespace's table. No markup in `src/` or `public/` has ever carried that
+attribute, and none ever will now, because a single `<li>` cannot hold two
+different `midi` values.
+
+That is the surviving sibling of the `midi="N_chord"` namespace Phase 4c
+deleted along with `highlightKeysForChords` (`ARCHITECTURE.md` §6.28). Three
+attribute namespaces were designed — plain, `_scale`, `_chord` — which is
+exactly what `theory/intervals.js`'s header means by "the scale piano, every
+chord piano, and the fretboard". **Three separate keyboards were planned.**
+Only the plain one is now built. §6.28 read the `_chord` deletion as removing
+one limb of a single unbuilt feature; it was one of three.
+
+So the two similarly-named highlighters in that file are dead for two
+*different*, unrelated reasons, and only one of them is about the key table:
+
+| Function | Namespace | Why it does nothing | Fixed by repopulating the table? |
+|---|---|---|---|
+| `highlightKeysForScales` (adds `highlightedKey`) | `midi="N_scale"` | Queries an attribute that has never existed | **No.** Nothing can fix it but changing the selector |
+| `highlightScaleNotes` (adds `scaleKey`) | `midi="N"` — the real one | Its range gate reads `#lowestNoteSelection`/`#highestNoteSelection`, **neither of which exists anywhere**, so `parseInt(undefined)` is `NaN` and every comparison is false | Elements are real as of step 3; the phantom range gate still isn't |
+
+Both verified 2026-08-03 by grep across all of `src/` and `public/`.
+
+**Consequences.**
+
+- **Step 3 repopulates `src/midi.js`'s `keys` only.** Repopulating
+  `keys_chords` would be pure ceremony — it would still resolve nothing.
+  §6's step-3 description says to do both; it is wrong and this supersedes
+  it.
+- **Step 4 has a decision to make that the plan didn't know about**: revive
+  `highlightScaleNotes` by removing its phantom range gate, or drive the
+  scale layer from `Piano.js` directly and leave both functions to be deleted
+  as dead code. Deleting is probably right — `highlightScaleNotes` computes
+  MIDI via `src/midi.js`'s non-standard `noteToMidi(...) + 12`, has no notion
+  of the semitone palette §2 requires, and its "which keys are visible" gate
+  is exactly what `pianoState`'s displayed range now answers properly. But it
+  is a step-4 call, taken on the evidence, not a foregone one.
+- **The two extra namespaces are dead code**, in the same class as
+  §6.28's `highlightKeysForChords`. Retiring `keys_chords`,
+  `highlightKeysForScales` and their `getElementByMIDI` is a cleanup for
+  after step 4 decides, not part of building the piano.
 
 ### 1.2 Everything else already in place
 
@@ -442,6 +491,29 @@ that happens mid-press (e.g. changing octave count while holding keys). Per
 object rather than being exported as a bare `let`. Small, and step 3's
 natural companion.
 
+**Landed in step 3**, as `keyboardState.currentPressed` in `src/keyboard.js`
+— that file already owns "the computer keyboard as a musical input device",
+so the held set belongs beside `keyToNote` rather than in a new module. The
+reapplication itself lives in `syncPianoKeyState` (`src/fretboard/index.js`),
+reached through `createPiano`'s `onRender` hook, which is what keeps
+`src/piano/` from having to import `midi.js` or `keyboard.js` at all.
+
+**Two stuck-highlight bugs, first reachable in step 3.** Both are in
+`initializeMouseInput` and both predate this work — the function has never
+run against a real key before, so they had no way to show. In each, the
+`pressedKey` class is *added* unconditionally but *removed* inside a branch
+gated on `pressedNotes.has(...)`, which is only true when the synth actually
+sounded the note:
+
+- gliding off a key with the synth disabled left it lit permanently;
+- releasing the mouse anywhere other than over the key it started on
+  (including off the piano entirely) left it lit.
+
+Playwright caught both immediately — a static screenshot could not have.
+Fixed by hoisting the un-highlight out of the audio gate at both sites,
+into a shared `clearPressedHighlight(note)` that clears exactly one key
+(never "all of them", which would wipe notes held on the computer keyboard).
+
 Note `PolySynth.jsx` has its *own* `keydown`/`keyup` block commented out at
 `:2081-2097` (the "working code behind a deliberate off-switch"
 `REFACTOR_PLAN.md` §1.2 lists). `src/index.js`'s handler is the live one.
@@ -504,11 +576,14 @@ look like a bug.
 
 ## 9. Still open
 
-- **Does the piano need its own `.pressed` state?** `index.css:150` defines
-  `.white.pressed` (a physical depression effect) separately from
-  `.pressedKey` (the amber highlight). Only `.pressedKey` is referenced by
-  any JS. Whether mouse/keyboard input should also apply `.pressed` for the
-  tactile look is a step-3 call.
+- ~~**Does the piano need its own `.pressed` state?**~~ **Decided in step 3:
+  no.** `.white.pressed`/`.black.pressed` (the physical depression effect)
+  stay unused. `.pressedKey`'s amber already reads unambiguously as "this key
+  is sounding", the two would have to be applied and cleared in lockstep at
+  six separate call sites in `initializeMouseInput` plus two in
+  `src/index.js`, and every one of those is a place a stuck highlight can
+  survive — step 3 already found two such leaks (§8.1). Left as dead CSS
+  rather than doubling that surface for a shadow.
 - ~~**`--num-keys` has two different defaults** in the dead CSS — `55` for
   white keys and `50` for black keys.~~ **Resolved in step 2:** neither
   number meant anything (the author was mid-iteration). Unified to `52`, the
