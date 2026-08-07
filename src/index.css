@@ -1810,6 +1810,7 @@ h3 {
     margin: 10px 0 !important;
     box-sizing: border-box;
     overflow-x: auto;
+    overflow-y: hidden;
   }
 
   #chordButtonGridContainer table {
@@ -1853,6 +1854,7 @@ h3 {
     max-width: 100%;
     box-sizing: border-box;
     overflow-x: auto;
+    overflow-y: hidden;
   }
 
   .help-dropdown {
