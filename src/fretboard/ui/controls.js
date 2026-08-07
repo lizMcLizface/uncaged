@@ -178,6 +178,53 @@ function createTabbedPanel(tabs, defaultActiveIndex = 0, storageKey = null) {
 }
 
 /**
+ * Inject the hotkey footer's collapse/expand CSS once. Applies at every
+ * screen size: the footer always starts collapsed to the toggle bar and
+ * opens via a tap or by scrolling to the bottom of the page (see
+ * attachHotkeyFooter).
+ */
+function addHotkeyFooterStyles() {
+    if (document.getElementById('hotkey-footer-styles')) {
+        return;
+    }
+    const styleElement = document.createElement('style');
+    styleElement.id = 'hotkey-footer-styles';
+    styleElement.textContent = `
+        .hotkey-footer-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+            font-weight: bold;
+            color: #ddd;
+        }
+        .hotkey-footer-toggle .hotkey-footer-chevron {
+            margin-left: auto;
+            transition: transform 0.2s ease;
+        }
+        .hotkey-footer.expanded .hotkey-footer-toggle .hotkey-footer-chevron {
+            transform: rotate(180deg);
+        }
+        .hotkey-footer-rows {
+            max-height: 0;
+            opacity: 0;
+            overflow: hidden;
+            margin-top: 0;
+            transition: max-height 0.25s ease, opacity 0.2s ease, margin-top 0.25s ease;
+        }
+        .hotkey-footer.expanded .hotkey-footer-rows {
+            max-height: 45vh;
+            opacity: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            margin-top: 8px;
+        }
+    `;
+    document.head.appendChild(styleElement);
+}
+
+/**
  * Build and attach the page footer listing the computer-keyboard hotkeys:
  * scale/root navigation (index.js's keydown handler) and the QWERTY-to-piano
  * mapping plus octave shift (keyboard.js / index.js).
@@ -187,11 +234,23 @@ function createTabbedPanel(tabs, defaultActiveIndex = 0, storageKey = null) {
  * active tab's content happens to be. A same-height spacer is appended to
  * `container` right along with the footer so the fixed footer never covers
  * the tail end of the tab content beneath it; a ResizeObserver keeps the
- * spacer in sync as the footer wraps to more/fewer rows on resize.
+ * spacer in sync as the footer wraps to more/fewer rows on resize - which
+ * also covers the collapse/expand transition below, since that's just
+ * another footer resize.
+ *
+ * Starts collapsed to a single toggle bar, at every screen size, rather
+ * than eating a permanent slice of the viewport. It opens either by tapping
+ * that bar, or automatically once the user scrolls to the very bottom of
+ * the page (where they've plainly gone looking for it) - and closes again
+ * if they scroll back up, unless they opened it manually themselves, which
+ * stays sticky until tapped shut.
  * @param {HTMLElement} container - element the footer (and its spacer) are appended to
  */
 function attachHotkeyFooter(container) {
+    addHotkeyFooterStyles();
+
     const footer = document.createElement('div');
+    footer.className = 'hotkey-footer';
     footer.style.cssText = `
         position: fixed;
         left: 0;
@@ -212,7 +271,39 @@ function attachHotkeyFooter(container) {
     heading.style.cssText = `font-weight: bold; color: #ddd; margin-bottom: 6px;`;
     // footer.appendChild(heading);
 
+    // Small-screen-only toggle bar. Hidden above the breakpoint (see
+    // addHotkeyFooterStyles), so it's harmless to always create.
+    let manuallyExpanded = false;
+    let atBottom = false;
+    const updateExpanded = () => {
+        footer.classList.toggle('expanded', manuallyExpanded || atBottom);
+    };
+
+    const toggleBar = document.createElement('div');
+    toggleBar.className = 'hotkey-footer-toggle';
+    toggleBar.setAttribute('role', 'button');
+    toggleBar.setAttribute('tabindex', '0');
+    toggleBar.setAttribute('aria-label', 'Toggle keyboard shortcuts');
+    toggleBar.innerHTML = `
+        <span aria-hidden="true">⌨️</span>
+        <span>Keyboard Shortcuts</span>
+        <span class="hotkey-footer-chevron" aria-hidden="true">▴</span>
+    `;
+    const toggleManually = () => {
+        manuallyExpanded = !manuallyExpanded;
+        updateExpanded();
+    };
+    toggleBar.addEventListener('click', toggleManually);
+    toggleBar.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleManually();
+        }
+    });
+    footer.appendChild(toggleBar);
+
     const rows = document.createElement('div');
+    rows.className = 'hotkey-footer-rows';
     rows.style.cssText = `
         display: flex;
         flex-wrap: wrap;
@@ -237,18 +328,42 @@ function attachHotkeyFooter(container) {
     // `order: 9999` keeps it last even if a sibling has an explicit order.
     const spacer = document.createElement('div');
     spacer.style.cssText = `flex-shrink: 0; width: 100%; order: 9999;`;
+
+    // Auto-expand once the page is scrolled to (or very near) the bottom of
+    // the *real* content, and auto-collapse again on scrolling away -
+    // unless the user opened it themselves, which takes priority and stays
+    // open regardless of scroll position. Measured against spacer.offsetTop
+    // (the content height above the spacer) rather than
+    // document.documentElement.scrollHeight, deliberately: scrollHeight
+    // includes the spacer itself, whose height mirrors the footer's, so
+    // expanding would grow the page, "un-reach" the bottom, collapse again,
+    // shrink the page, "re-reach" the bottom, expand again... an infinite
+    // loop. offsetTop is the position *before* the spacer, so it's stable
+    // across the footer's own collapse/expand.
+    const checkScrollPosition = () => {
+        const contentBottom = spacer.offsetTop;
+        const atBottomNow = window.scrollY + window.innerHeight >= contentBottom - 4;
+        if (atBottomNow !== atBottom) {
+            atBottom = atBottomNow;
+            updateExpanded();
+        }
+    };
+    window.addEventListener('scroll', checkScrollPosition, { passive: true });
+
     const reserveSpace = () => {
         spacer.style.height = `${footer.offsetHeight}px`;
+        checkScrollPosition();
     };
+
+    container.appendChild(spacer);
+    container.appendChild(footer);
+
     if (typeof ResizeObserver !== 'undefined') {
         new ResizeObserver(reserveSpace).observe(footer);
     } else {
         window.addEventListener('resize', reserveSpace);
         setTimeout(reserveSpace, 0);
     }
-
-    container.appendChild(spacer);
-    container.appendChild(footer);
 }
 
 /**
