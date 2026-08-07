@@ -28,6 +28,7 @@ import {
 } from './progressionList';
 import { createInputSection } from './input';
 import { createProgressionControlsSection } from './controls';
+import { applySnapToProgression } from './snap';
 
 /**
  * Get the fretboard instance for chord progression operations
@@ -74,7 +75,23 @@ subscribeToInstrumentChanges((config) => {
     MINI_FRETBOARD_CONFIG.stringCount = config.stringCount;
     progressionState.precomputedPatternData.clear();
     progressionState.selectedPatternIndexes.clear();
-    updateProgressionDisplay();
+
+    // **Deferred, and that is a fix, not a style choice.** Shapes are found by
+    // asking `window.chordProgressionFretboard` - the main fretboard - which
+    // does not learn the new tuning until src/fretboard/index.js's own
+    // subscriber calls `setTuning`. Subscribers run in registration order and
+    // this module registers at import time, long before `initializeFretboard`
+    // runs, so anything done synchronously here reads the *previous*
+    // instrument. That was already visibly wrong before snapping existed:
+    // switching a loaded progression from guitar to bass left the cards
+    // showing the old 6-string shapes until a reload. Going through
+    // precomputeAllPatternData (rather than leaving it to
+    // createPatternSelector's lazy fallback) is what lets snapping re-pick
+    // shapes for the new instrument, since it only runs off a precompute pass.
+    setTimeout(() => {
+        precomputeAllPatternData();
+        updateProgressionDisplay();
+    }, 0);
 });
 
 /**
@@ -195,6 +212,13 @@ function precomputeAllPatternData() {
         const patternData = precomputePatternData(chord, index);
         progressionState.precomputedPatternData.set(index, patternData);
     });
+
+    // Snapping picks *among* these patterns, so it has to run after they
+    // exist and before anything reads selectedPatternIndexes. Every path that
+    // can move the progression - edits, scale changes, seventh-chord toggling
+    // - funnels through here, which is why this is the only call site outside
+    // the snap controls' own handlers. A no-op with the toggle off.
+    applySnapToProgression();
 }
 
 /**

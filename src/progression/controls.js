@@ -21,6 +21,11 @@
 //     exactly as-is, not simplified, per this phase's no-behavior-changes
 //     rule). Building them separately would mean passing the checkbox out
 //     and back in for no structural benefit.
+//   - buildSnapControls(): the "Snap Shapes" toggle's listener owns the
+//     anchor dropdown's visibility, and the dropdown's options are rebuilt
+//     from the same closure on scale/instrument changes. The scoring and
+//     state behind both live in src/progression/snap.js; this file only
+//     builds the two controls and re-renders what they change.
 //   - buildSynthControlsContainer(): rate control, duration control, and
 //     the chord-triggering checkbox are visually one row, and the
 //     container's periodic sync (setInterval/setTimeout at the end) calls
@@ -40,11 +45,13 @@
 //
 // Lifted from progressionBuilder.js as part of REFACTOR_PLAN.md Phase 4.
 
+import { subscribe as subscribeToInstrumentChanges } from '../tuning';
 import { progressionState } from './state';
 import { updateProgressionDisplay } from './progressionList';
 import { copyShareableURL } from './share';
 import { getProcessedProgression } from './playback';
 import { displaySingleChordPattern, displayAllChordPatterns } from './fretboardDisplay';
+import { applySnapToProgression, getSnapAnchorRows, SNAP_ANCHOR_AUTO } from './snap';
 import { updateProgression, clearProgression } from '.';
 
 /**
@@ -473,6 +480,163 @@ function buildSeventhChordsToggle() {
     chordsToggleContainer.appendChild(chordsToggleLabel);
 
     return chordsToggleContainer;
+}
+
+/**
+ * Re-run whatever the snap state now implies and put the result on screen:
+ * the chord cards (new pattern selections), the main fretboard, and the
+ * sequencer's copy of the progression. Mirrors the pattern-selector dropdown's
+ * own change handler in chordCard.js, which does this for a single chord -
+ * snapping does it for all of them at once.
+ */
+function refreshAfterSnapChange() {
+    applySnapToProgression();
+
+    updateProgressionDisplay();
+    window.processedProgression = getProcessedProgression();
+
+    if (window.polySynthRef && window.polySynthRef.getProgressionSequencerState) {
+        const state = window.polySynthRef.getProgressionSequencerState();
+        if (state.playing && window.polySynthRef.updateProgressionSettings) {
+            window.polySynthRef.updateProgressionSettings(window.processedProgression);
+        }
+    }
+
+    if (progressionState.hoveredChordIndex !== null && progressionState.currentProgression[progressionState.hoveredChordIndex]) {
+        displaySingleChordPattern(progressionState.currentProgression[progressionState.hoveredChordIndex], progressionState.hoveredChordIndex, true);
+    } else {
+        displayAllChordPatterns();
+    }
+}
+
+/**
+ * Build the "Snap Shapes" toggle plus the scale-position anchor dropdown it
+ * shows/hides - built together for the same reason buildMiniFretboardControls
+ * is (the toggle's listener owns the other container's visibility), and
+ * because the anchor is meaningless with snapping off.
+ * @returns {{snapToggleContainer: HTMLElement, snapAnchorContainer: HTMLElement}}
+ */
+function buildSnapControls() {
+    const snapAnchorContainer = document.createElement('div');
+    snapAnchorContainer.style.cssText = `
+        display: ${progressionState.snapShapes ? 'flex' : 'none'};
+        align-items: center;
+        gap: 8px;
+        margin-left: 16px;
+    `;
+
+    const snapAnchorLabel = document.createElement('label');
+    snapAnchorLabel.htmlFor = 'chord-progression-snap-anchor';
+    snapAnchorLabel.textContent = 'Anchor Position';
+    snapAnchorLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+    `;
+
+    const snapAnchorSelect = document.createElement('select');
+    snapAnchorSelect.id = 'chord-progression-snap-anchor';
+    snapAnchorSelect.style.cssText = `
+        padding: 4px 8px;
+        border: 1px solid #666;
+        border-radius: 4px;
+        background: #333;
+        color: #fff;
+        font-size: 13px;
+        cursor: pointer;
+    `;
+
+    // The row set moves with the tuning and the anchor frets move with the
+    // scale root, so the options cannot be built once - they are rebuilt on
+    // both of those events (subscriptions at the end of this function).
+    const populateAnchorOptions = () => {
+        const previous = progressionState.snapAnchorRow;
+        snapAnchorSelect.innerHTML = '';
+
+        const autoOption = document.createElement('option');
+        autoOption.value = SNAP_ANCHOR_AUTO;
+        autoOption.textContent = 'Auto (tightest fit)';
+        autoOption.title = 'Pick the position the current chords fit into most tightly';
+        snapAnchorSelect.appendChild(autoOption);
+
+        getSnapAnchorRows().forEach((row) => {
+            const option = document.createElement('option');
+            option.value = String(row.rowIndex);
+            option.textContent = `Root ${row.label} (fret ${row.anchorFret})`;
+            snapAnchorSelect.appendChild(option);
+        });
+
+        // A row that no longer exists (e.g. after switching to a bass) falls
+        // back to Auto rather than leaving the select showing a stale label.
+        const stillAvailable = previous === SNAP_ANCHOR_AUTO
+            || Array.from(snapAnchorSelect.options).some(option => option.value === String(previous));
+        if (!stillAvailable) {
+            progressionState.snapAnchorRow = SNAP_ANCHOR_AUTO;
+        }
+        snapAnchorSelect.value = String(progressionState.snapAnchorRow);
+    };
+
+    populateAnchorOptions();
+
+    snapAnchorSelect.addEventListener('change', (e) => {
+        progressionState.snapAnchorRow = e.target.value === SNAP_ANCHOR_AUTO
+            ? SNAP_ANCHOR_AUTO
+            : parseInt(e.target.value, 10);
+        refreshAfterSnapChange();
+    });
+
+    snapAnchorContainer.appendChild(snapAnchorLabel);
+    snapAnchorContainer.appendChild(snapAnchorSelect);
+
+    const snapToggleContainer = document.createElement('div');
+    snapToggleContainer.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    `;
+
+    const snapToggleCheckbox = document.createElement('input');
+    snapToggleCheckbox.type = 'checkbox';
+    snapToggleCheckbox.id = 'chord-progression-snap-toggle';
+    snapToggleCheckbox.checked = progressionState.snapShapes;
+    snapToggleCheckbox.style.cssText = `
+        transform: scale(1.2);
+    `;
+
+    snapToggleCheckbox.addEventListener('change', (e) => {
+        progressionState.snapShapes = e.target.checked;
+        snapAnchorContainer.style.display = progressionState.snapShapes ? 'flex' : 'none';
+        // Turning it off leaves the shapes where snapping put them - there is
+        // no "before" to restore, and re-picking every lowest-fret shape would
+        // throw away a choice the user may have been happy with.
+        refreshAfterSnapChange();
+    });
+
+    const snapToggleLabel = document.createElement('label');
+    snapToggleLabel.htmlFor = 'chord-progression-snap-toggle';
+    snapToggleLabel.textContent = 'Snap Shapes';
+    snapToggleLabel.title = 'Keep every chord in one scale position instead of each taking its lowest-fret shape';
+    snapToggleLabel.style.cssText = `
+        color: #fff;
+        font-size: 14px;
+        cursor: pointer;
+        user-select: none;
+    `;
+
+    snapToggleContainer.appendChild(snapToggleCheckbox);
+    snapToggleContainer.appendChild(snapToggleLabel);
+
+    window.addEventListener('scaleChanged', populateAnchorOptions);
+
+    // Deferred, not called directly: the row set these options describe lives
+    // on fretboardState and is recomputed by src/fretboard/index.js's own
+    // tuning subscriber. Subscribers run in registration order and the
+    // progression UI is built first, so a synchronous repopulate here would
+    // read the *previous* instrument's rows.
+    subscribeToInstrumentChanges(() => setTimeout(populateAnchorOptions, 0));
+
+    return { snapToggleContainer, snapAnchorContainer };
 }
 
 /**
@@ -1039,6 +1203,7 @@ function createProgressionControlsSection() {
         staveTheoryModeContainer
     } = buildStaveControls();
     const chordsToggleContainer = buildSeventhChordsToggle();
+    const { snapToggleContainer, snapAnchorContainer } = buildSnapControls();
     const presetsContainer = buildPresetsDropdown();
     const shareButton = buildShareButton();
     const clearButton = buildClearButton();
@@ -1054,6 +1219,8 @@ function createProgressionControlsSection() {
     section.appendChild(staveKeyContainer);
     section.appendChild(staveTheoryModeContainer);
     section.appendChild(chordsToggleContainer);
+    section.appendChild(snapToggleContainer);
+    section.appendChild(snapAnchorContainer);
     section.appendChild(presetsContainer);
     section.appendChild(shareButton);
     section.appendChild(clearButton);

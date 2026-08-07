@@ -17,6 +17,7 @@
 //
 // Lifted from progressionBuilder.js as part of REFACTOR_PLAN.md Phase 4.
 
+import { refreshProgressionHighlight } from '../fretboard/ui/scalePositionGrid';
 import { progressionState } from './state';
 import { createChordElement } from './chordCard';
 
@@ -53,6 +54,12 @@ function createProgressionDisplaySection() {
 function updateProgressionDisplay(currentChordIndex = -1) {
     const displaySection = document.getElementById('progression-display-section');
     if (!displaySection) return;
+
+    // Every path that changes the progression - edits, scale changes, pattern
+    // selections, clearing - ends here, which makes this the one place the
+    // Scale Position Grid's progression highlight has to be refreshed from.
+    // No-ops when that tab has never been built.
+    refreshProgressionHighlight();
 
     displaySection.innerHTML = '';
 

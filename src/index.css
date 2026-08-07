@@ -1685,88 +1685,108 @@ h3 {
   z-index: 20;
 }
 
-/* Responsive fretboard for smaller screens */
+/* Responsive layout for phones/tablets.
+ *
+ * No forced-landscape rotation, no JS-driven reordering: everything here is
+ * plain CSS working WITH the real DOM order (top bar -> fretboard/piano ->
+ * tabbed panel -> hotkey footer), which is already the order we want on
+ * mobile, so `order`/flex tricks aren't needed at this level. Wide inner
+ * content (chord grid, scale position grid) gets its own local horizontal
+ * scrollbar instead of being shrunk to fit or allowed to blow out the page
+ * width - the page itself only ever scrolls vertically. */
 @media (max-width: 768px) {
-  /* Force landscape orientation with better portrait handling */
-  @media screen and (orientation: portrait) {
-    html {
-      transform: rotate(-90deg);
-      transform-origin: left top;
-      width: 100vh;
-      height: 100vw;
-      overflow-x: hidden;
-      position: absolute;
-      top: 100%;
-      left: 0;
-    }
-    
-    body {
-      width: 100vh;
-      height: 100vw;
-      overflow-x: hidden;
-      margin: 0;
-      padding: 0;
-    }
-    
-    .main-content {
-      height: 100vw;
-      width: 100vh;
-      overflow-y: auto;
-    }
-  }
-
   body {
     margin: 0;
     padding: 0;
     overflow-x: hidden;
   }
 
-  /* Prioritize fretboard display */
+  .main-content,
+  #fretNotPlaceholder {
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+  }
+
+  #fretNotPlaceholder {
+    padding: 5px;
+  }
+
+  /* Top bar: title, view toggle, instrument picker, quick scale picker */
+  .app-top-bar {
+    padding: 8px 10px !important;
+    gap: 10px !important;
+  }
+
+  .app-top-bar h1 {
+    font-size: 18px !important;
+  }
+
+  /* Fretboard */
   .fretboard {
     font-size: 10px;
-    width: 100% !important;
-    margin: 5px 0 !important;
-    order: 1 !important;
-    flex-shrink: 0 !important;
-    height: 200px !important;
+    width: 100%;
+    max-width: 100%;
+    margin: 5px 0;
+    height: 200px;
+    overflow-x: auto;
+    box-sizing: border-box;
   }
-  
+
   .fretboard .neck-container {
     height: 120px !important;
     margin: 0 5px !important;
   }
-  
+
   .fretboard .note-marker {
     width: 16px !important;
     height: 16px !important;
     font-size: 8px !important;
   }
-  
+
   .fretboard .position-marker {
     width: 8px !important;
     height: 8px !important;
   }
-  
+
   .fretboard .fret-wire {
     width: 1px !important;
   }
 
-  /* Mobile layout for main containers with proper ordering */
-  #fretNotPlaceholder {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 10px !important;
-    padding: 5px !important;
-    height: calc(100vh - 60px) !important;
-    overflow-y: auto !important;
+  /* Piano (shares the fretboard's slot - only one is visible at a time) */
+  #keyboard {
+    height: 9rem !important;
+    padding: 0 !important;
+    width: 100%;
+    box-sizing: border-box;
   }
 
-  /* Scale controls mobile optimization - order 3 */
+  #keyboard .white,
+  #keyboard .black {
+    font-size: 8px !important;
+  }
+
+  #keyboard .white {
+    height: 9rem !important;
+  }
+
+  #keyboard .black {
+    height: 5.5rem !important;
+  }
+
+  /* Tabbed panel (Scale Information / Chord Progression / Scale Position
+   * Grid / Scale Selection / Other Controls / Synthesizer) */
+  .tabbed-panel-bar button {
+    padding: 8px 10px !important;
+    font-size: 12px !important;
+  }
+
+  /* Scale Selection tab's root-note/scale-family tables */
   #scaleControlsContainer,
   #placeholderContent {
-    order: 3 !important;
-    width: 100% !important;
-    flex-shrink: 1 !important;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
   }
 
   #scaleControlsContainer table,
@@ -1782,158 +1802,87 @@ h3 {
     font-size: 9px !important;
   }
 
-  /* Chord grid mobile layout - order 2, below fretboard, 100% width */
+  /* Chord Pattern Grid - never wider than the viewport; scrolls locally if
+   * its 13-column table doesn't fit */
   #chordButtonGridContainer {
-    order: 2 !important;
-    width: 100% !important;
+    width: 100%;
     max-width: 100% !important;
     margin: 10px 0 !important;
-    flex-shrink: 1 !important;
+    box-sizing: border-box;
+    overflow-x: auto;
   }
 
   #chordButtonGridContainer table {
-    width: 100% !important;
+    margin: 0 auto !important;
   }
 
   #chordButtonGridContainer td,
   #chordButtonGridContainer th {
-    width: auto !important;
-    min-width: 20px !important;
-    height: 20px !important;
-    font-size: 8px !important;
-    padding: 1px !important;
-  }
-
-  /* Fretboard controls mobile */
-  .fretboard-controls {
-    order: 1 !important;
-    flex-wrap: wrap !important;
-    gap: 3px !important;
-    margin: 5px 0 !important;
-    justify-content: center !important;
-  }
-
-  .fretboard-controls button {
-    min-width: 28px !important;
-    height: 28px !important;
-    font-size: 10px !important;
-    padding: 3px !important;
-    margin: 1px !important;
-  }
-
-  /* Toggle switch mobile adjustments */
-  .fretboard-controls > div:first-child {
-    flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 3px !important;
-    width: 100% !important;
-  }
-
-  /* Compact header for mobile */
-  /* .selectionContainer {
-    flex-direction: row !important;
-    max-height: 50px !important;
-    padding: 2px !important;
-    display: flex !important;
-    flex-wrap: nowrap !important;
-    align-items: center !important;
-    justify-content: space-between !important;
-  }
-
-  .selectionContainer .tableCell {
-    width: auto !important;
-    margin-bottom: 0 !important;
-    padding: 2px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-  }
-
-  .selectionContainer .tableCell h3 {
-    font-size: 14px !important;
-    margin: 0 !important;
-    white-space: nowrap !important;
-  } */
-
-  /* Cross reference mobile */
-  .cross-reference-container {
-    order: 4 !important;
-    overflow-x: auto !important;
-    margin: 10px 0 !important;
-  }
-
-  .cross-reference-container table {
-    min-width: 300px !important;
-    font-size: 8px !important;
-  }
-
-  .cross-reference-container td,
-  .cross-reference-container th {
-    padding: 1px !important;
+    width: 22px !important;
+    height: 22px !important;
     font-size: 7px !important;
   }
 
-  /* Keyboard mobile adjustments */
-  #keyboard {
-    height: 60px !important;
-    padding: 0 !important;
-  }
-
-  .key {
-    font-size: 8px !important;
-  }
-
-  .key.black {
-    height: 40px !important;
-  }
-
-  .key.white {
-    height: 60px !important;
+  .help-dropdown {
+    min-width: 90vw !important;
+    max-width: 90vw !important;
+    left: -80vw;
   }
 }
 
-/* Tablet landscape adjustments */
-@media (min-width: 769px) and (max-width: 1024px) and (orientation: landscape) {
-  #fretNotPlaceholder {
-    display: flex !important;
-    flex-direction: column !important;
-    gap: 20px !important;
+/* Tablet portrait/landscape */
+@media (min-width: 769px) and (max-width: 1024px) {
+  .fretboard {
+    height: 250px;
+  }
+
+  #keyboard {
+    height: 11rem !important;
+  }
+
+  #keyboard .white {
+    height: 11rem !important;
+  }
+
+  #keyboard .black {
+    height: 7rem !important;
   }
 
   #chordButtonGridContainer {
-    order: 2 !important;
-    width: 100% !important;
-    max-width: 100% !important;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    overflow-x: auto;
   }
 
-  .fretboard {
-    order: 1 !important;
-  }
-
-  #scaleControlsContainer,
-  #placeholderContent {
-    order: 3 !important;
+  .help-dropdown {
+    min-width: 80vw !important;
+    max-width: 80vw !important;
+    left: -70vw;
   }
 }
 
-/* Adjust top banner height for desktop landscape mode */
-@media (min-width: 1025px) and (orientation: landscape) {
-  .top-banner {
-    height: 80px !important; /* Reduce height for better appearance */
-  }
-}
-
-/* Fix overlapping elements in mobile landscape mode */
-@media (max-width: 768px) and (orientation: landscape) {
+/* Short landscape viewports (phones rotated naturally) - vertical space is
+ * the scarce resource here, not width */
+@media (max-height: 500px) and (orientation: landscape) {
   .fretboard {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 10px; /* Add spacing to prevent overlap */
+    height: 150px !important;
   }
 
-  .key.black, .key.white {
-    height: auto !important; /* Ensure keys resize properly */
+  .fretboard .neck-container {
+    height: 90px !important;
+  }
+
+  #keyboard {
+    height: 6rem !important;
+  }
+
+  #keyboard .white {
+    height: 6rem !important;
+  }
+
+  #keyboard .black {
+    height: 3.5rem !important;
   }
 }
 

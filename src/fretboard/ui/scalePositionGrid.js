@@ -9,6 +9,15 @@
 // this module never calls back into chordGrid.js's own UI (the Chord
 // Pattern Grid button table), so the dependency runs one way, not a cycle.
 //
+// Progression highlighting (refreshProgressionHighlight, below) is the one
+// thing here that reads outside the fretboard: src/progression/snap.js
+// answers "which of my degree columns does the current progression use" and
+// progressionState says which position it is anchored on. snap.js imports
+// findRowRootAbsoluteFret/getScalePositionWindow back from here, so that pair
+// is two-way - safe for the usual reason, neither side reads the other at
+// module top level. Painting is one-way: nothing in src/progression/ knows
+// how these cells are styled, only that this function exists to be called.
+//
 // getFretboard and the visualization-stack producers (pushChordPreview,
 // pushPositionPreview, popPreviewLayer, bindPreviewSource) are imported back
 // from ../index.js - the same safe two-way shape chordGrid.js documents:
@@ -29,6 +38,8 @@ import {
 } from '../../theory/notation';
 import { getIntervalColor } from '../../theory/intervals';
 import { getPrimaryScale, getPrimaryRootNote } from '../../scales';
+import { progressionState } from '../../progression/state';
+import { getProgressionDegreeUsage } from '../../progression/snap';
 import { assignFingers, selectGripFromPositions } from '../../chordFingering';
 import { fretboardState, persistScalePositionGridSettings } from '../state';
 import { FRET_COUNT } from '../Fretboard';
@@ -58,6 +69,21 @@ const SCALE_POSITION_MIN_ABSOLUTE_ROOT_FRET = 0;
 const SCALE_POSITION_STACK_SIZES = { dyad: 2, triad: 3, tetrad: 4 };
 
 const NOTE_SHAPE_TYPES = ['circle', 'square', 'diamond', 'triangle-up', 'triangle-down', 'pentagon', 'hexagon', 'star', 'cross', 'plus', 'triangle-right', 'triangle-left'];
+
+const FALLBACK_SCALE = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+// Resting backgrounds, kept as constants because refreshProgressionHighlight
+// has to restore them: it writes style.background directly, which outranks the
+// cssText each cell was built with, so "not highlighted" has to be spelled out
+// rather than cleared.
+const CELL_BACKGROUND = 'rgba(30,30,30,0.35)';
+const HEADER_BACKGROUND = '#2b2b2b';
+const ROW_HEADER_BACKGROUND = '#383838';
+
+// The progression accent, shared with the chord cards' own highlighting
+// (src/progression/progressionList.js) so "this is your progression" reads as
+// one colour across the app.
+const PROGRESSION_ACCENT = '76, 175, 80';
 
 /**
  * Find the first matching fret at or above a minimum fret for a row root note.
@@ -96,6 +122,25 @@ export function findRowRootAbsoluteFret(rowStringIndex, rowScaleRootNote, minFre
  */
 export function getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, displayColumn) {
     return rowRootAbsoluteFret + (displayColumn - GENERIC_ROOT_DISPLAY_COLUMN);
+}
+
+/**
+ * The span of neck one row of this grid covers, as absolute frets.
+ *
+ * **This is the definition of "a scale position" for the rest of the app.**
+ * `src/progression/snap.js` scores chord shapes against it to decide which
+ * shape of each progression chord falls inside the position the user picked;
+ * exported (rather than each caller re-deriving `rowRootAbsoluteFret ± n`)
+ * so the grid cannot show one window while snapping targets another.
+ *
+ * @param {number} rowRootAbsoluteFret - from findRowRootAbsoluteFret
+ * @returns {{start: number, end: number}} inclusive absolute-fret bounds
+ */
+export function getScalePositionWindow(rowRootAbsoluteFret) {
+    return {
+        start: getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, 0),
+        end: getAbsoluteFretForDisplayColumn(rowRootAbsoluteFret, MINI_SCALE_FRET_COUNT)
+    };
 }
 
 /**
@@ -528,6 +573,68 @@ function pushScalePositionPreview(cell) {
         rootNote: cell.referenceRoot,
         label: cell.label
     });
+}
+
+/**
+ * Paint (or repaint) "these are the chords in your progression" onto the grid.
+ *
+ * **Restyles in place instead of re-rendering.** A progression edit is a
+ * keystroke away, and `renderScalePositionGrid` rebuilds every mini board's
+ * SVG from scratch; this only touches the backgrounds of cells that already
+ * exist, found by the `data-*` hooks the render leaves behind. That is also
+ * why it is safe to call when the grid tab has never been opened - it finds
+ * no container and does nothing.
+ *
+ * Two intensities, per the anchoring model in src/progression/snap.js: every
+ * cell of a degree the progression uses gets the base wash (the chord lives
+ * here too), and the row the progression is actually anchored on gets the
+ * stronger wash plus an inset outline (this is where you are playing it).
+ * With "Snap Shapes" off there is no anchored row, so only the base wash
+ * applies.
+ */
+export function refreshProgressionHighlight() {
+    const container = document.getElementById('scalePositionGridContainer');
+    if (!container) return;
+
+    const scaleNoteNames = getCurrentScaleNoteNames();
+    const workingScale = scaleNoteNames.length > 0 ? scaleNoteNames : FALLBACK_SCALE;
+    const usage = getProgressionDegreeUsage(workingScale);
+    const anchorRow = progressionState.snapShapes ? progressionState.snapResolvedRow : null;
+
+    container.querySelectorAll('[data-degree-col]').forEach((cell) => {
+        const column = parseInt(cell.dataset.degreeCol, 10);
+        const tokens = usage.get(column);
+        const isHeader = cell.dataset.degreeHeader === 'true';
+        const isAnchored = !isHeader && anchorRow !== null && parseInt(cell.dataset.gridRow, 10) === anchorRow;
+
+        if (!tokens) {
+            cell.style.background = isHeader ? HEADER_BACKGROUND : CELL_BACKGROUND;
+            cell.style.boxShadow = '';
+            cell.title = '';
+            return;
+        }
+
+        const alpha = isHeader ? 0.28 : (isAnchored ? 0.34 : 0.16);
+        cell.style.background = `rgba(${PROGRESSION_ACCENT}, ${alpha})`;
+        cell.style.boxShadow = isAnchored ? `inset 0 0 0 2px rgba(${PROGRESSION_ACCENT}, 0.9)` : '';
+        cell.title = isAnchored
+            ? `In the current progression (${tokens.join(', ')}) - anchored position`
+            : `In the current progression (${tokens.join(', ')})`;
+    });
+
+    container.querySelectorAll('[data-row-header]').forEach((rowHeader) => {
+        const isAnchored = anchorRow !== null && parseInt(rowHeader.dataset.rowHeader, 10) === anchorRow;
+        rowHeader.style.background = isAnchored ? `rgba(${PROGRESSION_ACCENT}, 0.34)` : ROW_HEADER_BACKGROUND;
+        rowHeader.title = isAnchored ? 'Position the current progression is anchored on' : '';
+    });
+
+    const legendItem = document.getElementById('scalePositionProgressionLegend');
+    if (legendItem) {
+        legendItem.style.display = usage.size > 0 ? 'inline-flex' : 'none';
+        legendItem.textContent = anchorRow !== null
+            ? 'Green = in current progression, outlined = anchored position'
+            : 'Green = in current progression';
+    }
 }
 
 /**
@@ -1251,8 +1358,7 @@ export function renderScalePositionGrid() {
     controls.appendChild(keepShapeControl);
     controls.appendChild(darkDuplicateControl);
 
-    const fallbackScale = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
-    const workingScale = scaleNoteNames.length > 0 ? scaleNoteNames : fallbackScale;
+    const workingScale = scaleNoteNames.length > 0 ? scaleNoteNames : FALLBACK_SCALE;
     const scaleIntervalEntries = getScaleIntervalEntries(workingScale, normalizedRoot);
     const intervalSummary = `${scaleIntervalEntries.map(entry => entry.intervalLabel).join(' - ')} - O`;
     const noteSummary = fretboardState.scalePositionUseInstancedScale ? ` | Notes: ${workingScale.join(' - ')}` : '';
@@ -1335,6 +1441,24 @@ export function renderScalePositionGrid() {
         gripItem.textContent = 'Dashed = suggested fingering grip';
         legend.appendChild(gripItem);
     }
+
+    {
+        // Built unconditionally and shown/hidden by refreshProgressionHighlight
+        // - it has to stay truthful while the progression changes without this
+        // function running again.
+        const progressionItem = document.createElement('span');
+        progressionItem.id = 'scalePositionProgressionLegend';
+        progressionItem.style.cssText = `
+            display: none;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 6px;
+            border: 1px solid rgba(${PROGRESSION_ACCENT}, 0.9);
+            border-radius: 10px;
+            background: rgba(${PROGRESSION_ACCENT}, 0.16);
+        `;
+        legend.appendChild(progressionItem);
+    }
     infoColumn.appendChild(legend);
 
     focusColumn.appendChild(buildScalePositionFocusMatrix(columnCount));
@@ -1408,9 +1532,11 @@ export function renderScalePositionGrid() {
             degreeChordNotes
         );
         colHeader.textContent = degreeLabel;
+        colHeader.dataset.degreeCol = String(col);
+        colHeader.dataset.degreeHeader = 'true';
         colHeader.style.cssText = `
             border: 1px solid #444;
-            background: #2b2b2b;
+            background: ${HEADER_BACKGROUND};
             color: #fff;
             padding: 4px;
             font-size: 11px;
@@ -1438,9 +1564,10 @@ export function renderScalePositionGrid() {
 
         const rowHeader = document.createElement('td');
         rowHeader.textContent = `Root ${rowLabel}`;
+        rowHeader.dataset.rowHeader = String(row);
         rowHeader.style.cssText = `
             border: 1px solid #444;
-            background: #383838;
+            background: ${ROW_HEADER_BACKGROUND};
             color: #fff;
             font-weight: bold;
             font-size: 11px;
@@ -1492,11 +1619,13 @@ export function renderScalePositionGrid() {
 
         for (const col of visibleDegreeCols) {
             const td = document.createElement('td');
+            td.dataset.degreeCol = String(col);
+            td.dataset.gridRow = String(row);
             td.style.cssText = `
                 border: 1px solid #444;
                 padding: 4px;
                 vertical-align: middle;
-                background: rgba(30,30,30,0.35);
+                background: ${CELL_BACKGROUND};
             `;
 
             if (isScalePositionCellVisible(row, col)) {
@@ -1543,6 +1672,11 @@ export function renderScalePositionGrid() {
 
     container.appendChild(table);
     container.appendChild(controls);
+
+    // The cells exist now; paint the progression onto them. Every later
+    // progression change reaches them through this same function without
+    // coming back through the render.
+    refreshProgressionHighlight();
 }
 
 /**
@@ -1553,14 +1687,15 @@ export function createScalePositionGrid() {
     const gridContainer = document.createElement('div');
     gridContainer.id = 'scalePositionGridContainer';
     gridContainer.style.cssText = `
-        margin: 16px auto 0 auto;
-        width: fit-content;
-        max-width: none;
+        margin: 16px 0 0 0;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box;
         background: hsla(0, 0%, 24%, 1);
         border-radius: 8px;
         padding: 12px;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        overflow-x: visible;
+        overflow-x: auto;
     `;
 
     renderScalePositionGrid();
