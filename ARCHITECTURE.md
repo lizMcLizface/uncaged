@@ -4,7 +4,8 @@ Living document. Updated as `REFACTOR_PLAN.md` phases land — see that file for
 what's left to do (its §1) and the documentation discipline this follows
 (its §2.4). Seeded 2026-08-01 as the Phase 0 baseline (the pre-refactor
 shape, warts included); current through Phase 4c, `PIANO_VIEW_PLAN.md`
-steps 1-8 and all of `VISUALIZATION_STACK_PLAN.md`, 2026-08-03. Sections describe the *current* shape, not an
+steps 1-9, all of `VISUALIZATION_STACK_PLAN.md`, and progression shape
+snapping (§6.35), 2026-08-04. Sections describe the *current* shape, not an
 aspirational one — planned features live in `SESSION_MODE_FEASIBILITY.md`
 and `PIANO_VIEW_PLAN.md`. Features land here the same way phases do (§6.29
 is the first): this file maps what exists, whichever plan produced it.
@@ -22,7 +23,7 @@ different colors. Measured before the change: E Aeolian's ♭3 and E Ionian's
 `rgb(210, 242, 95)`. `SCALE_COLORS` is deleted. The claim now holds for every
 instrument in the app. See §6.30.
 
-**Where the detail lives:** §6 is indexed by *module* (§6.1-§6.34, one per
+**Where the detail lives:** §6 is indexed by *module* (§6.1-§6.35, one per
 extracted module, in the order they landed) rather than by phase, so it stays
 useful once the phases are history. **§6.31 (with §6.32-§6.33) is the one to read first for
 anything that draws on the fretboard or the piano**: since
@@ -356,7 +357,7 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/fretboard/Fretboard.js` *(Phase 3, landed 2026-08-01)* | The `Fretboard` class itself - DOM rendering (neck/fret grid, note/scale/chord marking, subscale boxes, chord-shape lines, CAGED/fingering display) for one fretboard instance. Also owns `GUITAR_TUNING`/`FRET_COUNT` (constructor defaults), `DEFAULT_COLORS` (fallback marker coloring - the degree-indexed `SCALE_COLORS` was retired in §6.30) and `addInteractiveEvent` (a generic DOM helper with no better home yet) - `./index.js` imports `GUITAR_TUNING` back for its own glue code, `ui/scalePositionGrid.js` imports `FRET_COUNT`, and `ui/controls.js`/`ui/chordGrid.js` import `addInteractiveEvent`. | theory, `chordFingering`/`chordPatterns`, `tuning.js`, `src/fretboard/state.js`, `geometry.js`, `patterns.js` | must not import `./index.js` (would be circular - `index.js` imports `Fretboard` from here) |
 | `src/fretboard/ui/controls.js` *(Phase 3, in progress, landed 2026-08-01)* | The top bar (title + instrument/tuning picker), the tabbed-panel shell, the hotkey footer, and `createFretboardControls` - the orchestrator that builds the "Other Controls" panel and assembles all six tabs (Scale Information / Chord Progression / Scale Position Grid / Scale Selection / Other Controls / Synthesizer). Called once, from `initializeFretboard()` in `frets.js`. | `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), `src/fretboard/ui/chordGrid`, `src/fretboard/ui/scalePositionGrid`, `src/scales/`, `tuning.js`, `progressionBuilder.js`, and (cross-import, see §6.8) several glue functions from `frets.js` | — (see §6.8 for the two-way relationship with `frets.js`) |
 | `src/fretboard/ui/chordGrid.js` *(Phase 3, in progress, landed 2026-08-01)* | The Chord Pattern Grid (12-note x 12-chord-type button table, color coded for scale compatibility) and the chord-fingering-shape pipeline it shares with the Roman-numeral chord display: matching `chordPatterns.js` shapes to a chord, a "best-effort" fallback grip, the position-picker tab bar, and the scale/chord-interval math (`getSemitoneFromReference`, `getScaleIntervalEntries`, `deriveChordSuffix`, `getScaleDescriptor`) that both this grid and `src/fretboard/ui/scalePositionGrid.js` depend on. See §6.9. | theory, `src/scales/`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`addInteractiveEvent`), and (cross-import, see §6.9) glue functions from `frets.js` | must not import `src/fretboard/ui/scalePositionGrid.js` (the dependency runs one way - see §6.10) |
-| `src/fretboard/ui/scalePositionGrid.js` *(Phase 3, in progress, landed 2026-08-01; became a preview source 2026-08-03)* | The Scale Position Grid tab: one movable mini-fretboard pattern per (root string x scale degree) cell, the Focus Selector visibility matrix, and the per-cell rendering options (pattern/dot size, fret-label mode, note shapes, chord-name headers, etc.) on `fretboardState`. Every cell and column header pushes onto the visualization stack on hover/tap; `buildScalePositionCandidates` is the one place that decides a cell's contents, shared by the mini board and the preview. See §6.10 and §6.33. | theory, `src/scales/`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`FRET_COUNT`), `src/fretboard/markers`, `src/fretboard/ui/chordGrid`, and (cross-import, function bodies only) `getFretboard`/`pushChordPreview`/`pushPositionPreview`/`popPreviewLayer`/`bindPreviewSource` from `../index` | two-way with `src/fretboard/index.js`, same safe shape as `ui/chordGrid.js` (ARCHITECTURE.md §6.8) |
+| `src/fretboard/ui/scalePositionGrid.js` *(Phase 3, in progress, landed 2026-08-01; became a preview source 2026-08-03)* | The Scale Position Grid tab: one movable mini-fretboard pattern per (root string x scale degree) cell, the Focus Selector visibility matrix, and the per-cell rendering options (pattern/dot size, fret-label mode, note shapes, chord-name headers, etc.) on `fretboardState`. Every cell and column header pushes onto the visualization stack on hover/tap; `buildScalePositionCandidates` is the one place that decides a cell's contents, shared by the mini board and the preview. Since 2026-08-04 it also owns `getScalePositionWindow` (the app's definition of "a scale position", which snapping scores against) and `refreshProgressionHighlight` (the in-place restyle marking cells the current progression uses). See §6.10, §6.33 and §6.35. | theory, `src/scales/`, `chordFingering.js`, `src/fretboard/state`, `src/fretboard/Fretboard` (`FRET_COUNT`), `src/fretboard/markers`, `src/fretboard/ui/chordGrid`, `src/progression/state` + `src/progression/snap` (for the progression highlight), and (cross-import, function bodies only) `getFretboard`/`pushChordPreview`/`pushPositionPreview`/`popPreviewLayer`/`bindPreviewSource` from `../index` | two-way with `src/fretboard/index.js`, same safe shape as `ui/chordGrid.js` (ARCHITECTURE.md §6.8); also two-way with `src/progression/snap.js` (§6.35) |
 | `src/fretboard/index.js` *(Phase 3, done 2026-08-01 - `frets.js` deleted)* | The public barrel for `src/fretboard/`: `initializeFretboard`, chord display/search/pattern glue functions, `playChordVoicing`/`getChordVoicingNotes`, the `CHORD_TYPE_TO_PATTERN_TYPE` map, and the re-exports that make this folder's surface a single import. Everything else that used to live in `src/frets.js` moved to `state.js`/`geometry.js`/`markers.js`/`patterns.js`/`Fretboard.js`/`ui/controls.js`/`ui/chordGrid.js`/`ui/scalePositionGrid.js` across this phase's earlier steps (see §6.3-6.10); this file is what remained plus the barrel role. See §6.11. | theory, `chordFingering`/`chordPatterns`, `../chords.js`, `../progressionBuilder.js` (for the Chord Progression tab content), all of `src/fretboard/*` above, `./ui/controls.js` (for `createFretboardControls`), `./ui/chordGrid.js` (for the fingering-shape pipeline the glue functions call) | — (two-way with `../chords.js` and with `./ui/controls.js`/`./ui/chordGrid.js` - see §6.11) |
 | `src/progression/state.js` *(Phase 4, first step, landed 2026-08-01)* | The ~15 module-level `let`s `progressionBuilder.js` used to hold directly - current progression array, hovered/selected-pattern-index tracking, mini-fretboard/piano/stave display toggles, seventh-chords toggle, input-parse caches and debounce timer - plus `INPUT_DEBOUNCE_DELAY`/`CHORD_LINE_CONFIG`/`MINI_FRETBOARD_CONFIG`. Exported as one mutable object, `progressionState` (config constants as plain exports alongside it) - see §6.12 for why. | `tuning.js` | everything that used to read/write these as bare identifiers now imports `progressionState` instead |
 | `src/progression/parse.js` *(Phase 4, second step, landed 2026-08-01)* | The tokenize -> parse -> fretboard-pattern-match pipeline: `parseProgressionInput`, `updateProgressionIncremental`, `compareTokenArrays`, `precomputePatternData`, `processDefaultPatternSelections`, `getChordPatternMatches`, `collectArpeggiationNotes`, `clearCache`. Roman-numeral parsing/resolution itself stays in `theory/roman.js` (Phase 2). | `theory/roman`, `theory/notation`, `tuning.js`, `chordFingering.js`, `src/progression/state`, and (cross-import, see §6.13) `getChordDisplayName`/`getFretboardForProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js` - see §6.13, same shape as `src/fretboard/ui/{controls,chordGrid}.js` <-> `src/fretboard/index.js` in Phase 3 §6.8) |
@@ -365,9 +366,10 @@ entirely - Phase 1 deleted `staves.js`, Phase 1b deleted `progressions.js`.
 | `src/progression/scaleSync.js` *(Phase 4, fifth step, landed 2026-08-01)* | Keeps the progression in sync with the active scale/root: `setupScaleChangeListener` (event + polling-fallback listener), `initializeScaleNotesDisplay`, `updateScaleNotesDisplay`, `generateFallbackScaleNotes`, `updateProgressionDisplayForScaleChange`, `updateRomanNumeralChords` (re-resolves Roman-numeral chords against the new scale). | `src/scales/`, `theory/notes`, `theory/roman`, `src/progression/state`, `src/progression/fretboardDisplay` (`displaySingleChordPattern`/`displayAllChordPatterns`, repointed here in step 6 - see §6.17), and (cross-import, see §6.16) `precomputeAllPatternData`/`updateProgressionDisplay` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13-§6.15) |
 | `src/progression/fretboardDisplay.js` *(Phase 4, sixth step, landed 2026-08-02; moved onto the visualization stack 2026-08-03)* | Draws chord/scale content on the main chord-progression fretboard (not the per-card mini fretboards): `displaySingleChordPattern`, `displayAllChordPatterns`. **Markers go through the stack** (`pushChordPreview`/`popPreviewLayer`); only the chord-line overlay is drawn directly. `displayScaleContext` is deleted - see §6.32. | `src/progression/state`, `src/progression/parse` (`precomputePatternData`), `src/fretboard` (`pushChordPreview`/`popPreviewLayer`), and (cross-import, see §6.17) `getFretboardForProgression` from `../progressionBuilder` | — (two-way with `progressionBuilder.js`, same shape as §6.13-§6.16; also imported by `src/progression/scaleSync.js`, repointed from `../progressionBuilder` in this step) |
 | `src/progression/chordCard.js` *(Phase 4, seventh step, landed 2026-08-02; updated eighth step)* | The per-chord card in the progression display: `createChordElement` (name, notes, optional mini piano/stave, status indicator, hover/click handlers), `createPatternSelector` (the fret-pattern dropdown + prev/next buttons), `createMiniFretboardVisualization` (the SVG voicing diagram), `copySvgAsPng`, `showNotification`, `lightenColor` - all private except `createChordElement`. Also `getChordDisplayName`, moved here in step 7 rather than staying in `progressionBuilder.js` as earlier steps' notes expected - see §6.18. | theory, `src/scales/`, MiniPiano/MiniStave components, `audio/dispatch.js`, `src/progression/state`, `src/progression/parse` (`precomputePatternData`), `src/progression/playback`, `src/progression/fretboardDisplay`, and (cross-import, see §6.19) `updateProgressionDisplay` from `src/progression/progressionList` | two-way with `src/progression/parse.js`/`src/progression/playback.js` for `getChordDisplayName` (§6.18) and with `src/progression/progressionList.js` for `updateProgressionDisplay`/`createChordElement` (§6.19) - no longer any two-way relationship with `progressionBuilder.js` itself |
-| `src/progression/progressionList.js` *(Phase 4, eighth step, landed 2026-08-02)* | Renders the chord-progression display: `createProgressionDisplaySection`, `updateProgressionDisplay`, `highlightCurrentChord` (private - only reached via `window.highlightCurrentChord`, which moved here with it). See §6.19. | `src/progression/state`, and (cross-import, see §6.19) `createChordElement` from `src/progression/chordCard` | two-way with `src/progression/chordCard.js` (§6.19) - the first Phase 4 module with no cross-import back into the `progressionBuilder.js` residual |
+| `src/progression/progressionList.js` *(Phase 4, eighth step, landed 2026-08-02; became the grid highlight's refresh point 2026-08-04)* | Renders the chord-progression display: `createProgressionDisplaySection`, `updateProgressionDisplay`, `highlightCurrentChord` (private - only reached via `window.highlightCurrentChord`, which moved here with it). `updateProgressionDisplay` is also the single place the Scale Position Grid's progression highlight is refreshed from, since every progression change already ends there (§6.35). | `src/progression/state`, `src/fretboard/ui/scalePositionGrid` (`refreshProgressionHighlight`), and (cross-import, see §6.19) `createChordElement` from `src/progression/chordCard` | two-way with `src/progression/chordCard.js` (§6.19) - the first Phase 4 module with no cross-import back into the `progressionBuilder.js` residual |
 | `src/progression/input.js` *(Phase 4, ninth step, landed 2026-08-02)* | The chord-progression text input: `createInputSection` - the field, its debounced input handler (`updateProgression` after `INPUT_DEBOUNCE_DELAY`), and playback-blocking on input/keydown/paste while the sequencer is running. Self-contained, as the plan expected. See §6.20. | `src/progression/state`, and (cross-import, see §6.20) `updateProgression` from `../progressionBuilder` | two-way with `progressionBuilder.js` (same shape as §6.13-§6.19) |
-| `src/progression/controls.js` *(Phase 4, tenth step, landed 2026-08-02)* | The "Other Controls" row above the chord-card display: scale-context/mini-fretboard/mini-piano/mini-stave/seventh-chords toggles, the stave-key and theory-mode selectors, the presets dropdown, Share/Clear buttons, the sequencer Loop toggle, and the rate/duration/chord-triggering synth row - one `buildXControls()` per group (or per entangled group-cluster, see §6.21), only the orchestrator `createProgressionControlsSection` exported. | theory-adjacent: `src/progression/state`, `src/progression/progressionList`, `src/progression/share`, `src/progression/playback`, `src/progression/fretboardDisplay`, and (cross-import, see §6.21/§6.22) `updateProgression`/`clearProgression` from `src/progression/index.js` (the barrel) | two-way with `src/progression/index.js` (same shape as §6.13-§6.20) |
+| `src/progression/controls.js` *(Phase 4, tenth step, landed 2026-08-02)* | The "Other Controls" row above the chord-card display: scale-context/mini-fretboard/mini-piano/mini-stave/seventh-chords toggles, the stave-key and theory-mode selectors, the presets dropdown, Share/Clear buttons, the sequencer Loop toggle, the Snap Shapes toggle + anchor-position dropdown (§6.35), and the rate/duration/chord-triggering synth row - one `buildXControls()` per group (or per entangled group-cluster, see §6.21), only the orchestrator `createProgressionControlsSection` exported. | theory-adjacent: `src/progression/state`, `src/progression/progressionList`, `src/progression/share`, `src/progression/playback`, `src/progression/fretboardDisplay`, `src/progression/snap`, `tuning.js` (to rebuild the anchor options on an instrument change), and (cross-import, see §6.21/§6.22) `updateProgression`/`clearProgression` from `src/progression/index.js` (the barrel) | two-way with `src/progression/index.js` (same shape as §6.13-§6.20) |
+| `src/progression/snap.js` *(2026-08-04 — a feature, not a refactor phase)* | "Snap Shapes": which pattern index each progression chord should use so the whole progression sits in one scale position (`applySnapToProgression`, `resolveSnapAnchorRow`, `getSnapAnchorRows`), and the inverse the grid asks — which degree columns the progression uses (`getProgressionDegreeUsage`, matched by root note, not Roman numeral). **Owns no UI and no painting**: `controls.js` builds the toggle/anchor dropdown, `ui/scalePositionGrid.js` paints the highlight. A position is a grid row, so both the anchor frets and the window a shape is scored against come from the grid rather than being re-derived. See §6.35. | `theory/notation`, `src/scales/` (`getPrimaryRootNote`), `src/fretboard/state`, `src/fretboard/ui/scalePositionGrid` (`findRowRootAbsoluteFret`/`getScalePositionWindow`), `src/progression/state` | two-way with `src/fretboard/ui/scalePositionGrid.js`, same safe shape as §6.13-§6.22 (function bodies only, nothing read at module top level) |
 | `src/progression/index.js` *(Phase 4, eleventh and final step, landed 2026-08-02 - `progressionBuilder.js` deleted)* | The public barrel for `src/progression/`: `createChordProgressionUI`, `updateProgression`, `clearProgression`, `getFretboardForProgression`, `precomputeAllPatternData`, plus the re-exports (`loadSharedStateFromURL`/`applySharedState`) that make this folder's surface a single import. Everything else that used to live in `progressionBuilder.js` moved to `state.js`/`parse.js`/`share.js`/`playback.js`/`scaleSync.js`/`fretboardDisplay.js`/`chordCard.js`/`progressionList.js`/`input.js`/`controls.js` across this phase's earlier steps (§6.12-§6.21); this file is what remained plus the barrel role. See §6.22. | theory, `src/scales/` (`initializeNavigationButtonsDirect`), `tuning.js`, all of `src/progression/*` above, and (cross-imported back by seven sibling modules, see §6.22) itself | two-way with `src/progression/{parse,share,scaleSync,fretboardDisplay,input,controls}.js` (§6.13-§6.21); external importer is `src/fretboard/ui/controls.js` (`createChordProgressionUI`/`loadSharedStateFromURL`, repointed from `../../progressionBuilder` to `../../progression` in this step) |
 | `src/scales/state.js` *(Phase 4 second half, first step, landed 2026-08-02)* | Scale/root-note selection state (`scaleState`, one mutable object - same reasoning as `fretboardState`/`progressionState`), persistence, and the pure chromatic/enharmonic/navigation helpers. See §6.23. | `src/scales/scaleData`, and (cross-import, see §6.23/§6.26) `updateCurrentScaleDisplay` from `.` (the barrel), `createHeptatonicScaleTable` from `./ui/scaleTable` | two-way with `src/scales/index.js` and `src/scales/ui/scaleTable.js` |
 | `src/scales/scaleData.js` *(Phase 4 second half, second step, landed 2026-08-02)* | Scale interval data (`HeptatonicScales`/`HexatonicScales`/`PentatonicScales`/`scales`), the precomputed-chord cache, `getScaleNotes`. Framework-free except for reading `theory/notation`'s scale-spelling context. See §6.24. | `../midi`, `theory/notation`, `theory/chords` | — |
@@ -2893,6 +2895,84 @@ re-run unchanged. 135 tests, 34 warnings unchanged, zero page errors. Both
 halves of the instrument bug were mutation-checked and each reproduces its
 reported symptom exactly: no repaint gives 0 markers, no visibility reapply
 gives `display: block` in piano view.
+
+### 6.35 `src/progression/snap.js` — one progression, one position (2026-08-04)
+
+Each chord in a progression picked its shape alone: `parse.js` sorts
+`getChordPatternMatches` by lowest fret and the card defaults to index 0, so
+a progression is scattered across the neck by construction. The reported case
+was `I V vi IV` in E Locrian — `V`/`vi`/`IV` land at frets 0-3, `I` (E dim)
+jumps to 3-5 because its ♭5 would need fret −1 down there.
+
+**A position is a Scale Position Grid row, not a fret number.** That is the
+one decision the rest of this follows from. The anchor dropdown's entries are
+that grid's own rows (Root E / Root A / …), each resolving to the fret its
+root sits at, and a shape is scored against that row's own window — both
+`findRowRootAbsoluteFret` and the new `getScalePositionWindow` come from
+`ui/scalePositionGrid.js` rather than being re-derived, so the cell a user
+sees and the shape snapping picks cannot drift apart. `getScalePositionWindow`
+exists only to make that contract nameable; it is `MINI_SCALE_FRET_COUNT` and
+`GENERIC_ROOT_DISPLAY_COLUMN`, which were module-private facts about the
+grid's layout and are now a stated fact about the app's idea of a position.
+
+Scoring is deliberately dull: how far a shape pokes outside the window,
+weighted an order of magnitude above how far off-center it sits inside it, so
+fitting always beats centering and centering only breaks ties. **`Auto` is not
+a different algorithm** — it scores every row with the same function and takes
+the cheapest, which is what makes it useful in the reported case: no E dim
+shape exists near fret 0, so `Auto` rejects Root E, picks Root D, and the
+whole progression lands in frets 2-6. Pinning Root E explicitly gives the
+unchanged, honest answer instead of inventing a shape.
+
+**Snapping never overrides an explicitly-notated pattern.** `C-3` sets
+`defaultPatternIndex`; those chords are excluded from selection but still
+counted when scoring an `Auto` anchor, because they are part of where the
+progression sits. Manual dropdown changes survive until the next re-snap; the
+share URL needs no new parameter, since it already encodes the *resulting*
+per-chord pattern index.
+
+`applySnapToProgression()` has exactly one call site outside its own controls
+(the end of `precomputeAllPatternData`), because snapping picks *among*
+patterns and every path that can move a progression — edits, scale changes,
+seventh-chord toggling, instrument changes — funnels through there. It is a
+no-op with the toggle off, so callers never test for it.
+
+**The grid's progression highlight** is `refreshProgressionHighlight()`, which
+restyles in place through `data-degree-col` / `data-grid-row` hooks rather
+than re-rendering: a progression edit is a keystroke away and
+`renderScalePositionGrid` rebuilds ~40 mini-board SVGs. Two intensities, from
+the anchoring model above — the base wash on every cell of a degree the
+progression uses (the chord lives here too), the stronger wash plus an inset
+outline on the anchored row (this is where you are playing it). Degrees are
+matched **by root note, not by Roman numeral**, so `Am` and `vi` are one cell
+and a borrowed `bVII` lights up nothing rather than lying about degree VII.
+`updateProgressionDisplay` is the single refresh point, since every
+progression change already ends there.
+
+The import pair `snap.js` ↔ `ui/scalePositionGrid.js` runs both ways, the
+same shape §6.13-§6.22 documents and safe for the same reason. Painting is
+one-way: nothing in `src/progression/` knows how the cells are styled.
+
+**One pre-existing bug fell out and is fixed here**, because snapping could
+not be correct without it: the progression's instrument-change subscriber
+registers at import time, long before `initializeFretboard` registers the
+fretboard's, and subscribers run in registration order — so everything it did
+ran *before* `setTuning`, against the previous instrument. Switching a loaded
+progression from guitar to bass left the cards showing the old 6-string shapes
+until a reload; confirmed against unmodified code by `git stash` before
+touching it. Both that subscriber and the anchor dropdown's option rebuild now
+defer past the current task.
+
+**Verified** with three Playwright runs against the dev server: the reported
+E Locrian case (default 3-5/1-3/0-3/0-2 → snapped 3-5/3-6/3-5/2-5, `Auto`
+resolving to Root D), every explicit anchor moving the whole progression as a
+unit (Root A → frets 7-11, Root G → 9-14, Root B → 5-9), and grid highlight
+state read back from the DOM — columns I/IV/V/VI washed across all five rows,
+Root D outlined, legend shown, and every highlight gone after **Clear
+Progression**. Anchor options follow a root change (E → G re-frets all five
+rows) and an instrument change (bass4 drops to four rows, a pinned Root B
+falling back to `Auto`); a live guitar→bass switch now matches a reload
+exactly. 135 tests, 34 warnings unchanged, zero page errors throughout.
 
 ---
 

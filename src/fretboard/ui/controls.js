@@ -86,11 +86,15 @@ import { createScalePositionGrid, renderScalePositionGrid } from './scalePositio
  */
 function createTabbedPanel(tabs, defaultActiveIndex = 0, storageKey = null) {
     const wrapper = document.createElement('div');
+    wrapper.className = 'tabbed-panel';
     wrapper.style.cssText = `
         margin-top: 16px;
+        width: 100%;
+        box-sizing: border-box;
     `;
 
     const tabBar = document.createElement('div');
+    tabBar.className = 'tabbed-panel-bar';
     tabBar.style.cssText = `
         display: flex;
         gap: 4px;
@@ -110,6 +114,11 @@ function createTabbedPanel(tabs, defaultActiveIndex = 0, storageKey = null) {
     `;
 
     const contentArea = document.createElement('div');
+    contentArea.className = 'tabbed-panel-content';
+    contentArea.style.cssText = `
+        width: 100%;
+        box-sizing: border-box;
+    `;
 
     let activeIndex = defaultActiveIndex;
     const buttons = [];
@@ -499,6 +508,7 @@ function createViewModeToggle() {
 
 function createTopBar() {
     const topBar = document.createElement('div');
+    topBar.className = 'app-top-bar';
     topBar.style.cssText = `
         display: flex;
         align-items: center;
@@ -1810,6 +1820,10 @@ function createFretboardControls(fretboard) {
         synthesizerTabContent.id = 'synthesizerTabContent';
         synthesizerTabContent.style.cssText = `
             min-height: 400px;
+            width: 100%;
+            max-width: 100%;
+            overflow-x: auto;
+            box-sizing: border-box;
         `;
 
         const tabs = [];

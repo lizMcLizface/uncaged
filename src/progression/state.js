@@ -31,6 +31,16 @@ export const progressionState = {
     showFretboardIntervals: false, // interval labels instead of note names on mini fretboards
     showArpeggiationNotes: false, // arpeggiation notes on mini fretboards
 
+    // "Snap Shapes" - keep every chord's shape inside one scale position
+    // rather than each independently taking its lowest-fret match. The anchor
+    // is a Scale Position Grid row index, or SNAP_ANCHOR_AUTO to let
+    // src/progression/snap.js pick the position the progression fits best;
+    // snapResolvedRow is whichever row that came out as, written back so the
+    // grid knows which row to accent. See src/progression/snap.js.
+    snapShapes: false,
+    snapAnchorRow: 'auto',
+    snapResolvedRow: null,
+
     // Caching for performance.
     parsedTokensCache: [], // Cache of parsed tokens from input
     lastInputString: '', // Last processed input string
