@@ -527,7 +527,9 @@ function initializeFretboard() {
     const mainFretboard = createFretboard('fretNotPlaceholder', {
         showFretNumbers: true,
         showStringNames: false,
-        tuning: getActiveInstrumentConfig().tuning
+        tuning: getActiveInstrumentConfig().tuning,
+        lowestFret: fretboardState.visibleLowestFret,
+        highestFret: fretboardState.visibleHighestFret
     });
 
     // Create control panel
@@ -1443,7 +1445,8 @@ export {
     updateChordButtonStyles,
     updateChordInfoDisplay,
     playChordVoicing,
-    getChordVoicingNotes
+    getChordVoicingNotes,
+    renderMainDisplay
 };
 
 

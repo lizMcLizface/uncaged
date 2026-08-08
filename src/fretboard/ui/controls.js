@@ -29,8 +29,8 @@
 // 8/8; frets.js itself folded into ../index.js as the barrel in the same
 // step).
 
-import { fretboardState } from '../state';
-import { addInteractiveEvent } from '../Fretboard';
+import { fretboardState, persistFretRangeSettings } from '../state';
+import { addInteractiveEvent, FRET_COUNT } from '../Fretboard';
 import { HeptatonicScales, getScaleNotes, getPrimaryScale, getPrimaryRootNote } from '../../scales';
 import {
     getPresets as getInstrumentPresets,
@@ -49,7 +49,8 @@ import {
     setMainViewMode,
     getMainViewMode,
     refreshScaleLayer,
-    refreshPianoBounds
+    refreshPianoBounds,
+    renderMainDisplay
 } from '..';
 import { clearLayers } from '../../visualization';
 import {
@@ -1812,6 +1813,110 @@ function buildPianoRangeControls() {
     return container;
 }
 
+/**
+ * How much of the fretboard's neck is shown: its lowest and highest visible
+ * fret. Same idea and same panel as buildPianoRangeControls just above -
+ * "how much of the instrument am I looking at" - so it lives next to it
+ * rather than getting its own row.
+ *
+ * Mainly for mobile: FRET_COUNT frets compressed into a phone-width neck
+ * makes every fret too narrow to read or tap accurately. Narrowing the
+ * range re-zooms the same physical fret spacing (see
+ * Fretboard#setFretRange) into whatever window is picked, e.g. just frets
+ * 0-5 for open-position chords, or 5-12 for a specific movable shape.
+ * @param {Fretboard} fretboard
+ */
+function buildFretRangeControls(fretboard) {
+    const container = document.createElement('div');
+    container.id = 'fretRangeControls';
+    container.style.cssText = `
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    `;
+
+    const labelStyle = `font-size: 12px; color: #fff; user-select: none; white-space: nowrap;`;
+    const selectStyle = `
+        padding: 2px 4px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+    `;
+
+    const heading = document.createElement('span');
+    heading.textContent = 'Fret range:';
+    heading.style.cssText = labelStyle + ' font-weight: 600;';
+    container.appendChild(heading);
+
+    const populateFretOptions = (select) => {
+        for (let fret = 0; fret <= FRET_COUNT; fret++) {
+            const option = document.createElement('option');
+            option.value = String(fret);
+            option.textContent = String(fret);
+            select.appendChild(option);
+        }
+    };
+
+    const lowSelect = document.createElement('select');
+    lowSelect.id = 'fretRangeLow';
+    lowSelect.style.cssText = selectStyle;
+    populateFretOptions(lowSelect);
+
+    const toLabel = document.createElement('span');
+    toLabel.textContent = 'to';
+    toLabel.style.cssText = labelStyle;
+
+    const highSelect = document.createElement('select');
+    highSelect.id = 'fretRangeHigh';
+    highSelect.style.cssText = selectStyle;
+    populateFretOptions(highSelect);
+
+    const resetButton = document.createElement('button');
+    resetButton.type = 'button';
+    resetButton.textContent = 'Show all frets';
+    resetButton.style.cssText = `
+        padding: 2px 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        font-size: 12px;
+        cursor: pointer;
+        background: #333;
+        color: #fff;
+    `;
+
+    // What is asked for can be clamped (a minimum span, staying within
+    // 0..FRET_COUNT) - read the applied range back rather than restating
+    // the request, same reasoning as buildPianoRangeControls's apply().
+    const apply = (lowestFret, highestFret) => {
+        const applied = fretboard.setFretRange(lowestFret, highestFret);
+        lowSelect.value = String(applied.lowestFret);
+        highSelect.value = String(applied.highestFret);
+
+        fretboardState.visibleLowestFret = applied.lowestFret;
+        fretboardState.visibleHighestFret = applied.highestFret;
+        persistFretRangeSettings();
+        // setFretRange rebuilt the neck from scratch, same as setTuning -
+        // repaint whatever was on it before onto the fresh DOM.
+        renderMainDisplay();
+    };
+
+    lowSelect.addEventListener('change', () => apply(Number(lowSelect.value), Number(highSelect.value)));
+    highSelect.addEventListener('change', () => apply(Number(lowSelect.value), Number(highSelect.value)));
+    resetButton.addEventListener('click', () => apply(0, FRET_COUNT));
+
+    lowSelect.value = String(fretboardState.visibleLowestFret);
+    highSelect.value = String(fretboardState.visibleHighestFret);
+
+    container.appendChild(lowSelect);
+    container.appendChild(toLabel);
+    container.appendChild(highSelect);
+    container.appendChild(resetButton);
+
+    return container;
+}
+
 function buildOtherControlsPanel(fretboard) {
     const controlsContainer = document.createElement('div');
     controlsContainer.style.cssText = `
@@ -1857,6 +1962,7 @@ function buildOtherControlsPanel(fretboard) {
 
     controlsContainer.appendChild(clearButton);
     controlsContainer.appendChild(showAllButton);
+    controlsContainer.appendChild(buildFretRangeControls(fretboard));
     controlsContainer.appendChild(buildPianoRangeControls());
     // controlsContainer.appendChild(showScaleButton);
     controlsContainer.appendChild(chordControlsContainer);

@@ -112,7 +112,12 @@ class Fretboard {
         this.fretCount = options.fretCount || FRET_COUNT;
         this.showFretNumbers = options.showFretNumbers !== false;
         this.showStringNames = options.showStringNames !== false;
-        
+
+        // The visible fret window - see setFretRange. Defaults to the whole
+        // modeled neck, i.e. unchanged from before this existed.
+        this.lowestFret = options.lowestFret || 0;
+        this.highestFret = options.highestFret || this.fretCount;
+
         this.fretboardElement = null;
         this.markers = new Map(); // Store markers by string-fret key
         this.subscaleBoxes = new Map(); // Store subscale boxes by ID
@@ -144,7 +149,42 @@ class Fretboard {
         }
         return this.visible;
     }
-    
+
+    /**
+     * Narrow (or restore) which frets are drawn, e.g. for a mobile screen
+     * that only has room for a legible chunk of the neck. This does not
+     * change fretCount or any note-lookup/search behavior - it only affects
+     * what buildFretboardElement draws (see the fretPositions windowing
+     * there), by rescaling the same physical fret-position math so
+     * `lowestFret` lands at the left edge and `highestFret` at the right,
+     * same as scrolling+zooming a camera rather than remodeling the neck.
+     *
+     * Clamped to a sane range rather than trusting the caller, and returns
+     * what was actually applied - callers (the range picker in
+     * ui/controls.js) read this back the same way setPianoOctaveSpan's
+     * caller does, since a request can be clamped at the edges.
+     * @param {number} lowestFret
+     * @param {number} highestFret
+     * @returns {{lowestFret: number, highestFret: number}}
+     */
+    setFretRange(lowestFret, highestFret) {
+        const MIN_SPAN = 2;
+        let low = Math.max(0, Math.min(this.fretCount - MIN_SPAN, Math.round(lowestFret)));
+        let high = Math.max(low + MIN_SPAN, Math.min(this.fretCount, Math.round(highestFret)));
+
+        this.lowestFret = low;
+        this.highestFret = high;
+
+        // Rebuild from scratch, same as setTuning - the fret window changes
+        // fretPositions, which every marker's `left: %` was computed from.
+        this.markers.clear();
+        this.subscaleBoxes.clear();
+        this.chordLines.clear();
+        this.buildFretboardElement();
+
+        return { lowestFret: low, highestFret: high };
+    }
+
     /**
      * Initialize the fretboard visual structure
      */
@@ -163,8 +203,22 @@ class Fretboard {
      * ever wrong, leave a stray duplicate node behind.
      */
     buildFretboardElement() {
-        // Calculate fret positions first
-        this.fretPositions = calculateFretPositions(this.fretCount);
+        // Calculate fret positions first - windowed to [lowestFret,
+        // highestFret] when that's narrower than the full neck (see
+        // setFretRange). Every marker/wire/label below positions itself with
+        // `calculateFretPosition(this.fretPositions, fret)`, so rescaling
+        // this one table is all that's needed to "zoom" the display: the
+        // window's left edge (the wire before lowestFret, or the nut at 0)
+        // becomes 0%, its right edge (the wire after highestFret) becomes
+        // 100%, and everything in between - or outside, which wire/marker
+        // creation still iterates 0..fretCount for and neckContainer's own
+        // `overflow: hidden` (see createNeckStructure) then crops - is
+        // rescaled the same way a photo crop rescales what's left.
+        const rawPositions = calculateFretPositions(this.fretCount);
+        const windowStart = this.lowestFret > 0 ? rawPositions[this.lowestFret - 1] : 0;
+        const windowEnd = rawPositions[this.highestFret];
+        const windowSpan = windowEnd - windowStart;
+        this.fretPositions = rawPositions.map(position => (position - windowStart) / windowSpan * 100);
 
         // Create the fretboard's own node once; every later rebuild reuses
         // it in place rather than re-inserting into this.container.
@@ -318,27 +372,33 @@ class Fretboard {
             left: 0;
             right: 0;
             z-index: 10;
+            overflow-x: clip;
+            overflow-y: visible;
         `;
-        
-        // Add fret 0 (nut) label
-        const nutLabel = document.createElement('div');
-        nutLabel.textContent = '0';
-        nutLabel.style.cssText = `
-            position: absolute;
-            left: 0%;
-            transform: translateX(-50%);
-            text-align: center;
-            font-size: ${fontSize}px;
-            font-weight: bold;
-            color: #ddd;
-            min-width: ${minWidth}px;
-            background: rgba(0, 0, 0, 0.5);
-            border-radius: 3px;
-            padding: ${padding};
-            border: 1px solid #555;
-        `;
-        fretNumberRow.appendChild(nutLabel);
-        
+
+        // Add fret 0 (nut) label - only when the nut is actually in view
+        // (see setFretRange); otherwise it would show a "0" for a fret
+        // that isn't drawn.
+        if (this.lowestFret === 0) {
+            const nutLabel = document.createElement('div');
+            nutLabel.textContent = '0';
+            nutLabel.style.cssText = `
+                position: absolute;
+                left: 0%;
+                transform: translateX(-50%);
+                text-align: center;
+                font-size: ${fontSize}px;
+                font-weight: bold;
+                color: #ddd;
+                min-width: ${minWidth}px;
+                background: rgba(0, 0, 0, 0.5);
+                border-radius: 3px;
+                padding: ${padding};
+                border: 1px solid #555;
+            `;
+            fretNumberRow.appendChild(nutLabel);
+        }
+
         // Add labels for each fret aligned with fret markers (center of fret spaces)
         for (let fret = 1; fret <= this.fretCount; fret++) {
             const fretLabel = document.createElement('div');
@@ -369,8 +429,17 @@ class Fretboard {
     
     /**
      * Add string name labels
+     *
+     * These are the open strings' note names, so they only mean anything
+     * when the nut (fret 0) is actually in view - skipped entirely once
+     * setFretRange has scrolled it out, same as the nut bar and its "0"
+     * label below.
      */
     addStringNames() {
+        if (this.lowestFret > 0) {
+            return;
+        }
+
         // Calculate responsive sizing
         let containerWidth = 40;
         let containerLeft = -50;
@@ -465,6 +534,8 @@ class Fretboard {
             background: linear-gradient(to bottom, #2e2e2e, #1a1a1a);
             border-radius: 8px;
             box-shadow: inset 0 2px 8px rgba(0,0,0,0.5);
+            overflow-x: clip;
+            overflow-y: visible;
         `;
         
         // Store reference to neck container for fret grid
@@ -488,21 +559,25 @@ class Fretboard {
             neckContainer.appendChild(stringElement);
         });
         
-        // Create nut (at the start of the fretboard)
-        const nut = document.createElement('div');
-        nut.className = 'nut';
-        nut.style.cssText = `
-            position: absolute;
-            left: 0;
-            top: -5px;
-            bottom: -5px;
-            width: 4px;
-            // background: linear-gradient(to bottom, #f5f5f5, #e0e0e0, #f5f5f5);
-            z-index: 2;
-            border-radius: 2px;
-            box-shadow: 1px 0 3px rgba(0,0,0,0.4);
-        `;
-        neckContainer.appendChild(nut);
+        // Create nut (at the start of the fretboard) - only when fret 0 is
+        // actually the left edge of the visible window (see setFretRange);
+        // otherwise it would draw a nut where there isn't one.
+        if (this.lowestFret === 0) {
+            const nut = document.createElement('div');
+            nut.className = 'nut';
+            nut.style.cssText = `
+                position: absolute;
+                left: 0;
+                top: -5px;
+                bottom: -5px;
+                width: 4px;
+                // background: linear-gradient(to bottom, #f5f5f5, #e0e0e0, #f5f5f5);
+                z-index: 2;
+                border-radius: 2px;
+                box-shadow: 1px 0 3px rgba(0,0,0,0.4);
+            `;
+            neckContainer.appendChild(nut);
+        }
         
         // Create fret wires using calculated positions
         for (let fret = 1; fret <= this.fretCount; fret++) {
