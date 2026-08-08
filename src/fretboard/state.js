@@ -10,6 +10,7 @@
 
 import { stripOctave as notationStripOctave } from '../theory/notation';
 import { getActiveConfig as getActiveInstrumentConfig, toSlashFormat as tuningToSlashFormat } from '../tuning';
+import { FRET_COUNT } from './Fretboard';
 
 export const fretboardState = {
     // Scale Position Grid row anchors/tuning - string indices (into the
@@ -67,6 +68,13 @@ export const fretboardState = {
     isUpdatingFretboards: false,
     lastScaleUpdateTime: 0,
     lastScaleData: null,
+
+    // Which frets the main fretboard draws - see Fretboard#setFretRange.
+    // Defaults to the whole neck; narrowed by the fret range picker in
+    // ui/controls.js, mainly so a mobile screen can zoom into a legible
+    // chunk instead of showing all of FRET_COUNT compressed into one width.
+    visibleLowestFret: 0,
+    visibleHighestFret: FRET_COUNT,
 
     // The main fretboard instance, set once DOM is ready (see
     // initializeFretboardWithScale() in src/fretboard/index.js).
@@ -156,3 +164,34 @@ export function persistScalePositionGridSettings() {
 }
 
 refreshScalePositionTuning();
+
+// Persisted fret-range setting so users return to the same zoomed-in view
+// they left, same pattern as the Scale Position Grid settings above.
+const FRET_RANGE_SETTINGS_KEY = 'PolySynth-FretRangeSettings';
+
+function loadSavedFretRangeSettings() {
+    try {
+        const raw = localStorage.getItem(FRET_RANGE_SETTINGS_KEY);
+        return raw ? JSON.parse(raw) : null;
+    } catch (error) {
+        console.warn('Could not load saved fret range settings, using defaults', error);
+        return null;
+    }
+}
+
+const savedFretRangeSettings = loadSavedFretRangeSettings();
+if (savedFretRangeSettings) {
+    fretboardState.visibleLowestFret = savedFretRangeSettings.lowestFret ?? fretboardState.visibleLowestFret;
+    fretboardState.visibleHighestFret = savedFretRangeSettings.highestFret ?? fretboardState.visibleHighestFret;
+}
+
+export function persistFretRangeSettings() {
+    try {
+        localStorage.setItem(FRET_RANGE_SETTINGS_KEY, JSON.stringify({
+            lowestFret: fretboardState.visibleLowestFret,
+            highestFret: fretboardState.visibleHighestFret
+        }));
+    } catch (error) {
+        console.warn('Could not persist fret range settings', error);
+    }
+}
